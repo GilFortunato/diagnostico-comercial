@@ -26,6 +26,8 @@ type CompareState = {
   message: string;
 };
 
+type ProfileInputMode = "url" | "linkedin";
+
 const sampleByBu: Record<string, FormState> = {
   bu_share: {
     profileUrl: "",
@@ -67,6 +69,7 @@ export function AuthorityDiagnostic() {
   const [history, setHistory] = useState<AuthorityAssessment[]>([]);
   const [comparison, setComparison] = useState<CompareState | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [profileInputMode, setProfileInputMode] = useState<ProfileInputMode>("url");
   const [isPending, startTransition] = useTransition();
   const canRunDiagnostic = form.profileUrl.includes("linkedin.com/in/") && form.objective.trim().length >= 10;
 
@@ -76,6 +79,7 @@ export function AuthorityDiagnostic() {
     setAssessment(null);
     setHistory([]);
     setComparison(null);
+    setProfileInputMode("url");
   }
 
   function updateField(key: keyof FormState, value: string) {
@@ -164,13 +168,46 @@ export function AuthorityDiagnostic() {
             </div>
           </div>
           <div className="mt-5 grid gap-4">
-            <Input
-              icon={<Link className="h-4 w-4 text-[#0a66c2]" />}
-              label="URL do perfil no LinkedIn"
-              placeholder="https://www.linkedin.com/in/seu-perfil"
-              value={form.profileUrl}
-              onChange={(value) => updateField("profileUrl", value)}
-            />
+            <div className="grid gap-3 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3">
+              <div className="flex flex-wrap gap-2">
+                <ModeButton active={profileInputMode === "url"} onClick={() => setProfileInputMode("url")}>
+                  Colar URL
+                </ModeButton>
+                <ModeButton active={profileInputMode === "linkedin"} onClick={() => setProfileInputMode("linkedin")}>
+                  Conectar LinkedIn
+                </ModeButton>
+              </div>
+              {profileInputMode === "url" ? (
+                <Input
+                  icon={<Link className="h-4 w-4 text-[#0a66c2]" />}
+                  label="URL do perfil no LinkedIn"
+                  placeholder="https://www.linkedin.com/in/seu-perfil"
+                  value={form.profileUrl}
+                  onChange={(value) => updateField("profileUrl", value)}
+                />
+              ) : (
+                <div className="rounded-md border border-[#0a66c2]/20 bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--share-green-950)]">Conexao LinkedIn</p>
+                      <p className="mt-1 max-w-xl text-sm leading-6 text-zinc-600">
+                        A conexao segura sera ativada quando o app LinkedIn e as permissoes oficiais estiverem configurados.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled
+                      className="rounded-md border border-[#0a66c2]/25 px-3 py-2 text-sm font-semibold text-[#0a66c2] opacity-60"
+                    >
+                      Aguardando configuracao
+                    </button>
+                  </div>
+                  <button type="button" onClick={() => setProfileInputMode("url")} className="mt-3 text-sm font-semibold text-[var(--share-green-900)] underline-offset-4 hover:underline">
+                    Usar URL publica por enquanto
+                  </button>
+                </div>
+              )}
+            </div>
             <Input label="Objetivo comercial" value={form.objective} onChange={(value) => updateField("objective", value)} />
             <Input label="Headline do LinkedIn" value={form.headline} onChange={(value) => updateField("headline", value)} />
             <Textarea label="Sobre" value={form.about} onChange={(value) => updateField("about", value)} rows={4} />
@@ -291,6 +328,22 @@ export function AuthorityDiagnostic() {
         </div>
       </div>
     </section>
+  );
+}
+
+function ModeButton({ active, children, onClick }: { active: boolean; children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+        active
+          ? "bg-[var(--share-green-950)] text-white"
+          : "border border-[var(--share-line)] bg-white text-[var(--share-green-900)] hover:bg-[#edf7eb]"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

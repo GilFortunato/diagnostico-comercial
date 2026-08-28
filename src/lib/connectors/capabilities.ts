@@ -35,6 +35,14 @@ export const connectorCatalog: ConnectorDefinition[] = [
     requiresSeparateConsent: true,
   },
   {
+    key: "linkedin-account",
+    name: "Conectar LinkedIn",
+    kind: "data_source",
+    status: "disconnected",
+    capabilities: ["profile.read", "content.analyze", "network.evaluate"],
+    requiresSeparateConsent: true,
+  },
+  {
     key: "public-web-research",
     name: "Pesquisa publica permitida",
     kind: "data_source",
