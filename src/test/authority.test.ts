@@ -5,7 +5,7 @@ import { compareAuthorityAssessments, createAuthorityAssessment } from "@/lib/di
 const baseInput = {
   businessUnitId: "bu_prosper",
   businessUnitName: "Prosper",
-  profileUrl: "",
+  profileUrl: "https://www.linkedin.com/in/prosper-demo",
   objective: "Ser reconhecido por liderancas de RH como referencia em IA aplicada a educacao corporativa.",
   headline: "Educacao corporativa e IA aplicada ao desenvolvimento de talentos para empresas",
   about:
@@ -30,6 +30,8 @@ test("authority assessment returns a bounded commercial authority score", () => 
 test("authority comparison calculates score movement", () => {
   const first = createAuthorityAssessment({ ...baseInput, proofPoints: "", recentContent: "" });
   const latest = createAuthorityAssessment(baseInput);
+  first.createdAt = "2026-01-01T00:00:00.000Z";
+  latest.createdAt = "2026-02-01T00:00:00.000Z";
   const comparison = compareAuthorityAssessments([latest, first]);
 
   assert.equal(comparison.available, true);

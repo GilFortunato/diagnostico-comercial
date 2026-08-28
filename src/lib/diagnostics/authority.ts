@@ -267,7 +267,10 @@ export function createAuthorityAssessment(input: AuthorityInput): AuthorityAsses
 }
 
 export function compareAuthorityAssessments(items: AuthorityAssessment[]) {
-  const sorted = [...items].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const sorted = [...items].sort((a, b) => {
+    const byDate = a.createdAt.localeCompare(b.createdAt);
+    return byDate === 0 ? a.id.localeCompare(b.id) : byDate;
+  });
   const first = sorted.at(0);
   const latest = sorted.at(-1);
 

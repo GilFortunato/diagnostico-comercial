@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Activity, BarChart3, CheckCircle2, History, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
+import { Activity, BarChart3, CheckCircle2, History, Link, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import type { AuthorityAssessment } from "@/lib/diagnostics/authority";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
 import { prosperContext } from "@/lib/tenancy/prosper";
 import { StatusPill } from "@/components/app/StatusPill";
 
 type FormState = {
+  profileUrl: string;
   objective: string;
   headline: string;
   about: string;
@@ -27,6 +28,7 @@ type CompareState = {
 
 const sampleByBu: Record<string, FormState> = {
   bu_share: {
+    profileUrl: "",
     objective: "Ser reconhecido por decisores B2B como especialista em Social Selling e inteligencia comercial.",
     headline: "Estrategia comercial B2B, Social Selling e posicionamento para empresas que vendem conhecimento",
     about: "Ajudo times comerciais e liderancas a transformar repertorio, contexto de marca e relacoes em oportunidades mais qualificadas. Minha atuacao combina diagnostico, conteudo, hunting e preparacao para conversas com decisores.",
@@ -36,6 +38,7 @@ const sampleByBu: Record<string, FormState> = {
     interactionSignals: "Interacoes com gestores, diretores comerciais, lideres de marketing e fundadores.",
   },
   bu_prosper: {
+    profileUrl: "",
     objective: "Ser lembrado por RHs, liderancas e areas de negocio como referencia em habilidades digitais, IA aplicada e transformacao com resultado.",
     headline: "Habilidades digitais, IA aplicada e desenvolvimento de talentos para empresas que querem gerar valor real",
     about: "Atuo na Prosper Digital Skills, frente da Share People Hub dedicada ao desenvolvimento de habilidades digitais para o futuro do trabalho. Ajudo empresas a sair do entendimento da IA para a aplicacao pratica e a construcao de solucoes reais, conectando aprendizagem, dados, negocio, diversidade e impacto.",
@@ -45,6 +48,7 @@ const sampleByBu: Record<string, FormState> = {
     interactionSignals: "Conversas com RH, liderancas de negocio, gestores de treinamento, operacoes, decisores de transformacao digital e patrocinadores de programas de DEI.",
   },
   bu_education_recruit: {
+    profileUrl: "",
     objective: "Construir autoridade com instituicoes de ensino que precisam recrutar melhor.",
     headline: "Recrutamento para educacao, atracao de talentos e inteligencia para instituicoes de ensino",
     about: "Apoio instituicoes educacionais na leitura de perfil, atracao e selecao de talentos alinhados ao contexto escolar. O foco e unir criterio, agilidade e qualidade de decisao.",
@@ -62,7 +66,9 @@ export function AuthorityDiagnostic() {
   const [assessment, setAssessment] = useState<AuthorityAssessment | null>(null);
   const [history, setHistory] = useState<AuthorityAssessment[]>([]);
   const [comparison, setComparison] = useState<CompareState | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const canRunDiagnostic = form.profileUrl.includes("linkedin.com/in/") && form.objective.trim().length >= 10;
 
   function switchBu(nextBusinessUnitId: string) {
     setBusinessUnitId(nextBusinessUnitId);
@@ -77,11 +83,17 @@ export function AuthorityDiagnostic() {
   }
 
   function runDiagnostic() {
+    if (!canRunDiagnostic) {
+      setFormError("Informe uma URL valida do LinkedIn e o objetivo comercial antes de gerar o diagnostico.");
+      return;
+    }
+
+    setFormError(null);
     startTransition(async () => {
       const response = await fetch("/api/diagnostics/authority", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, businessUnitId, businessUnitName: selectedBu.name, profileUrl: "" }),
+        body: JSON.stringify({ ...form, businessUnitId, businessUnitName: selectedBu.name }),
       });
       const result = (await response.json()) as AuthorityAssessment;
       setAssessment(result);
@@ -110,7 +122,7 @@ export function AuthorityDiagnostic() {
       <aside className="share-card space-y-4 rounded-lg p-5">
         <div>
           <div className="h-2 w-44 rounded-r-md share-tab-accent" style={{ "--accent-color": selectedBu.brandPack.accent } as React.CSSProperties} />
-          <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Business Unit</p>
+          <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Unidade de negocio</p>
           <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{selectedBu.name}</h2>
           <p className="mt-2 text-sm leading-6 text-zinc-600">{selectedBu.description}</p>
         </div>
@@ -132,9 +144,9 @@ export function AuthorityDiagnostic() {
           ))}
         </div>
         <div className="rounded-md p-3 text-sm text-zinc-700" style={{ backgroundColor: selectedBu.brandPack.surface }}>
-          <p className="font-medium text-[var(--share-green-950)]">Brand Pack ativo</p>
+          <p className="font-medium text-[var(--share-green-950)]">Contexto ativo</p>
           <p className="mt-1">Tom: {selectedBu.brandPack.voice}</p>
-          <p className="mt-1">Tokens configuraveis; sem identidade hardcoded.</p>
+          <p className="mt-1">As recomendacoes usam a linguagem e os temas desta BU.</p>
         </div>
       </aside>
 
@@ -144,15 +156,21 @@ export function AuthorityDiagnostic() {
         <div className="share-card rounded-lg p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Skill funcional</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Diagnostico guiado</p>
               <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Diagnostico de Autoridade Comercial</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
                 Avalia se um potencial cliente percebe profundidade, repertorio e confianca comercial no perfil.
               </p>
             </div>
-            <StatusPill tone="warning">Adapter demo-local</StatusPill>
           </div>
           <div className="mt-5 grid gap-4">
+            <Input
+              icon={<Link className="h-4 w-4 text-[#0a66c2]" />}
+              label="URL do perfil no LinkedIn"
+              placeholder="https://www.linkedin.com/in/seu-perfil"
+              value={form.profileUrl}
+              onChange={(value) => updateField("profileUrl", value)}
+            />
             <Input label="Objetivo comercial" value={form.objective} onChange={(value) => updateField("objective", value)} />
             <Input label="Headline do LinkedIn" value={form.headline} onChange={(value) => updateField("headline", value)} />
             <Textarea label="Sobre" value={form.about} onChange={(value) => updateField("about", value)} rows={4} />
@@ -161,8 +179,14 @@ export function AuthorityDiagnostic() {
             <Textarea label="Conteudos recentes" value={form.recentContent} onChange={(value) => updateField("recentContent", value)} />
             <Textarea label="Interacoes e networking" value={form.interactionSignals} onChange={(value) => updateField("interactionSignals", value)} />
           </div>
+          {formError ? <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</p> : null}
           <div className="mt-5 flex flex-wrap gap-3">
-            <button type="button" onClick={runDiagnostic} className="share-button-primary inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold">
+            <button
+              type="button"
+              onClick={runDiagnostic}
+              className="share-button-primary inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-55"
+              disabled={isPending}
+            >
               <Sparkles className="h-4 w-4" />
               {assessment ? "Refazer diagnostico" : "Gerar diagnostico"}
             </button>
@@ -183,6 +207,11 @@ export function AuthorityDiagnostic() {
                 <span className="pb-2 text-white/70">/100</span>
               </div>
               <p className="mt-4 text-sm leading-6 text-white/78">{assessment.summary}</p>
+              {assessment.input.profileUrl ? (
+                <a className="mt-4 inline-flex text-sm font-semibold text-[var(--share-lime)] underline-offset-4 hover:underline" href={assessment.input.profileUrl} target="_blank" rel="noreferrer">
+                  Perfil avaliado no LinkedIn
+                </a>
+              ) : null}
               <div className="mt-4 flex flex-wrap gap-2">
                 {assessment.sources.map((source) => (
                   <StatusPill key={source.title} tone={source.confidence === "confirmed" ? "ready" : "neutral"}>
@@ -248,7 +277,7 @@ export function AuthorityDiagnostic() {
                   <span>{new Date(item.createdAt).toLocaleString("pt-BR")}</span>
                   <span className="font-semibold">{item.overallScore}/100</span>
                 </div>
-              )) : <p className="text-sm text-zinc-500">Sem diagnosticos nesta sessao local.</p>}
+              )) : <p className="text-sm text-zinc-500">Sem diagnosticos neste historico.</p>}
             </div>
           </div>
           <div className="share-card rounded-lg p-5">
@@ -265,11 +294,31 @@ export function AuthorityDiagnostic() {
   );
 }
 
-function Input({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function Input({
+  label,
+  value,
+  onChange,
+  placeholder,
+  icon,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  icon?: React.ReactNode;
+}) {
   return (
     <label className="grid gap-1.5">
       <span className="text-sm font-medium text-zinc-700">{label}</span>
-      <input value={value} onChange={(event) => onChange(event.target.value)} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2 text-sm outline-none focus:border-[var(--share-green-800)] focus:bg-white" />
+      <span className="flex items-center gap-2 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2 focus-within:border-[var(--share-green-800)] focus-within:bg-white">
+        {icon}
+        <input
+          value={value}
+          placeholder={placeholder}
+          onChange={(event) => onChange(event.target.value)}
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-zinc-400"
+        />
+      </span>
     </label>
   );
 }
@@ -304,7 +353,7 @@ function ProsperContextPanel() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[#2ef2ce]">Prosper Digital Skills</p>
-            <h3 className="mt-2 text-2xl font-semibold md:text-3xl">Contexto da BU carregado</h3>
+            <h3 className="mt-2 text-2xl font-semibold md:text-3xl">Contexto Prosper ativo</h3>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/82">{prosperContext.positioning}</p>
           </div>
           <div className="rounded-md border border-white/20 px-4 py-3 text-right">
