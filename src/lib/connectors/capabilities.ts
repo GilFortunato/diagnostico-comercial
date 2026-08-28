@@ -3,6 +3,9 @@ export type ConnectorCapability =
   | "research.publicBusinessProfile"
   | "content.analyze"
   | "network.evaluate"
+  | "posts.read"
+  | "company.read"
+  | "decisionMakers.find"
   | "calendar.read"
   | "message.preview"
   | "externalAction.requestApproval"
@@ -40,6 +43,38 @@ export const connectorCatalog: ConnectorDefinition[] = [
     kind: "data_source",
     status: "disconnected",
     capabilities: ["profile.read", "content.analyze", "network.evaluate"],
+    requiresSeparateConsent: true,
+  },
+  {
+    key: "apify-linkedin-profile",
+    name: "Apify LinkedIn Profile",
+    kind: "data_source",
+    status: "disconnected",
+    capabilities: ["profile.read"],
+    requiresSeparateConsent: true,
+  },
+  {
+    key: "apify-linkedin-profile-posts",
+    name: "Apify LinkedIn Profile Posts",
+    kind: "data_source",
+    status: "disconnected",
+    capabilities: ["posts.read", "content.analyze"],
+    requiresSeparateConsent: true,
+  },
+  {
+    key: "apify-linkedin-company",
+    name: "Apify LinkedIn Company",
+    kind: "data_source",
+    status: "disconnected",
+    capabilities: ["company.read"],
+    requiresSeparateConsent: true,
+  },
+  {
+    key: "apify-linkedin-company-employees",
+    name: "Apify LinkedIn Company Employees",
+    kind: "data_source",
+    status: "disconnected",
+    capabilities: ["decisionMakers.find", "network.evaluate"],
     requiresSeparateConsent: true,
   },
   {

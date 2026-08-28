@@ -7,7 +7,18 @@ type ConnectorStatus = {
   google: { connected: boolean; label: string };
   gemini: { connected: boolean; label: string; mode: string };
   linkedin: { connected: boolean; label: string; mode: string };
-  apify: { connected: boolean; label: string; actorId: string };
+  apify: {
+    connected: boolean;
+    label: string;
+    actorId: string;
+    actors: Array<{
+      key: string;
+      actorId: string;
+      label: string;
+      purpose: string;
+      stage: "authority" | "rapport" | "decision_maker";
+    }>;
+  };
 };
 
 export function ConnectorReadiness() {
@@ -147,7 +158,7 @@ export function ConnectorReadiness() {
         <ConnectorTile
           icon={<Link className="h-4 w-4" />}
           title={status.linkedin.label}
-          description={status.linkedin.connected ? `Actor ativo: ${status.apify.actorId}` : "Conecte Apify para importar o perfil publico pela URL."}
+          description={status.linkedin.connected ? "Perfil, posts, empresa e decisores via Actors Apify." : "Conecte Apify para importar dados publicos pela URL."}
           connected={status.linkedin.connected}
         />
       </div>
@@ -192,7 +203,7 @@ export function ConnectorReadiness() {
                 {isSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
                 Conectar Apify
               </button>
-              <p className="text-sm leading-6 text-zinc-600">Usa o Actor `unseenuser/linkedin-profile` para importar dados publicos da URL.</p>
+            <p className="text-sm leading-6 text-zinc-600">Usa Actors publicos da Apify para perfil, posts, empresa e decisores.</p>
             </div>
           </div>
         </div>
@@ -210,6 +221,24 @@ export function ConnectorReadiness() {
           </button>
         </div>
       )}
+
+      <div className="mt-4 grid gap-2">
+        <p className="text-sm font-semibold text-[var(--share-green-950)]">Actors preparados</p>
+        <div className="grid gap-2 md:grid-cols-2">
+          {status.apify.actors.map((actor) => (
+            <div key={actor.key} className="rounded-md border border-[var(--share-line)] bg-white p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-zinc-950">{actor.label}</p>
+                <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">
+                  {stageLabel(actor.stage)}
+                </span>
+              </div>
+              <p className="mt-1 font-mono text-xs text-zinc-500">{actor.actorId}</p>
+              <p className="mt-2 text-xs leading-5 text-zinc-600">{actor.purpose}</p>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {!status.gemini.connected ? (
         <div className="mt-4 grid gap-4 rounded-md border border-amber-200 bg-amber-50 p-4 lg:grid-cols-[320px_1fr]">
@@ -272,6 +301,12 @@ export function ConnectorReadiness() {
       {message ? <p className="mt-3 text-sm font-medium text-[var(--share-green-900)]">{message}</p> : null}
     </section>
   );
+}
+
+function stageLabel(stage: "authority" | "rapport" | "decision_maker") {
+  if (stage === "authority") return "Autoridade";
+  if (stage === "rapport") return "Rapport";
+  return "Decisor";
 }
 
 function ConnectorTile({

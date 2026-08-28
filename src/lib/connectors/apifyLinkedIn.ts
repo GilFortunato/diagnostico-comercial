@@ -1,15 +1,14 @@
 import "server-only";
 import type { AuthorityInput, ResearchSource } from "@/lib/diagnostics/authority";
+import { apifyActors } from "@/lib/connectors/apifyActors";
 
 type LinkedInExtraction = {
   input: Partial<AuthorityInput>;
   source: ResearchSource;
 };
 
-const defaultActorId = "unseenuser/linkedin-profile";
-
 export async function extractLinkedInProfileWithApify(profileUrl: string, token: string): Promise<LinkedInExtraction | null> {
-  const actorId = encodeActorId(process.env.APIFY_LINKEDIN_ACTOR_ID ?? defaultActorId);
+  const actorId = encodeActorId(process.env.APIFY_LINKEDIN_ACTOR_ID ?? apifyActors.linkedinProfile.actorId);
   const endpoint = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${token}&timeout=120`;
 
   const response = await fetch(endpoint, {
@@ -35,7 +34,7 @@ export async function extractLinkedInProfileWithApify(profileUrl: string, token:
       title: "Perfil publico do LinkedIn coletado via Apify",
       url: profileUrl,
       confidence: "likely",
-      notes: "Dados retornados pelo Actor unseenuser/linkedin-profile para a URL informada pelo usuario.",
+      notes: `Dados retornados pelo Actor ${apifyActors.linkedinProfile.actorId} para a URL informada pelo usuario.`,
     },
   };
 }

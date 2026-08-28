@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apifyActors } from "@/lib/connectors/apifyActors";
 import { getUserApifyToken } from "@/lib/connectors/userApifyCredential";
 import { getUserGeminiApiKey } from "@/lib/connectors/userGeminiCredential";
 
@@ -27,7 +28,8 @@ export async function GET() {
     apify: {
       connected: apifyConnected,
       label: apifyConnected ? "Apify conectado" : "Conectar Apify",
-      actorId: process.env.APIFY_LINKEDIN_ACTOR_ID ?? "unseenuser/linkedin-profile",
+      actorId: process.env.APIFY_LINKEDIN_ACTOR_ID ?? apifyActors.linkedinProfile.actorId,
+      actors: Object.values(apifyActors),
     },
   });
 }
