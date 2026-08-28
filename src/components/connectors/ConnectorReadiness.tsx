@@ -122,12 +122,11 @@ export function ConnectorReadiness() {
               <li>3. Copie a chave gerada e cole aqui.</li>
             </ol>
             <a
-              href="https://aistudio.google.com/api-keys"
+              href="/ajuda/gemini"
               target="_blank"
-              rel="noreferrer"
               className="mt-4 inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
             >
-              Abrir Google AI Studio
+              Ver passo a passo
               <ExternalLink className="h-4 w-4" />
             </a>
           </div>
