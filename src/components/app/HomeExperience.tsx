@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, CalendarDays, CheckCircle2, ShieldCheck, Target, TrendingUp } from "lucide-react";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { LoginButton } from "@/components/auth/LoginButton";
 import { ConnectorStatusSummary } from "@/components/connectors/ConnectorStatusSummary";
@@ -119,6 +120,22 @@ export function HomeExperience() {
         </section>
 
         <ConnectorStatusSummary />
+        <section className="grid gap-4 rounded-lg border border-[var(--share-line)] bg-white p-5 shadow-[0_18px_60px_rgb(0_63_46_/_0.08)] md:grid-cols-[1fr_auto] md:items-center">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Nova area</p>
+            <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Mapa de decisores</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
+              Estruture a pesquisa de conta, encontre pessoas estrategicas e prepare rapport com fontes e confianca.
+            </p>
+          </div>
+          <Link
+            href="/mapa-decisores"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
+          >
+            Abrir mapa
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </section>
         <AuthorityDiagnostic />
       </div>
     </main>
