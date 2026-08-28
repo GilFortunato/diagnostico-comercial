@@ -42,7 +42,7 @@ export type ResearchSource = {
 export type AuthorityAssessment = {
   id: string;
   createdAt: string;
-  adapter: "demo-local" | "database";
+  adapter: "demo-local" | "gemini" | "database";
   input: AuthorityInput;
   overallScore: number;
   summary: string;
@@ -243,18 +243,7 @@ export function createAuthorityAssessment(input: AuthorityInput): AuthorityAsses
         ],
       },
     ],
-    sources: [
-      {
-        title: "Dados informados pelo usuario",
-        confidence: "confirmed",
-        notes: "Entradas declaradas no formulario do diagnostico.",
-      },
-      {
-        title: "Avaliacao heuristica local",
-        confidence: "inference",
-        notes: "Adapter temporario ate conectar provider de IA e fontes autorizadas.",
-      },
-    ],
+    sources: buildSources(parsed),
     nextActions: [
       "Refazer diagnostico",
       "Comparar evolucao",
@@ -264,6 +253,33 @@ export function createAuthorityAssessment(input: AuthorityInput): AuthorityAsses
       "O que devo fazer agora?",
     ],
   };
+}
+
+function buildSources(input: AuthorityInput): ResearchSource[] {
+  const sources: ResearchSource[] = [
+    {
+      title: "Dados informados pelo usuario",
+      confidence: "confirmed",
+      notes: "Entradas declaradas no formulario do diagnostico.",
+    },
+  ];
+
+  if (input.profileUrl) {
+    sources.push({
+      title: "URL publica do LinkedIn informada",
+      url: input.profileUrl,
+      confidence: "unverified",
+      notes: "A URL e usada como referencia. O conteudo precisa vir de conexao autorizada ou informacao fornecida pelo usuario.",
+    });
+  }
+
+  sources.push({
+    title: "Avaliacao heuristica local",
+    confidence: "inference",
+    notes: "Fallback usado quando o provider de IA nao esta configurado ou nao retorna uma avaliacao valida.",
+  });
+
+  return sources;
 }
 
 export function compareAuthorityAssessments(items: AuthorityAssessment[]) {
