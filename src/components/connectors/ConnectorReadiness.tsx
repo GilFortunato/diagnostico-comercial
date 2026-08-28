@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Brain, CheckCircle2, Link, LockKeyhole, RefreshCw, Trash2 } from "lucide-react";
+import { Brain, CheckCircle2, ExternalLink, Link, LockKeyhole, RefreshCw, Trash2 } from "lucide-react";
 
 type ConnectorStatus = {
   google: { connected: boolean; label: string };
@@ -113,28 +113,47 @@ export function ConnectorReadiness() {
       </div>
 
       {!status.gemini.connected ? (
-        <div className="mt-4 grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
-          <label className="grid gap-1.5">
-            <span className="text-sm font-semibold text-amber-950">Chave Gemini deste usuario</span>
-            <input
-              value={geminiApiKey}
-              onChange={(event) => setGeminiApiKey(event.target.value)}
-              type="password"
-              placeholder="AIza..."
-              className="rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-[var(--share-green-800)]"
-            />
-          </label>
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={connectGemini}
-              disabled={isSaving || geminiApiKey.trim().length < 20}
-              className="share-button-primary inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+        <div className="mt-4 grid gap-4 rounded-md border border-amber-200 bg-amber-50 p-4 lg:grid-cols-[320px_1fr]">
+          <div className="rounded-md border border-amber-200 bg-white p-4">
+            <p className="text-sm font-semibold text-amber-950">Onde pegar a chave Gemini</p>
+            <ol className="mt-3 grid gap-2 text-sm leading-6 text-zinc-700">
+              <li>1. Abra o Google AI Studio.</li>
+              <li>2. Clique em Create API key.</li>
+              <li>3. Copie a chave gerada e cole aqui.</li>
+            </ol>
+            <a
+              href="https://aistudio.google.com/api-keys"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
             >
-              {isSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
-              Conectar Gemini
-            </button>
-            <p className="text-sm leading-6 text-amber-900">A chave e validada no Google e guardada protegida no backend deste navegador.</p>
+              Abrir Google AI Studio
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          </div>
+          <div className="grid content-start gap-3">
+            <label className="grid gap-1.5">
+              <span className="text-sm font-semibold text-amber-950">Cole a chave Gemini deste usuario</span>
+              <input
+                value={geminiApiKey}
+                onChange={(event) => setGeminiApiKey(event.target.value)}
+                type="password"
+                placeholder="AIza..."
+                className="rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-[var(--share-green-800)]"
+              />
+            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={connectGemini}
+                disabled={isSaving || geminiApiKey.trim().length < 20}
+                className="share-button-primary inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+                Conectar Gemini
+              </button>
+              <p className="text-sm leading-6 text-amber-900">A chave e validada no Google e guardada protegida no backend deste navegador.</p>
+            </div>
           </div>
         </div>
       ) : null}
