@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { buildBusinessUnitGuidance } from "@/lib/business-units/dna";
 
 export const confidenceLevels = ["confirmed", "likely", "inference", "unverified"] as const;
 
@@ -7,6 +8,21 @@ export type ConfidenceLevel = (typeof confidenceLevels)[number];
 export const authorityInputSchema = z.object({
   businessUnitId: z.string().min(1),
   businessUnitName: z.string().min(1),
+  businessUnitContext: z
+    .object({
+      name: z.string(),
+      products: z.array(z.string()),
+      icps: z.array(z.string()),
+      personas: z.array(z.string()),
+      territories: z.array(z.string()),
+      recommendedTerms: z.array(z.string()),
+      avoidedTerms: z.array(z.string()),
+      proofPoints: z.array(z.string()),
+      contentTone: z.string(),
+      recommendedCtas: z.array(z.string()),
+      forbiddenClaims: z.array(z.string()),
+    })
+    .optional(),
   profileUrl: z.string().url().optional().or(z.literal("")),
   objective: z.string().min(10),
   headline: z.string().optional().default(""),
@@ -147,34 +163,27 @@ export function createAuthorityAssessment(input: AuthorityInput, extraSources: R
   const overallScore = normalize(weighted / totalWeight);
   const weak = dimensions.filter((item) => item.score < 55).slice(0, 4);
   const strong = dimensions.filter((item) => item.score >= 72).slice(0, 4);
-
-  const prosperMode = parsed.businessUnitId === "bu_prosper";
-  const opportunities = prosperMode
-    ? [
-        "Transformar Inic.IA, AI for Business e AI Builders em uma narrativa de maturidade: entender, aplicar e construir.",
-        "Usar Prosper Sprints como prova de escala, mensuracao e acompanhamento, nao apenas como plataforma.",
-        "Conectar autoridade em IA a dores reais de RH, lideranca, operacoes e transformacao digital.",
-        "Evidenciar impacto em diversidade, equidade, inclusao e empregabilidade quando houver fonte segura.",
-      ]
-    : [
-        `Transformar temas de ${parsed.businessUnitName} em uma narrativa recorrente.`,
-        "Adicionar provas objetivas, aprendizados de campo e exemplos comerciais.",
-        "Criar uma rotina de comentarios em conversas onde o ICP ja participa.",
-      ];
-  const recommendations = prosperMode
-    ? [
-        "Reescrever headline com tres sinais: habilidades digitais, IA aplicada e impacto de negocio.",
-        "Organizar o Sobre pela jornada Prosper: entender IA, aplicar no dia a dia e construir solucoes reais.",
-        "Publicar uma serie sobre maturidade em IA com exemplos de RH, lideranca e operacoes.",
-        "Usar provas de clientes, programas e resultados sem expor dados sensiveis ou prometer ROI sem fonte.",
-        "Criar comentarios consultivos em posts de decisores sobre futuro do trabalho, produtividade, DEI e transformacao.",
-      ]
-    : [
-        "Reescrever headline com problema resolvido, publico e territorio de autoridade.",
-        "Reorganizar o Sobre para combinar contexto, prova, oferta e CTA.",
-        "Publicar uma sequencia de 4 posts com ponto de vista, case, aprendizado e convite.",
-        "Comentar semanalmente em posts de decisores e especialistas do ICP.",
-      ];
+  const guidance = parsed.businessUnitContext ?? buildBusinessUnitGuidance(parsed.businessUnitId);
+  const primaryTerritory = guidance.territories[0] ?? parsed.businessUnitName;
+  const primaryProduct = guidance.products[0] ?? parsed.businessUnitName;
+  const primaryIcp = guidance.icps[0] ?? "decisores do ICP";
+  const opportunities = [
+    `Transformar ${primaryProduct} em narrativa de autoridade conectada a ${primaryTerritory}.`,
+    `Conectar temas da BU a dores reais de ${primaryIcp}, sem depender de discurso institucional generico.`,
+    "Evidenciar aprendizados de campo, provas e exemplos concretos antes de pedir conversa comercial.",
+    guidance.proofPoints.length
+      ? `Usar provas disponiveis com fonte: ${guidance.proofPoints.slice(0, 2).join("; ")}.`
+      : "Mapear provas institucionais antes de afirmar resultados, clientes ou numeros.",
+  ];
+  const recommendations = [
+    `Reescrever headline com tres sinais: ${primaryTerritory}, publico e impacto comercial.`,
+    `Organizar o Sobre conectando problema, visao, experiencia, prova e CTA para ${primaryIcp}.`,
+    `Publicar uma serie consultiva no tom ${guidance.contentTone}, sem transformar a pessoa em outdoor da BU.`,
+    `Usar termos estrategicos como ${guidance.recommendedTerms.slice(0, 4).join(", ") || parsed.businessUnitName}.`,
+    guidance.forbiddenClaims.length
+      ? `Evitar claims sem fonte, especialmente: ${guidance.forbiddenClaims[0]}.`
+      : "Nao criar claims, cases ou numeros sem evidencia confirmada.",
+  ];
 
   return {
     id: crypto.randomUUID(),
@@ -199,12 +208,12 @@ export function createAuthorityAssessment(input: AuthorityInput, extraSources: R
         objective: "Reposicionar perfil",
         actions: [
           {
-            action: prosperMode ? "Ajustar headline para conectar habilidades digitais, IA aplicada e valor real." : "Ajustar headline com ICP, problema e promessa realista.",
+            action: `Ajustar headline para conectar ${primaryTerritory}, ICP e impacto real.`,
             effort: "low",
             impact: "high",
           },
           {
-            action: prosperMode ? "Atualizar Sobre com a jornada entender, aplicar e construir IA." : "Atualizar Sobre com prova, contexto da BU e CTA de conversa.",
+            action: `Atualizar Sobre com problema, experiencia, prova e CTA: ${guidance.recommendedCtas[0] ?? "convite para conversa"}.`,
             effort: "medium",
             impact: "high",
           },
@@ -215,12 +224,12 @@ export function createAuthorityAssessment(input: AuthorityInput, extraSources: R
         objective: "Evidenciar repertorio",
         actions: [
           {
-            action: prosperMode ? "Publicar insight sobre baixa aplicacao pratica de IA nas areas de negocio." : "Publicar insight sobre uma dor concreta do ICP.",
+            action: `Publicar insight sobre uma dor concreta de ${primaryIcp}.`,
             effort: "medium",
             impact: "high",
           },
           {
-            action: prosperMode ? "Registrar aprendizado de programa, sprint ou mentoria sem expor dados sensiveis." : "Registrar um case ou aprendizado sem expor dados sensiveis.",
+            action: `Registrar um aprendizado associado a ${primaryProduct}, sem expor dados sensiveis.`,
             effort: "medium",
             impact: "high",
           },

@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Activity, BarChart3, CheckCircle2, History, Link, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import type { AuthorityAssessment } from "@/lib/diagnostics/authority";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
-import { prosperContext } from "@/lib/tenancy/prosper";
+import { buildBusinessUnitGuidance, defaultBusinessUnitId, getBusinessUnitStarterInput } from "@/lib/business-units/dna";
 import { StatusPill } from "@/components/app/StatusPill";
 
 type FormState = {
@@ -26,43 +26,10 @@ type CompareState = {
   message: string;
 };
 
-const sampleByBu: Record<string, FormState> = {
-  bu_share: {
-    profileUrl: "",
-    objective: "Ser reconhecido por decisores B2B como especialista em Social Selling e inteligencia comercial.",
-    headline: "Estrategia comercial B2B, Social Selling e posicionamento para empresas que vendem conhecimento",
-    about: "Ajudo times comerciais e liderancas a transformar repertorio, contexto de marca e relacoes em oportunidades mais qualificadas. Minha atuacao combina diagnostico, conteudo, hunting e preparacao para conversas com decisores.",
-    themes: "social selling, autoridade comercial, vendas B2B, posicionamento",
-    proofPoints: "Projetos com clientes B2B, playbooks comerciais, cases de melhoria de abordagem e workshops com liderancas.",
-    recentContent: "Posts com insights sobre autoridade comercial, comentarios em conversas de decisores e artigos sobre reputacao no LinkedIn.",
-    interactionSignals: "Interacoes com gestores, diretores comerciais, lideres de marketing e fundadores.",
-  },
-  bu_prosper: {
-    profileUrl: "",
-    objective: "Ser lembrado por RHs, liderancas e areas de negocio como referencia em habilidades digitais, IA aplicada e transformacao com resultado.",
-    headline: "Habilidades digitais, IA aplicada e desenvolvimento de talentos para empresas que querem gerar valor real",
-    about: "Atuo na Prosper Digital Skills, frente da Share People Hub dedicada ao desenvolvimento de habilidades digitais para o futuro do trabalho. Ajudo empresas a sair do entendimento da IA para a aplicacao pratica e a construcao de solucoes reais, conectando aprendizagem, dados, negocio, diversidade e impacto.",
-    themes: "IA aplicada a RH, habilidades digitais, futuro do trabalho, AI for Business, educacao corporativa, Prosper Sprints",
-    proofPoints: "Programas como Inic.IA, AI for Business, AI Builders, Potenc.IA e Prosper Sprints; jornadas com empresas como AB InBev, CI&T, John Deere, Bosch, Vivo, BNP Paribas, Itau, Localiza e Suzano.",
-    recentContent: "Posts e comentarios sobre sensibilizacao em IA, letramento digital, uso pratico de ferramentas, desafios reais de negocio, ROI educacional e novas formas de trabalho.",
-    interactionSignals: "Conversas com RH, liderancas de negocio, gestores de treinamento, operacoes, decisores de transformacao digital e patrocinadores de programas de DEI.",
-  },
-  bu_education_recruit: {
-    profileUrl: "",
-    objective: "Construir autoridade com instituicoes de ensino que precisam recrutar melhor.",
-    headline: "Recrutamento para educacao, atracao de talentos e inteligencia para instituicoes de ensino",
-    about: "Apoio instituicoes educacionais na leitura de perfil, atracao e selecao de talentos alinhados ao contexto escolar. O foco e unir criterio, agilidade e qualidade de decisao.",
-    themes: "recrutamento educacional, talentos, gestao escolar, selecao",
-    proofPoints: "Projetos de recrutamento, mapeamento de mercado educacional e processos seletivos para instituicoes de ensino.",
-    recentContent: "Conteudos sobre desafios de recrutamento na educacao e comentarios em temas de gestao escolar.",
-    interactionSignals: "Interacoes com mantenedores, gestores escolares, coordenadores e liderancas de educacao.",
-  },
-};
-
 export function AuthorityDiagnostic() {
-  const [businessUnitId, setBusinessUnitId] = useState(demoBusinessUnits[1].id);
+  const [businessUnitId, setBusinessUnitId] = useState(defaultBusinessUnitId);
   const selectedBu = useMemo(() => demoBusinessUnits.find((item) => item.id === businessUnitId) ?? demoBusinessUnits[0], [businessUnitId]);
-  const [form, setForm] = useState<FormState>(sampleByBu[businessUnitId]);
+  const [form, setForm] = useState<FormState>(getBusinessUnitStarterInput(businessUnitId));
   const [assessment, setAssessment] = useState<AuthorityAssessment | null>(null);
   const [history, setHistory] = useState<AuthorityAssessment[]>([]);
   const [comparison, setComparison] = useState<CompareState | null>(null);
@@ -72,7 +39,7 @@ export function AuthorityDiagnostic() {
 
   function switchBu(nextBusinessUnitId: string) {
     setBusinessUnitId(nextBusinessUnitId);
-    setForm(sampleByBu[nextBusinessUnitId]);
+    setForm(getBusinessUnitStarterInput(nextBusinessUnitId));
     setAssessment(null);
     setHistory([]);
     setComparison(null);
@@ -93,7 +60,7 @@ export function AuthorityDiagnostic() {
       const response = await fetch("/api/diagnostics/authority", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, businessUnitId, businessUnitName: selectedBu.name }),
+        body: JSON.stringify({ ...form, businessUnitId, businessUnitName: selectedBu.name, businessUnitContext: buildBusinessUnitGuidance(businessUnitId) }),
       });
       const result = (await response.json()) as AuthorityAssessment;
       setAssessment(result);
@@ -151,7 +118,7 @@ export function AuthorityDiagnostic() {
       </aside>
 
       <div className="space-y-6">
-        {businessUnitId === "bu_prosper" ? <ProsperContextPanel /> : null}
+        <BusinessUnitContextPanel businessUnit={selectedBu} />
 
         <div className="share-card rounded-lg p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -352,26 +319,36 @@ function ResultList({ title, icon, items }: { title: string; icon: React.ReactNo
   );
 }
 
-function ProsperContextPanel() {
+type VisualBusinessUnitContext = {
+  positioning?: string;
+  pillars?: Array<{ title: string; description: string; offers: string[] }>;
+  differentiators?: string[];
+  aiMaturity?: Array<{ level: string; title: string }>;
+};
+
+function BusinessUnitContextPanel({ businessUnit }: { businessUnit: (typeof demoBusinessUnits)[number] }) {
+  const context = businessUnit.brandPack.context as VisualBusinessUnitContext | undefined;
+  if (!context?.pillars?.length) return null;
+
   return (
-    <div className="overflow-hidden rounded-lg bg-[linear-gradient(135deg,#ff0048_0%,#c51bbf_48%,#5b19ef_100%)] text-white shadow-[0_24px_80px_rgb(91_25_239_/_0.22)]">
+    <div className="overflow-hidden rounded-lg text-white shadow-[0_24px_80px_rgb(0_63_46_/_0.16)]" style={{ background: `linear-gradient(135deg, ${businessUnit.brandPack.primary} 0%, ${businessUnit.brandPack.secondary ?? "var(--share-green-950)"} 100%)` }}>
       <div className="p-5 md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#2ef2ce]">Prosper Digital Skills</p>
-            <h3 className="mt-2 text-2xl font-semibold md:text-3xl">Contexto Prosper ativo</h3>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/82">{prosperContext.positioning}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: businessUnit.brandPack.accent }}>{businessUnit.name}</p>
+            <h3 className="mt-2 text-2xl font-semibold md:text-3xl">Contexto da BU ativo</h3>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/82">{context.positioning}</p>
           </div>
           <div className="rounded-md border border-white/20 px-4 py-3 text-right">
-            <p className="text-xs text-white/70">Maturidade em IA</p>
-            <p className="mt-1 text-xl font-semibold text-[#2ef2ce]">Entender - Aplicar - Construir</p>
+            <p className="text-xs text-white/70">Brand Pack</p>
+            <p className="mt-1 text-xl font-semibold" style={{ color: businessUnit.brandPack.accent }}>{businessUnit.brandPack.voice}</p>
           </div>
         </div>
 
         <div className="mt-6 grid gap-3 xl:grid-cols-5">
-          {prosperContext.pillars.map((pillar) => (
+          {context.pillars.map((pillar) => (
             <article key={pillar.title} className="rounded-md border border-white/15 bg-white/10 p-4">
-              <h4 className="text-sm font-semibold text-[#2ef2ce]">{pillar.title}</h4>
+              <h4 className="text-sm font-semibold" style={{ color: businessUnit.brandPack.accent }}>{pillar.title}</h4>
               <p className="mt-2 min-h-20 text-xs leading-5 text-white/78">{pillar.description}</p>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {pillar.offers.map((offer) => (
@@ -386,17 +363,17 @@ function ProsperContextPanel() {
 
         <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1.2fr]">
           <div className="rounded-md border border-[#2ef2ce]/70 bg-white/8 p-4">
-            <p className="text-sm font-semibold text-[#2ef2ce]">Diferenciais para autoridade comercial</p>
+            <p className="text-sm font-semibold" style={{ color: businessUnit.brandPack.accent }}>Diferenciais para autoridade comercial</p>
             <div className="mt-3 grid gap-2 text-sm leading-5 text-white/82 sm:grid-cols-2">
-              {prosperContext.differentiators.map((item) => (
+              {(context.differentiators ?? []).map((item) => (
                 <span key={item}>{item}</span>
               ))}
             </div>
           </div>
           <div className="rounded-md border border-white/15 bg-white/10 p-4">
-            <p className="text-sm font-semibold text-[#2ef2ce]">Jornada de evolucao em IA</p>
+            <p className="text-sm font-semibold" style={{ color: businessUnit.brandPack.accent }}>Jornada de evolucao</p>
             <div className="mt-3 grid gap-2 md:grid-cols-3">
-              {prosperContext.aiMaturity.map((step) => (
+              {(context.aiMaturity ?? []).map((step) => (
                 <div key={step.level} className="rounded-md bg-white/12 p-3">
                   <p className="text-xs font-semibold uppercase text-white">{step.level}</p>
                   <p className="mt-2 text-xs leading-5 text-white/78">{step.title}</p>

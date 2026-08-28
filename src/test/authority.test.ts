@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compareAuthorityAssessments, createAuthorityAssessment } from "@/lib/diagnostics/authority";
+import { buildBusinessUnitGuidance, defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
 
+const defaultBu = getBusinessUnitDna(defaultBusinessUnitId);
 const baseInput = {
-  businessUnitId: "bu_prosper",
-  businessUnitName: "Prosper",
+  businessUnitId: defaultBu.id,
+  businessUnitName: defaultBu.name,
+  businessUnitContext: buildBusinessUnitGuidance(defaultBu.id),
   profileUrl: "https://www.linkedin.com/in/prosper-demo",
   objective: "Ser reconhecido por liderancas de RH como referencia em IA aplicada a educacao corporativa.",
   headline: "Educacao corporativa e IA aplicada ao desenvolvimento de talentos para empresas",
@@ -19,7 +22,7 @@ const baseInput = {
 test("authority assessment returns a bounded commercial authority score", () => {
   const assessment = createAuthorityAssessment(baseInput);
 
-  assert.equal(assessment.input.businessUnitName, "Prosper");
+  assert.equal(assessment.input.businessUnitName, defaultBu.name);
   assert.equal(assessment.dimensions.length, 20);
   assert.ok(assessment.overallScore >= 0);
   assert.ok(assessment.overallScore <= 100);

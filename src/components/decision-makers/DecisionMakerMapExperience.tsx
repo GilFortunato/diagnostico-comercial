@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Building2, CheckCircle2, Compass, KeyRound, Network, Search, ShieldAlert, Sparkles } from "lucide-react";
 import { LoginButton } from "@/components/auth/LoginButton";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
+import { defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
 import { decisionMakerActorAudit, decisionMakerPipeline, recommendationLabel } from "@/lib/decision-makers/capabilityAudit";
 
 type ConnectorStatus = {
@@ -15,14 +16,11 @@ type ConnectorStatus = {
   apify: { connected: boolean; label: string };
 };
 
-const roleSignals = ["RH", "T&D", "People", "Learning", "Transformacao Digital", "Inovacao"];
-const titleSignals = ["CHRO", "Head of People", "Head of Learning", "Diretor de RH", "Gerente de T&D", "Gerente de DO"];
-
 export function DecisionMakerMapExperience() {
   const [status, setStatus] = useState<ConnectorStatus | null>(null);
   const [company, setCompany] = useState("Natura");
-  const [businessUnitId, setBusinessUnitId] = useState("bu_prosper");
-  const [objective, setObjective] = useState("Vender programa corporativo de desenvolvimento em IA");
+  const [businessUnitId, setBusinessUnitId] = useState(defaultBusinessUnitId);
+  const [objective, setObjective] = useState(buildDecisionMakerObjective(defaultBusinessUnitId));
   const [location, setLocation] = useState("");
 
   useEffect(() => {
@@ -33,6 +31,8 @@ export function DecisionMakerMapExperience() {
   }, []);
 
   const selectedBu = useMemo(() => demoBusinessUnits.find((unit) => unit.id === businessUnitId) ?? demoBusinessUnits[0], [businessUnitId]);
+  const roleSignals = selectedBu.icps[0]?.buyingAreas ?? selectedBu.positioning.recommendedTerms.slice(0, 6);
+  const titleSignals = selectedBu.icps[0]?.decisionMakers ?? selectedBu.personas.map((persona) => persona.name);
   const readyCount = status ? [status.google.connected, status.gemini.connected, status.apify.connected].filter(Boolean).length : 0;
   const isReady = Boolean(status?.google.connected && status.gemini.connected && status.apify.connected);
 
@@ -108,7 +108,10 @@ export function DecisionMakerMapExperience() {
                 <span className="text-sm font-medium text-zinc-700">BU</span>
                 <select
                   value={businessUnitId}
-                  onChange={(event) => setBusinessUnitId(event.target.value)}
+                  onChange={(event) => {
+                    setBusinessUnitId(event.target.value);
+                    setObjective(buildDecisionMakerObjective(event.target.value));
+                  }}
                   className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2 text-sm outline-none focus:border-[var(--share-green-800)]"
                 >
                   {demoBusinessUnits.map((unit) => (
@@ -246,4 +249,11 @@ function AuditNote({ title, text }: { title: string; text: string }) {
       <p className="mt-1 text-xs leading-5 text-zinc-600">{text}</p>
     </div>
   );
+}
+
+function buildDecisionMakerObjective(businessUnitId: string) {
+  const unit = getBusinessUnitDna(businessUnitId);
+  const product = unit.products[0]?.name ?? unit.name;
+  const territory = unit.authorityTerritories[0]?.name ?? "prioridade comercial";
+  return `Encontrar decisores para ${product} com foco em ${territory}.`;
 }

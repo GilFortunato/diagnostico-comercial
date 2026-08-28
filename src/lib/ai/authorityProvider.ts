@@ -105,6 +105,7 @@ Temas: ${input.themes}
 Provas e resultados: ${input.proofPoints}
 Conteudos recentes: ${input.recentContent}
 Interacoes e networking: ${input.interactionSignals}
+BU DNA: ${JSON.stringify(input.businessUnitContext ?? {}, null, 2)}
 
 Formato:
 {

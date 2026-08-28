@@ -6,10 +6,12 @@ import { useSession } from "next-auth/react";
 import { LoginButton } from "@/components/auth/LoginButton";
 import { ConnectorStatusSummary } from "@/components/connectors/ConnectorStatusSummary";
 import { AuthorityDiagnostic } from "@/components/diagnostics/AuthorityDiagnostic";
+import { defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
 
 export function HomeExperience() {
   const { data: session } = useSession();
   const isAuthenticated = Boolean(session?.user);
+  const defaultBu = getBusinessUnitDna(defaultBusinessUnitId);
 
   if (!isAuthenticated) {
     return (
@@ -21,7 +23,7 @@ export function HomeExperience() {
               <span className="pb-1 text-xs font-semibold uppercase text-[var(--share-green-800)]">AI</span>
             </div>
             <span className="hidden rounded-md border border-[var(--share-line)] bg-white px-3 py-2 text-sm font-medium text-zinc-600 sm:inline-flex">
-              Prosper Digital Skills
+              {defaultBu.name}
             </span>
           </div>
 
@@ -133,6 +135,22 @@ export function HomeExperience() {
             className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
           >
             Abrir mapa
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </section>
+        <section className="grid gap-4 rounded-lg border border-[var(--share-line)] bg-white p-5 shadow-[0_18px_60px_rgb(0_63_46_/_0.08)] md:grid-cols-[1fr_auto] md:items-center">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Admin</p>
+            <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Business Unit DNA</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
+              Configure produtos, ICPs, personas, territorios, content DNA, claims e documentos sem transformar Prosper no produto.
+            </p>
+          </div>
+          <Link
+            href="/admin/business-units"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
+          >
+            Abrir Admin
             <ArrowRight className="h-4 w-4" />
           </Link>
         </section>
