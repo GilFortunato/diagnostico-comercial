@@ -9,9 +9,9 @@ export const authorityInputSchema = z.object({
   businessUnitName: z.string().min(1),
   profileUrl: z.string().url().optional().or(z.literal("")),
   objective: z.string().min(10),
-  headline: z.string().min(3),
-  about: z.string().min(20),
-  themes: z.string().min(3),
+  headline: z.string().optional().default(""),
+  about: z.string().optional().default(""),
+  themes: z.string().optional().default(""),
   proofPoints: z.string().optional().default(""),
   recentContent: z.string().optional().default(""),
   interactionSignals: z.string().optional().default(""),
@@ -139,7 +139,7 @@ function buildRationale(label: string, score: number) {
   return `${label} ainda nao sustenta autoridade comercial de forma clara.`;
 }
 
-export function createAuthorityAssessment(input: AuthorityInput): AuthorityAssessment {
+export function createAuthorityAssessment(input: AuthorityInput, extraSources: ResearchSource[] = []): AuthorityAssessment {
   const parsed = authorityInputSchema.parse(input);
   const dimensions = authorityDimensions.map((dimension) => scoreDimension(dimension, parsed));
   const weighted = dimensions.reduce((sum, item) => sum + item.score * item.weight, 0);
@@ -243,7 +243,7 @@ export function createAuthorityAssessment(input: AuthorityInput): AuthorityAsses
         ],
       },
     ],
-    sources: buildSources(parsed),
+    sources: buildSources(parsed, extraSources),
     nextActions: [
       "Refazer diagnostico",
       "Comparar evolucao",
@@ -255,7 +255,7 @@ export function createAuthorityAssessment(input: AuthorityInput): AuthorityAsses
   };
 }
 
-function buildSources(input: AuthorityInput): ResearchSource[] {
+function buildSources(input: AuthorityInput, extraSources: ResearchSource[] = []): ResearchSource[] {
   const sources: ResearchSource[] = [
     {
       title: "Dados informados pelo usuario",
@@ -264,7 +264,9 @@ function buildSources(input: AuthorityInput): ResearchSource[] {
     },
   ];
 
-  if (input.profileUrl) {
+  sources.push(...extraSources);
+
+  if (input.profileUrl && !extraSources.some((source) => source.url === input.profileUrl)) {
     sources.push({
       title: "URL publica do LinkedIn informada",
       url: input.profileUrl,

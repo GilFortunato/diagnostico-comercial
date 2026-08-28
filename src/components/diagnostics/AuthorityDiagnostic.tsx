@@ -166,18 +166,23 @@ export function AuthorityDiagnostic() {
           <div className="mt-5 grid gap-4">
             <Input
               icon={<Link className="h-4 w-4 text-[#0a66c2]" />}
-              label="URL publica do perfil no LinkedIn"
+              label="URL do seu perfil no LinkedIn"
               placeholder="https://www.linkedin.com/in/seu-perfil"
               value={form.profileUrl}
               onChange={(value) => updateField("profileUrl", value)}
             />
             <Input label="Objetivo comercial" value={form.objective} onChange={(value) => updateField("objective", value)} />
-            <Input label="Headline do LinkedIn" value={form.headline} onChange={(value) => updateField("headline", value)} />
-            <Textarea label="Sobre" value={form.about} onChange={(value) => updateField("about", value)} rows={4} />
-            <Input label="Temas de autoridade" value={form.themes} onChange={(value) => updateField("themes", value)} />
-            <Textarea label="Provas, cases e resultados" value={form.proofPoints} onChange={(value) => updateField("proofPoints", value)} />
-            <Textarea label="Conteudos recentes" value={form.recentContent} onChange={(value) => updateField("recentContent", value)} />
-            <Textarea label="Interacoes e networking" value={form.interactionSignals} onChange={(value) => updateField("interactionSignals", value)} />
+            <details className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-[var(--share-green-900)]">Complementar manualmente</summary>
+              <div className="mt-4 grid gap-4">
+                <Input label="Headline do LinkedIn" value={form.headline} onChange={(value) => updateField("headline", value)} />
+                <Textarea label="Sobre" value={form.about} onChange={(value) => updateField("about", value)} rows={4} />
+                <Input label="Temas de autoridade" value={form.themes} onChange={(value) => updateField("themes", value)} />
+                <Textarea label="Provas, cases e resultados" value={form.proofPoints} onChange={(value) => updateField("proofPoints", value)} />
+                <Textarea label="Conteudos recentes" value={form.recentContent} onChange={(value) => updateField("recentContent", value)} />
+                <Textarea label="Interacoes e networking" value={form.interactionSignals} onChange={(value) => updateField("interactionSignals", value)} />
+              </div>
+            </details>
           </div>
           {formError ? <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</p> : null}
           <div className="mt-5 flex flex-wrap gap-3">
@@ -188,7 +193,7 @@ export function AuthorityDiagnostic() {
               disabled={isPending}
             >
               <Sparkles className="h-4 w-4" />
-              {assessment ? "Refazer diagnostico" : "Analisar perfil"}
+              {assessment ? "Refazer diagnostico" : "Analisar meu LinkedIn"}
             </button>
             <button type="button" onClick={compareEvolution} className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]">
               <BarChart3 className="h-4 w-4" />

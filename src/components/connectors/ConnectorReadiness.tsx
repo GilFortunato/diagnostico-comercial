@@ -7,11 +7,13 @@ type ConnectorStatus = {
   google: { connected: boolean; label: string };
   gemini: { connected: boolean; label: string; mode: string };
   linkedin: { connected: boolean; label: string; mode: string };
+  apify: { connected: boolean; label: string; actorId: string };
 };
 
 export function ConnectorReadiness() {
   const [status, setStatus] = useState<ConnectorStatus | null>(null);
   const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [apifyToken, setApifyToken] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -67,6 +69,45 @@ export function ConnectorReadiness() {
     }
   }
 
+  async function connectApify() {
+    setIsSaving(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/connectors/apify/credential", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: apifyToken.trim() }),
+      });
+      const result = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Nao foi possivel conectar Apify.");
+      }
+
+      setApifyToken("");
+      setMessage("Apify conectado para coletar o LinkedIn publico deste usuario.");
+      await refreshStatus();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Nao foi possivel conectar Apify.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function disconnectApify() {
+    setIsSaving(true);
+    setMessage(null);
+
+    try {
+      await fetch("/api/connectors/apify/credential", { method: "DELETE" });
+      setMessage("Apify desconectado deste usuario.");
+      await refreshStatus();
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   if (!status) {
     return (
       <section className="share-card rounded-lg p-5">
@@ -86,7 +127,7 @@ export function ConnectorReadiness() {
           <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Fontes e IA do diagnostico</h2>
         </div>
         <span className="rounded-md bg-[#edf7eb] px-3 py-2 text-sm font-semibold text-[var(--share-green-900)]">
-          {status.gemini.connected ? "IA ativa" : "IA pendente"}
+          {status.gemini.connected && status.apify.connected ? "Analise pronta" : "Conecte as fontes"}
         </span>
       </div>
 
@@ -106,11 +147,69 @@ export function ConnectorReadiness() {
         <ConnectorTile
           icon={<Link className="h-4 w-4" />}
           title={status.linkedin.label}
-          description={status.linkedin.connected ? "Pronto para evoluir para consentimento LinkedIn." : "Analise por URL publica e conteudo autorizado, sem scraping proibido."}
+          description={status.linkedin.connected ? `Actor ativo: ${status.apify.actorId}` : "Conecte Apify para importar o perfil publico pela URL."}
           connected={status.linkedin.connected}
-          neutral={!status.linkedin.connected}
         />
       </div>
+
+      {!status.apify.connected ? (
+        <div className="mt-4 grid gap-4 rounded-md border border-[#0a66c2]/25 bg-[#f4f8ff] p-4 lg:grid-cols-[320px_1fr]">
+          <div className="rounded-md border border-[#0a66c2]/20 bg-white p-4">
+            <p className="text-sm font-semibold text-[var(--share-green-950)]">Conectar coleta do LinkedIn</p>
+            <ol className="mt-3 grid gap-2 text-sm leading-6 text-zinc-700">
+              <li>1. Abra sua conta Apify.</li>
+              <li>2. Copie seu API token.</li>
+              <li>3. Cole aqui para usar o Actor do print.</li>
+            </ol>
+            <a
+              href="https://console.apify.com/account/integrations"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 inline-flex items-center gap-2 rounded-md border border-[#0a66c2]/40 px-3 py-2 text-sm font-semibold text-[#0a66c2] hover:bg-[#eef5ff]"
+            >
+              Abrir token Apify
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          </div>
+          <div className="grid content-start gap-3">
+            <label className="grid gap-1.5">
+              <span className="text-sm font-semibold text-[var(--share-green-950)]">Token Apify deste usuario</span>
+              <input
+                value={apifyToken}
+                onChange={(event) => setApifyToken(event.target.value)}
+                type="password"
+                placeholder="apify_api_..."
+                className="rounded-md border border-[#0a66c2]/25 bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-[#0a66c2]"
+              />
+            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={connectApify}
+                disabled={isSaving || apifyToken.trim().length < 20}
+                className="inline-flex items-center gap-2 rounded-md bg-[#0a66c2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084f96] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
+                Conectar Apify
+              </button>
+              <p className="text-sm leading-6 text-zinc-600">Usa o Actor `unseenuser/linkedin-profile` para importar dados publicos da URL.</p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#0a66c2]/25 bg-[#f4f8ff] px-4 py-3">
+          <p className="text-sm font-medium text-[var(--share-green-950)]">Apify pronto para coletar o perfil publico do LinkedIn informado.</p>
+          <button
+            type="button"
+            onClick={disconnectApify}
+            disabled={isSaving}
+            className="inline-flex items-center gap-2 rounded-md border border-[#0a66c2]/25 bg-white px-3 py-2 text-sm font-semibold text-[#0a66c2] hover:bg-[#eef5ff] disabled:opacity-60"
+          >
+            <Trash2 className="h-4 w-4" />
+            Desconectar
+          </button>
+        </div>
+      )}
 
       {!status.gemini.connected ? (
         <div className="mt-4 grid gap-4 rounded-md border border-amber-200 bg-amber-50 p-4 lg:grid-cols-[320px_1fr]">

@@ -1,4 +1,4 @@
-import { createAuthorityAssessment, type AuthorityAssessment, type AuthorityInput } from "@/lib/diagnostics/authority";
+import { createAuthorityAssessment, type AuthorityAssessment, type AuthorityInput, type ResearchSource } from "@/lib/diagnostics/authority";
 import { resolveProviderForCapability } from "@/lib/ai/providers";
 
 type GeminiAuthorityPayload = {
@@ -13,8 +13,8 @@ type GeminiAuthorityPayload = {
 
 const geminiModel = process.env.GEMINI_MODEL ?? "gemini-1.5-flash";
 
-export async function createAuthorityAssessmentWithProvider(input: AuthorityInput, userGeminiApiKey?: string | null): Promise<AuthorityAssessment> {
-  const fallback = createAuthorityAssessment(input);
+export async function createAuthorityAssessmentWithProvider(input: AuthorityInput, userGeminiApiKey?: string | null, extraSources: ResearchSource[] = []): Promise<AuthorityAssessment> {
+  const fallback = createAuthorityAssessment(input, extraSources);
   const provider = resolveProviderForCapability("ai.generateStructuredAssessment", process.env.DEFAULT_AI_PROVIDER);
   const geminiApiKey = userGeminiApiKey || process.env.GEMINI_API_KEY;
 
