@@ -3,6 +3,7 @@
 import { ArrowRight, CalendarDays, CheckCircle2, ShieldCheck, Target, TrendingUp } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { LoginButton } from "@/components/auth/LoginButton";
+import { ConnectorReadiness } from "@/components/connectors/ConnectorReadiness";
 import { AuthorityDiagnostic } from "@/components/diagnostics/AuthorityDiagnostic";
 
 export function HomeExperience() {
@@ -117,6 +118,7 @@ export function HomeExperience() {
           </div>
         </section>
 
+        <ConnectorReadiness />
         <AuthorityDiagnostic />
       </div>
     </main>
