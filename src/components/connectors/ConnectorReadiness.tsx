@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { Brain, CheckCircle2, ExternalLink, Link, LockKeyhole, RefreshCw, Trash2 } from "lucide-react";
 
 type ConnectorStatus = {
@@ -41,32 +42,6 @@ export function ConnectorReadiness() {
       .catch(() => setStatus(null));
   }, []);
 
-  async function connectGemini() {
-    setIsSaving(true);
-    setMessage(null);
-
-    try {
-      const response = await fetch("/api/connectors/gemini/credential", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey: geminiApiKey.trim() }),
-      });
-      const result = (await response.json()) as { error?: string };
-
-      if (!response.ok) {
-        throw new Error(result.error ?? "Nao foi possivel conectar Gemini.");
-      }
-
-      setGeminiApiKey("");
-      setMessage("Gemini conectado para este usuario.");
-      await refreshStatus();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel conectar Gemini.");
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
   async function disconnectGemini() {
     setIsSaving(true);
     setMessage(null);
@@ -80,27 +55,33 @@ export function ConnectorReadiness() {
     }
   }
 
-  async function connectApify() {
+  async function connectWorkspace() {
     setIsSaving(true);
     setMessage(null);
 
-    try {
-      const response = await fetch("/api/connectors/apify/credential", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: apifyToken.trim() }),
-      });
-      const result = (await response.json()) as { error?: string };
+    const tasks: Promise<void>[] = [];
 
-      if (!response.ok) {
-        throw new Error(result.error ?? "Nao foi possivel conectar Apify.");
+    if (!status?.gemini.connected && geminiApiKey.trim()) {
+      tasks.push(connectCredential("/api/connectors/gemini/credential", { apiKey: geminiApiKey.trim() }, "Gemini"));
+    }
+
+    if (!status?.apify.connected && apifyToken.trim()) {
+      tasks.push(connectCredential("/api/connectors/apify/credential", { token: apifyToken.trim() }, "Apify"));
+    }
+
+    try {
+      if (!tasks.length) {
+        setMessage("Cole a chave Gemini e o token Apify para conectar a base completa.");
+        return;
       }
 
+      await Promise.all(tasks);
+      setGeminiApiKey("");
       setApifyToken("");
-      setMessage("Apify conectado para coletar o LinkedIn publico deste usuario.");
+      setMessage("Conexoes salvas. A plataforma ja sabe quando usar Gemini, perfil, posts, empresa e decisores.");
       await refreshStatus();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel conectar Apify.");
+      setMessage(error instanceof Error ? error.message : "Nao foi possivel conectar tudo.");
     } finally {
       setIsSaving(false);
     }
@@ -163,123 +144,71 @@ export function ConnectorReadiness() {
         />
       </div>
 
-      {!status.apify.connected ? (
-        <div className="mt-4 grid gap-4 rounded-md border border-[#0a66c2]/25 bg-[#f4f8ff] p-4 lg:grid-cols-[320px_1fr]">
-          <div className="rounded-md border border-[#0a66c2]/20 bg-white p-4">
-            <p className="text-sm font-semibold text-[var(--share-green-950)]">Conectar coleta do LinkedIn</p>
+      {!status.gemini.connected || !status.apify.connected ? (
+        <div className="mt-4 grid gap-4 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4 lg:grid-cols-[320px_1fr]">
+          <div className="rounded-md border border-[var(--share-line)] bg-white p-4">
+            <p className="text-sm font-semibold text-[var(--share-green-950)]">Ativar base completa</p>
             <ol className="mt-3 grid gap-2 text-sm leading-6 text-zinc-700">
-              <li>1. Abra sua conta Apify.</li>
-              <li>2. Copie seu API token.</li>
-              <li>3. Cole aqui para usar o Actor do print.</li>
+              <li>1. Entre com Google no Share AI.</li>
+              <li>2. Pegue a chave Gemini e o token Apify.</li>
+              <li>3. Clique em Conectar tudo uma vez.</li>
             </ol>
-            <a
-              href="https://console.apify.com/account/integrations"
-              target="_blank"
-              rel="noreferrer"
-              className="mt-4 inline-flex items-center gap-2 rounded-md border border-[#0a66c2]/40 px-3 py-2 text-sm font-semibold text-[#0a66c2] hover:bg-[#eef5ff]"
-            >
-              Abrir token Apify
-              <ExternalLink className="h-4 w-4" />
-            </a>
-          </div>
-          <div className="grid content-start gap-3">
-            <label className="grid gap-1.5">
-              <span className="text-sm font-semibold text-[var(--share-green-950)]">Token Apify deste usuario</span>
-              <input
-                value={apifyToken}
-                onChange={(event) => setApifyToken(event.target.value)}
-                type="password"
-                placeholder="apify_api_..."
-                className="rounded-md border border-[#0a66c2]/25 bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-[#0a66c2]"
-              />
-            </label>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={connectApify}
-                disabled={isSaving || apifyToken.trim().length < 20}
-                className="inline-flex items-center gap-2 rounded-md bg-[#0a66c2] px-4 py-2 text-sm font-semibold text-white hover:bg-[#084f96] disabled:cursor-not-allowed disabled:opacity-60"
+            <div className="mt-4 flex flex-wrap gap-2">
+              <a
+                href="/ajuda/gemini"
+                target="_blank"
+                className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
               >
-                {isSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
-                Conectar Apify
-              </button>
-            <p className="text-sm leading-6 text-zinc-600">Usa Actors publicos da Apify para perfil, posts, empresa e decisores.</p>
+                Gemini
+                <ExternalLink className="h-4 w-4" />
+              </a>
+              <a
+                href="https://console.apify.com/account/integrations"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-md border border-[#0a66c2]/40 px-3 py-2 text-sm font-semibold text-[#0a66c2] hover:bg-[#eef5ff]"
+              >
+                Apify
+                <ExternalLink className="h-4 w-4" />
+              </a>
             </div>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#0a66c2]/25 bg-[#f4f8ff] px-4 py-3">
-          <p className="text-sm font-medium text-[var(--share-green-950)]">Apify pronto para coletar o perfil publico do LinkedIn informado.</p>
-          <button
-            type="button"
-            onClick={disconnectApify}
-            disabled={isSaving}
-            className="inline-flex items-center gap-2 rounded-md border border-[#0a66c2]/25 bg-white px-3 py-2 text-sm font-semibold text-[#0a66c2] hover:bg-[#eef5ff] disabled:opacity-60"
-          >
-            <Trash2 className="h-4 w-4" />
-            Desconectar
-          </button>
-        </div>
-      )}
-
-      <div className="mt-4 grid gap-2">
-        <p className="text-sm font-semibold text-[var(--share-green-950)]">Actors preparados</p>
-        <div className="grid gap-2 md:grid-cols-2">
-          {status.apify.actors.map((actor) => (
-            <div key={actor.key} className="rounded-md border border-[var(--share-line)] bg-white p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-zinc-950">{actor.label}</p>
-                <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">
-                  {stageLabel(actor.stage)}
-                </span>
-              </div>
-              <p className="mt-1 font-mono text-xs text-zinc-500">{actor.actorId}</p>
-              <p className="mt-2 text-xs leading-5 text-zinc-600">{actor.purpose}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {!status.gemini.connected ? (
-        <div className="mt-4 grid gap-4 rounded-md border border-amber-200 bg-amber-50 p-4 lg:grid-cols-[320px_1fr]">
-          <div className="rounded-md border border-amber-200 bg-white p-4">
-            <p className="text-sm font-semibold text-amber-950">Onde pegar a chave Gemini</p>
-            <ol className="mt-3 grid gap-2 text-sm leading-6 text-zinc-700">
-              <li>1. Abra o Google AI Studio.</li>
-              <li>2. Clique em Create API key.</li>
-              <li>3. Copie a chave gerada e cole aqui.</li>
-            </ol>
-            <a
-              href="/ajuda/gemini"
-              target="_blank"
-              className="mt-4 inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
-            >
-              Ver passo a passo
-              <ExternalLink className="h-4 w-4" />
-            </a>
           </div>
           <div className="grid content-start gap-3">
-            <label className="grid gap-1.5">
-              <span className="text-sm font-semibold text-amber-950">Cole a chave Gemini deste usuario</span>
-              <input
-                value={geminiApiKey}
-                onChange={(event) => setGeminiApiKey(event.target.value)}
-                type="password"
-                placeholder="AIza..."
-                className="rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-[var(--share-green-800)]"
-              />
-            </label>
+            {!status.gemini.connected ? (
+              <label className="grid gap-1.5">
+                <span className="text-sm font-semibold text-[var(--share-green-950)]">Chave Gemini deste usuario</span>
+                <input
+                  value={geminiApiKey}
+                  onChange={(event) => setGeminiApiKey(event.target.value)}
+                  type="password"
+                  placeholder="AIza..."
+                  className="rounded-md border border-[var(--share-line)] bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-[var(--share-green-800)]"
+                />
+              </label>
+            ) : null}
+            {!status.apify.connected ? (
+              <label className="grid gap-1.5">
+                <span className="text-sm font-semibold text-[var(--share-green-950)]">Token Apify deste usuario</span>
+                <input
+                  value={apifyToken}
+                  onChange={(event) => setApifyToken(event.target.value)}
+                  type="password"
+                  placeholder="apify_api_..."
+                  className="rounded-md border border-[var(--share-line)] bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-[#0a66c2]"
+                />
+              </label>
+            ) : null}
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                onClick={connectGemini}
-                disabled={isSaving || geminiApiKey.trim().length < 20}
+                onClick={connectWorkspace}
+                disabled={isSaving || (!geminiApiKey.trim() && !apifyToken.trim())}
                 className="share-button-primary inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
-                Conectar Gemini
+                {isSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Conectar tudo
               </button>
-              <p className="text-sm leading-6 text-amber-900">A chave e validada no Google e guardada protegida no backend deste navegador.</p>
+              <p className="text-sm leading-6 text-zinc-600">Depois disso, a plataforma usa cada conector quando o fluxo precisar.</p>
             </div>
           </div>
         </div>
@@ -298,9 +227,53 @@ export function ConnectorReadiness() {
           </button>
         </div>
       ) : null}
+      {status.apify.connected ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#0a66c2]/25 bg-[#f4f8ff] px-4 py-3">
+          <p className="text-sm font-medium text-[var(--share-green-950)]">Apify pronto para perfil, posts, empresa e decisores.</p>
+          <button
+            type="button"
+            onClick={disconnectApify}
+            disabled={isSaving}
+            className="inline-flex items-center gap-2 rounded-md border border-[#0a66c2]/25 bg-white px-3 py-2 text-sm font-semibold text-[#0a66c2] hover:bg-[#eef5ff] disabled:opacity-60"
+          >
+            <Trash2 className="h-4 w-4" />
+            Desconectar
+          </button>
+        </div>
+      ) : null}
+      <div className="mt-4 grid gap-2">
+        <p className="text-sm font-semibold text-[var(--share-green-950)]">Actors preparados</p>
+        <div className="grid gap-2 md:grid-cols-2">
+          {status.apify.actors.map((actor) => (
+            <div key={actor.key} className="rounded-md border border-[var(--share-line)] bg-white p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-zinc-950">{actor.label}</p>
+                <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">
+                  {stageLabel(actor.stage)}
+                </span>
+              </div>
+              <p className="mt-1 font-mono text-xs text-zinc-500">{actor.actorId}</p>
+              <p className="mt-2 text-xs leading-5 text-zinc-600">{actor.purpose}</p>
+            </div>
+          ))}
+        </div>
+      </div>
       {message ? <p className="mt-3 text-sm font-medium text-[var(--share-green-900)]">{message}</p> : null}
     </section>
   );
+}
+
+async function connectCredential(url: string, body: Record<string, string>, label: string) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const result = (await response.json()) as { error?: string };
+
+  if (!response.ok) {
+    throw new Error(result.error ?? `Nao foi possivel conectar ${label}.`);
+  }
 }
 
 function stageLabel(stage: "authority" | "rapport" | "decision_maker") {
@@ -316,7 +289,7 @@ function ConnectorTile({
   connected,
   neutral = false,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
   description: string;
   connected: boolean;
