@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Brain, CheckCircle2, Link, LockKeyhole, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Brain, CheckCircle2, Link, LockKeyhole, RefreshCw, Trash2 } from "lucide-react";
 
 type ConnectorStatus = {
   google: { connected: boolean; label: string };
@@ -11,6 +11,15 @@ type ConnectorStatus = {
 
 export function ConnectorReadiness() {
   const [status, setStatus] = useState<ConnectorStatus | null>(null);
+  const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const refreshStatus = useCallback(async () => {
+    const response = await fetch("/api/connectors/status");
+    const data = (await response.json()) as ConnectorStatus;
+    setStatus(data);
+  }, []);
 
   useEffect(() => {
     fetch("/api/connectors/status")
@@ -18,6 +27,45 @@ export function ConnectorReadiness() {
       .then((data: ConnectorStatus) => setStatus(data))
       .catch(() => setStatus(null));
   }, []);
+
+  async function connectGemini() {
+    setIsSaving(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/connectors/gemini/credential", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: geminiApiKey.trim() }),
+      });
+      const result = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Nao foi possivel conectar Gemini.");
+      }
+
+      setGeminiApiKey("");
+      setMessage("Gemini conectado para este usuario.");
+      await refreshStatus();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Nao foi possivel conectar Gemini.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function disconnectGemini() {
+    setIsSaving(true);
+    setMessage(null);
+
+    try {
+      await fetch("/api/connectors/gemini/credential", { method: "DELETE" });
+      setMessage("Gemini desconectado deste usuario.");
+      await refreshStatus();
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   if (!status) {
     return (
@@ -52,7 +100,7 @@ export function ConnectorReadiness() {
         <ConnectorTile
           icon={<Brain className="h-4 w-4" />}
           title={status.gemini.label}
-          description={status.gemini.connected ? "As respostas do diagnostico passam pelo provider Gemini." : "Adicione GEMINI_API_KEY na Vercel e faca redeploy."}
+          description={status.gemini.connected ? "As respostas do diagnostico passam pelo provider Gemini." : "A pessoa conecta a propria chave Gemini para liberar a IA."}
           connected={status.gemini.connected}
         />
         <ConnectorTile
@@ -65,10 +113,46 @@ export function ConnectorReadiness() {
       </div>
 
       {!status.gemini.connected ? (
-        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-          Para o Gemini analisar de verdade, salve `GEMINI_API_KEY` nas variaveis da Vercel. Sem isso, o sistema usa o motor local de diagnostico.
+        <div className="mt-4 grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
+          <label className="grid gap-1.5">
+            <span className="text-sm font-semibold text-amber-950">Chave Gemini deste usuario</span>
+            <input
+              value={geminiApiKey}
+              onChange={(event) => setGeminiApiKey(event.target.value)}
+              type="password"
+              placeholder="AIza..."
+              className="rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-[var(--share-green-800)]"
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={connectGemini}
+              disabled={isSaving || geminiApiKey.trim().length < 20}
+              className="share-button-primary inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+              Conectar Gemini
+            </button>
+            <p className="text-sm leading-6 text-amber-900">A chave e validada no Google e guardada protegida no backend deste navegador.</p>
+          </div>
         </div>
       ) : null}
+      {status.gemini.connected ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--share-line)] bg-[#f2faef] px-4 py-3">
+          <p className="text-sm font-medium text-[var(--share-green-950)]">Gemini pronto para analisar os dados autorizados.</p>
+          <button
+            type="button"
+            onClick={disconnectGemini}
+            disabled={isSaving}
+            className="inline-flex items-center gap-2 rounded-md border border-[var(--share-line)] bg-white px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb] disabled:opacity-60"
+          >
+            <Trash2 className="h-4 w-4" />
+            Desconectar
+          </button>
+        </div>
+      ) : null}
+      {message ? <p className="mt-3 text-sm font-medium text-[var(--share-green-900)]">{message}</p> : null}
     </section>
   );
 }

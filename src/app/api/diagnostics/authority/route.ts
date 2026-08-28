@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authorityInputSchema } from "@/lib/diagnostics/authority";
 import { createAuthorityAssessmentWithProvider } from "@/lib/ai/authorityProvider";
+import { getUserGeminiApiKey } from "@/lib/connectors/userGeminiCredential";
 import { saveAuthorityAssessment } from "@/lib/repositories/authorityRepository";
 
 export async function POST(request: Request) {
@@ -11,7 +12,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid authority assessment input.", issues: parsed.error.flatten() }, { status: 400 });
   }
 
-  const assessment = await createAuthorityAssessmentWithProvider(parsed.data);
+  const assessment = await createAuthorityAssessmentWithProvider(parsed.data, await getUserGeminiApiKey());
   await saveAuthorityAssessment(assessment);
   return NextResponse.json(assessment);
 }

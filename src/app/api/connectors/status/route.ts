@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { getUserGeminiApiKey } from "@/lib/connectors/userGeminiCredential";
 
 export async function GET() {
   const googleConnected = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-  const geminiConnected = Boolean(process.env.GEMINI_API_KEY);
+  const hasUserGeminiCredential = Boolean(await getUserGeminiApiKey());
+  const geminiConnected = hasUserGeminiCredential || Boolean(process.env.GEMINI_API_KEY);
   const linkedinOauthReady = Boolean(process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET);
 
   return NextResponse.json({
@@ -13,7 +15,7 @@ export async function GET() {
     gemini: {
       connected: geminiConnected,
       label: geminiConnected ? "Gemini conectado" : "Conectar Gemini",
-      mode: geminiConnected ? "ai-provider" : "missing-env",
+      mode: hasUserGeminiCredential ? "user-credential" : geminiConnected ? "platform-provider" : "missing-user-credential",
     },
     linkedin: {
       connected: linkedinOauthReady,

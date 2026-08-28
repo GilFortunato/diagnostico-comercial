@@ -13,16 +13,17 @@ type GeminiAuthorityPayload = {
 
 const geminiModel = process.env.GEMINI_MODEL ?? "gemini-1.5-flash";
 
-export async function createAuthorityAssessmentWithProvider(input: AuthorityInput): Promise<AuthorityAssessment> {
+export async function createAuthorityAssessmentWithProvider(input: AuthorityInput, userGeminiApiKey?: string | null): Promise<AuthorityAssessment> {
   const fallback = createAuthorityAssessment(input);
   const provider = resolveProviderForCapability("ai.generateStructuredAssessment", process.env.DEFAULT_AI_PROVIDER);
+  const geminiApiKey = userGeminiApiKey || process.env.GEMINI_API_KEY;
 
-  if (provider?.key !== "gemini" || !process.env.GEMINI_API_KEY) {
+  if (provider?.key !== "gemini" || !geminiApiKey) {
     return fallback;
   }
 
   try {
-    const geminiResult = await generateWithGemini(input);
+    const geminiResult = await generateWithGemini(input, geminiApiKey);
 
     return {
       ...fallback,
@@ -48,8 +49,8 @@ export async function createAuthorityAssessmentWithProvider(input: AuthorityInpu
   }
 }
 
-async function generateWithGemini(input: AuthorityInput): Promise<GeminiAuthorityPayload> {
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+async function generateWithGemini(input: AuthorityInput, apiKey: string): Promise<GeminiAuthorityPayload> {
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

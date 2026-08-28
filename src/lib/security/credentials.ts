@@ -1,14 +1,19 @@
 import "server-only";
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
 function getKey() {
-  const raw = process.env.CREDENTIAL_ENCRYPTION_KEY;
+  const raw = process.env.CREDENTIAL_ENCRYPTION_KEY ?? process.env.NEXTAUTH_SECRET;
   if (!raw) {
-    throw new Error("CREDENTIAL_ENCRYPTION_KEY is required before storing connector credentials.");
+    throw new Error("CREDENTIAL_ENCRYPTION_KEY or NEXTAUTH_SECRET is required before storing connector credentials.");
   }
-  const key = Buffer.from(raw, "base64");
+
+  if (!process.env.CREDENTIAL_ENCRYPTION_KEY) {
+    return createHash("sha256").update(raw).digest();
+  }
+
+  const key = /^[0-9a-f]{64}$/i.test(raw) ? Buffer.from(raw, "hex") : Buffer.from(raw, "base64");
   if (key.length !== 32) {
-    throw new Error("CREDENTIAL_ENCRYPTION_KEY must be a 32-byte base64 value.");
+    throw new Error("CREDENTIAL_ENCRYPTION_KEY must be a 32-byte base64 value or a 64-character hex value.");
   }
   return key;
 }
