@@ -1,0 +1,346 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  SALES
+  MARKETING
+}
+
+enum ConnectorKind {
+  AI_PROVIDER
+  DATA_SOURCE
+  COMMUNICATION
+  CRM
+  BROWSER_AUTOMATION
+}
+
+enum ConnectorStatus {
+  DISCONNECTED
+  CONNECTED
+  NEEDS_ATTENTION
+  REVOKED
+}
+
+enum ConfidenceLevel {
+  CONFIRMED
+  LIKELY
+  INFERENCE
+  UNVERIFIED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXECUTED
+  CANCELED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  memberships   Membership[]
+  credentials   UserConnectorCredential[]
+  skillRuns     SkillRun[]
+  assessments   AuthorityAssessment[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Organization {
+  id            String         @id @default(cuid())
+  name          String
+  slug          String         @unique
+  memberships   Membership[]
+  businessUnits BusinessUnit[]
+  connectors    Connector[]
+  skills        Skill[]
+  auditLogs     AuditLog[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Membership {
+  id             String        @id @default(cuid())
+  userId         String
+  organizationId String
+  role           Role          @default(SALES)
+  businessUnits  BusinessUnit[]
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([userId, organizationId])
+}
+
+model BusinessUnit {
+  id             String        @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  active         Boolean       @default(true)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships    Membership[]
+  brandPack      BrandPack?
+  documents      Document[]
+  skillRuns      SkillRun[]
+  assessments    AuthorityAssessment[]
+  content        ContentOpportunity[]
+  calendar       CalendarOpportunity[]
+  companies      ProspectCompany[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([organizationId, slug])
+}
+
+model BrandPack {
+  id             String       @id @default(cuid())
+  businessUnitId String       @unique
+  name           String
+  visualTokens   Json
+  voiceTokens    Json
+  context        Json
+  businessUnit   BusinessUnit @relation(fields: [businessUnitId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Document {
+  id             String       @id @default(cuid())
+  businessUnitId String
+  title          String
+  kind           String
+  storageUrl     String?
+  extractedText  String?
+  metadata       Json         @default("{}")
+  businessUnit   BusinessUnit @relation(fields: [businessUnitId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Connector {
+  id             String                    @id @default(cuid())
+  organizationId String
+  key            String
+  name           String
+  kind           ConnectorKind
+  capabilities   String[]
+  status         ConnectorStatus           @default(DISCONNECTED)
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  credentials    UserConnectorCredential[]
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  @@unique([organizationId, key])
+}
+
+model UserConnectorCredential {
+  id          String          @id @default(cuid())
+  userId      String
+  connectorId String
+  label       String
+  encrypted   String
+  scopes      String[]
+  status      ConnectorStatus @default(CONNECTED)
+  revokedAt   DateTime?
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connector   Connector       @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model Skill {
+  id             String        @id @default(cuid())
+  organizationId String
+  key            String
+  name           String
+  active         Boolean       @default(true)
+  requiredCapabilities String[]
+  definition     Json
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  runs           SkillRun[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([organizationId, key])
+}
+
+model SkillRun {
+  id             String       @id @default(cuid())
+  skillId        String
+  userId         String
+  businessUnitId String
+  objective      String
+  input          Json
+  output         Json?
+  status         String       @default("completed")
+  confidence     Int          @default(0)
+  skill          Skill        @relation(fields: [skillId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+  businessUnit   BusinessUnit @relation(fields: [businessUnitId], references: [id])
+  assessment     AuthorityAssessment?
+  auditLogs      AuditLog[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model AuthorityAssessment {
+  id             String                    @id @default(cuid())
+  skillRunId     String?                   @unique
+  userId         String
+  businessUnitId String
+  profileUrl     String?
+  objective      String
+  overallScore   Int
+  summary        String
+  strengths      String[]
+  gaps           String[]
+  risks          String[]
+  opportunities  String[]
+  recommendations String[]
+  plan30Days     Json
+  sources        ResearchSource[]
+  dimensions     AuthorityDimensionScore[]
+  skillRun       SkillRun?                 @relation(fields: [skillRunId], references: [id])
+  user           User                      @relation(fields: [userId], references: [id])
+  businessUnit   BusinessUnit              @relation(fields: [businessUnitId], references: [id])
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+}
+
+model AuthorityDimensionScore {
+  id           String              @id @default(cuid())
+  assessmentId String
+  key          String
+  label        String
+  score        Int
+  rationale    String
+  evidence     String[]
+  assessment   AuthorityAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+}
+
+model AuthorityPlan {
+  id             String       @id @default(cuid())
+  businessUnitId String
+  userId         String
+  title          String
+  weeks          Json
+  status         String       @default("draft")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model ContentOpportunity {
+  id             String       @id @default(cuid())
+  businessUnitId String
+  title          String
+  objective      String
+  confidence     ConfidenceLevel
+  payload        Json
+  businessUnit   BusinessUnit @relation(fields: [businessUnitId], references: [id])
+  createdAt      DateTime     @default(now())
+}
+
+model CalendarOpportunity {
+  id             String       @id @default(cuid())
+  businessUnitId String
+  date           DateTime
+  title          String
+  opportunity    String
+  confidence     ConfidenceLevel
+  payload        Json
+  businessUnit   BusinessUnit @relation(fields: [businessUnitId], references: [id])
+}
+
+model ProspectCompany {
+  id             String           @id @default(cuid())
+  businessUnitId String
+  name           String
+  site           String?
+  score          Int
+  confidence     ConfidenceLevel
+  payload        Json
+  businessUnit   BusinessUnit     @relation(fields: [businessUnitId], references: [id])
+  people         ProspectPerson[]
+  sources        ResearchSource[]
+  createdAt      DateTime         @default(now())
+}
+
+model ProspectPerson {
+  id        String          @id @default(cuid())
+  companyId String
+  name      String
+  role      String?
+  profileUrl String?
+  payload   Json
+  company   ProspectCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model ResearchSource {
+  id           String              @id @default(cuid())
+  title        String
+  url          String?
+  publisher    String?
+  confidence   ConfidenceLevel
+  notes        String?
+  assessmentId String?
+  companyId    String?
+  assessment   AuthorityAssessment? @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  company      ProspectCompany?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt    DateTime             @default(now())
+}
+
+model RapportReport {
+  id        String   @id @default(cuid())
+  payload   Json
+  createdAt DateTime @default(now())
+}
+
+model AidaSequence {
+  id        String   @id @default(cuid())
+  payload   Json
+  createdAt DateTime @default(now())
+}
+
+model MeetingBrief {
+  id        String   @id @default(cuid())
+  payload   Json
+  createdAt DateTime @default(now())
+}
+
+model ApprovalRequest {
+  id          String         @id @default(cuid())
+  actionKey   String
+  title       String
+  preview     Json
+  status      ApprovalStatus @default(PENDING)
+  requestedBy String
+  approvedBy  String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model AuditLog {
+  id             String        @id @default(cuid())
+  organizationId String
+  skillRunId     String?
+  actorUserId    String?
+  action         String
+  metadata       Json          @default("{}")
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  skillRun       SkillRun?     @relation(fields: [skillRunId], references: [id])
+  createdAt      DateTime      @default(now())
+}
