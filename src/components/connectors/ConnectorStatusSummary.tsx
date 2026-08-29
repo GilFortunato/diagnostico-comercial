@@ -37,7 +37,7 @@ export function ConnectorStatusSummary() {
     return [status.google.connected, status.gemini.connected, status.apify.connected].filter(Boolean).length;
   }, [status]);
 
-  const isReady = Boolean(status?.google.connected && status.gemini.connected && status.apify.connected);
+  const expertReady = Boolean(status?.google.connected && status.gemini.connected);
 
   if (!status) {
     return (
@@ -56,28 +56,28 @@ export function ConnectorStatusSummary() {
       <div className="absolute right-14 top-14 h-10 w-10 rounded-full border border-[var(--share-lime)]/50" />
       <div className="relative flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <span className={`flex h-12 w-12 items-center justify-center rounded-md ${isReady ? "bg-[var(--share-lime)] text-[var(--share-green-950)]" : "bg-white/12 text-white"}`}>
-            {isReady ? <CheckCircle2 className="h-6 w-6" /> : <Unplug className="h-6 w-6" />}
+          <span className={`flex h-12 w-12 items-center justify-center rounded-md ${expertReady ? "bg-[var(--share-lime)] text-[var(--share-green-950)]" : "bg-white/12 text-white"}`}>
+            {expertReady ? <CheckCircle2 className="h-6 w-6" /> : <Unplug className="h-6 w-6" />}
           </span>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Status dos conectores</p>
-            <h2 className="mt-1 text-2xl font-semibold">{isReady ? "Conectores ligados" : "Conectores desligados"}</h2>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Status da inteligência</p>
+            <h2 className="mt-1 text-2xl font-semibold">{expertReady ? "IA especialista disponível" : "IA especialista indisponível"}</h2>
             <p className="mt-1 text-sm leading-6 text-white/72">
-              {isReady
-                ? "Google, Gemini e LinkedIn via Apify prontos para o diagnóstico."
-                : "Falta ativar Gemini e/ou LinkedIn via Apify antes da analise completa."}
+              {expertReady
+                ? "Seu login Google já está ativo e o Gemini da Share AI está pronto. Fontes públicas são usadas apenas quando necessárias."
+                : "A conexão Gemini da plataforma está indisponível. Diagnóstico, plano e conteúdo especialista ficam bloqueados até ela voltar."}
             </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <span className="rounded-md border border-white/15 bg-white/10 px-3 py-2 text-sm font-semibold text-white">
-            {connectedCount}/3 ativos
+            {connectedCount}/3 recursos ativos
           </span>
           <Link
             href="/conectores"
             className="inline-flex items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-semibold text-[var(--share-green-950)] transition hover:bg-[var(--share-lime)]"
           >
-            Configurar
+            Ver fontes
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -85,7 +85,7 @@ export function ConnectorStatusSummary() {
       <div className="relative mt-5 grid gap-2 sm:grid-cols-3">
         <CompactStep label="Google" connected={status.google.connected} />
         <CompactStep label="Gemini" connected={status.gemini.connected} />
-        <CompactStep label="LinkedIn" connected={status.apify.connected} />
+        <CompactStep label="Fontes públicas" connected={status.apify.connected} />
       </div>
     </section>
   );
