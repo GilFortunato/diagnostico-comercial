@@ -17,32 +17,33 @@ export type AuthorityContentDraft = {
   territory: string;
   bridge: string;
   timing: string;
+  expertReading: string;
+  thesis: string;
+  expertTips: string[];
   primaryStepps: string[];
   secondaryStepps: string[];
   whyThisWorks: string[];
   naturality: "Alta" | "Média" | "Baixa";
   naturalityRationale: string;
   trend?: { label: string; source?: string; confidence: ConfidenceLevel } | null;
+  generationMode: "gemini";
 };
 
-const geminiModel = process.env.GEMINI_MODEL ?? "gemini-1.5-flash";
+const geminiModel = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 export async function createAuthorityContentDraftWithProvider(
   assessment: AuthorityAssessment,
   brief: AuthorityContentBrief,
-  userGeminiApiKey?: string | null,
 ): Promise<AuthorityContentDraft> {
-  const fallback = createFallbackDraft(assessment, brief);
   const provider = resolveProviderForCapability("ai.generateContentPlan", process.env.DEFAULT_AI_PROVIDER);
-  const apiKey = userGeminiApiKey || process.env.GEMINI_API_KEY;
-  if (provider?.key !== "gemini" || !apiKey) return fallback;
+  const apiKey = process.env.GEMINI_API_KEY;
 
-  try {
-    const generated = await callGemini(assessment, brief, apiKey);
-    return normalizeDraft(generated, fallback);
-  } catch {
-    return fallback;
+  if (provider?.key !== "gemini" || !apiKey) {
+    throw new Error("A inteligência de conteúdo está indisponível. Conecte o Gemini da plataforma antes de gerar conteúdo.");
   }
+
+  const generated = await callGemini(assessment, brief, apiKey);
+  return normalizeDraft(generated, assessment, brief);
 }
 
 async function callGemini(assessment: AuthorityAssessment, brief: AuthorityContentBrief, apiKey: string) {
@@ -50,14 +51,19 @@ async function callGemini(assessment: AuthorityAssessment, brief: AuthorityConte
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      generationConfig: { temperature: 0.72, response_mime_type: "application/json" },
+      generationConfig: { temperature: 0.7, response_mime_type: "application/json" },
       contents: [{ role: "user", parts: [{ text: buildPrompt(assessment, brief) }] }],
     }),
   });
-  if (!response.ok) throw new Error("Falha ao gerar conteúdo.");
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Gemini indisponível (${response.status}). ${body.slice(0, 240)}`.trim());
+  }
+
   const data = await response.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (typeof text !== "string") throw new Error("Resposta inválida.");
+  if (typeof text !== "string") throw new Error("O Gemini não retornou uma análise editorial válida.");
   return JSON.parse(text) as Partial<AuthorityContentDraft>;
 }
 
@@ -75,27 +81,47 @@ function contextOf(assessment: AuthorityAssessment, brief: AuthorityContentBrief
 function buildPrompt(assessment: AuthorityAssessment, brief: AuthorityContentBrief) {
   const { guidance, bridge, persona, territory } = contextOf(assessment, brief);
   return `
-Você é estrategista editorial sênior de Personal Branding, Social Selling, LinkedIn e autoridade comercial B2B.
-Crie UMA publicação completa para LinkedIn em português brasileiro natural, específica e humana.
+Você é um conselho editorial sênior composto por especialistas em Personal Branding, Social Selling, LinkedIn, posicionamento B2B, estratégia comercial e escrita humana.
+Sua tarefa NÃO é simplesmente reescrever o contexto do usuário. Primeiro interprete, encontre uma ideia intelectualmente relevante e só então escreva.
 ${ptBrEditorialInstruction}
 ${silentEditorialReviewInstruction}
 
-REGRAS
-- Entregue o post pronto, sem rótulos "Gancho", "Corpo" ou "CTA" no texto final.
+PIPELINE OBRIGATÓRIO — execute silenciosamente nesta ordem:
+1. LEITURA DO ESPECIALISTA: identifique o que há de realmente interessante, contraditório, útil ou revelador no contexto da pessoa.
+2. TESE: transforme essa leitura em uma ideia central específica que a pessoa possa defender e que acrescente algo além do que ela já escreveu.
+3. PONTE: valide se a tese cria conexão legítima entre a marca pessoal, a persona e a BU sem virar propaganda.
+4. ESTRATÉGIA: selecione os pilares STEPPS que realmente ajudam; não tente usar todos.
+5. ESCRITA: produza o post completo em voz natural, com repertório e especificidade.
+6. CRÍTICA: avalie o próprio texto com as perguntas abaixo e reescreva antes de responder se qualquer resposta importante for negativa.
+
+QUALITY GATE OBRIGATÓRIO:
+- O texto trouxe uma ideia nova ou apenas parafraseou o usuário?
+- Existe uma tese clara que possa ser resumida em uma frase?
+- O texto poderia ser publicado por qualquer profissional sem mudar quase nada? Se sim, REESCREVA.
+- A experiência/opinião da pessoa realmente alterou o raciocínio do post?
+- Há valor prático, critério, consequência ou insight de especialista?
+- O texto evita transformar a BU em propaganda?
+- O texto evita clichês reconhecíveis de IA e LinkedIn?
+- O conselho final ajuda a pessoa a melhorar o conteúdo, e não apenas elogia o rascunho?
+
+REGRAS FACTUAIS:
 - Não invente experiência, reunião, cliente, case, número, resultado, notícia ou tendência.
-- Se houver contexto humano, use somente o que foi informado, sem ampliar fatos.
+- Se houver contexto humano, use apenas os fatos informados. Você pode INTERPRETAR o significado deles, mas não ampliar a história.
 - Se não houver contexto humano, não finja experiência pessoal: use tese, observação, pergunta específica, contraste ou valor prático.
-- A BU é contexto estratégico, não propaganda.
-- Evite pitch cedo demais, clichês de LinkedIn, excesso de hashtags, emojis, bullets e a fórmula "não é sobre X, é sobre Y".
-- CTA é opcional; não encerre automaticamente com "E você, o que acha?".
-- Não há Trend Intelligence verificada nesta chamada. Não afirme que algo está em alta. Use timing evergreen/contextual.
-- STEPPS é estratégia: escolha 1-2 pilares principais e no máximo 2 secundários entre Social Currency, Triggers, Emotion, Public, Practical Value e Stories.
-- Preserve a marca pessoal e crie uma ponte legítima com a BU.
-- Revise silenciosamente português, fluidez, naturalidade e especificidade antes de responder.
-- Responda somente JSON válido.
+- Não romantize excesso de trabalho, privação de sono ou sobrecarga. Se isso aparecer no contexto, procure a ideia profissional por trás (por exemplo: ownership, atenção à qualidade, curiosidade, senso crítico) sem glorificar jornadas excessivas.
+- A BU é contexto estratégico, nunca identidade artificial da pessoa.
+- Não faça pitch comercial precoce.
+- Não use "Gancho", "Corpo" ou "CTA" como rótulos dentro do post.
+- CTA é opcional; não termine automaticamente com "E você, o que acha?".
+- Evite "no mundo cada vez mais", "mais do que nunca", "você já parou para pensar", "em um cenário em constante transformação" e fórmulas equivalentes.
+- Evite excesso de hashtags, emojis, bullets e a fórmula "não é sobre X, é sobre Y".
+- Não há Trend Intelligence verificada nesta chamada. Não diga que algo está em alta. Use timing Evergreen ou Contextual.
+- STEPPS disponíveis: Social Currency, Triggers, Emotion, Public, Practical Value, Stories. Escolha 1-2 principais e no máximo 2 secundários.
+- Revise silenciosamente ortografia, acentuação, concordância, regência, pontuação, ritmo, clareza e naturalidade.
+- Responda SOMENTE JSON válido.
 
 PESSOA
-Objetivo: ${assessment.input.objective}
+Objetivo comercial: ${assessment.input.objective}
 Headline: ${assessment.input.headline}
 Sobre: ${assessment.input.about}
 Temas: ${assessment.input.themes}
@@ -111,19 +137,21 @@ Pontos fortes: ${JSON.stringify(assessment.strengths)}
 BU
 Nome: ${assessment.input.businessUnitName}
 DNA: ${JSON.stringify(guidance ?? {})}
-Persona: ${persona}
+Persona prioritária: ${persona}
 Território: ${territory}
-Ponte: ${JSON.stringify(bridge ?? null)}
+Ponte selecionada: ${JSON.stringify(bridge ?? null)}
 
 BRIEF
 Objetivo editorial: ${brief.objective}
 Estratégia: ${brief.strategy}
-Contexto humano: ${brief.humanContext?.trim() || "nenhum"}
+Contexto humano fornecido: ${brief.humanContext?.trim() || "nenhum"}
 
-JSON
+FORMATO EXATO
 {
-  "title":"",
-  "post":"",
+  "title":"título interno curto",
+  "expertReading":"2 a 4 frases explicando o que um especialista enxerga de relevante no contexto, sem apenas repeti-lo",
+  "thesis":"uma frase com a ideia central defendida pelo post",
+  "post":"publicação completa, pronta para a pessoa revisar e copiar para o LinkedIn",
   "objective":"",
   "persona":"",
   "territory":"",
@@ -131,7 +159,8 @@ JSON
   "timing":"Evergreen ou Contextual",
   "primaryStepps":[""],
   "secondaryStepps":[""],
-  "whyThisWorks":[""],
+  "whyThisWorks":["3 a 5 razões específicas"],
+  "expertTips":["2 a 4 recomendações concretas para tornar o conteúdo ainda mais forte ou mais pessoal"],
   "naturality":"Alta ou Média ou Baixa",
   "naturalityRationale":"",
   "trend":null
@@ -139,71 +168,56 @@ JSON
 `;
 }
 
-function createFallbackDraft(assessment: AuthorityAssessment, brief: AuthorityContentBrief): AuthorityContentDraft {
+function normalizeDraft(value: Partial<AuthorityContentDraft>, assessment: AuthorityAssessment, brief: AuthorityContentBrief): AuthorityContentDraft {
   const { bridge, persona, territory } = contextOf(assessment, brief);
-  const bridgeTitle = bridge?.title ?? `${territory} + ${persona}`;
-  const human = brief.humanContext?.trim();
-  const opening = human
-    ? `${human}\n\nO ponto mais interessante aqui é o critério por trás da decisão.`
-    : "Antes de escolher uma solução, existe uma pergunta mais útil: qual problema realmente precisa ser resolvido e qual evidência mostraria que estamos avançando?";
-  const middle = assessment.buAffinityScore < 55
-    ? `Quando a marca pessoal ainda tem pouca associação com ${assessment.input.businessUnitName}, acelerar a venda tende a soar institucional. Faz mais sentido construir repertório em ${territory}: participar de conversas, explicar critérios e mostrar uma leitura própria antes da abordagem.`
-    : `Quando já existe repertório visível, o próximo passo é torná-lo útil para ${persona}: explicar critérios, consequências práticas e decisões que normalmente ficam escondidas atrás de uma solução.`;
-  const ending = brief.objective === "Conversa" || brief.objective === "Relacionamento"
-    ? "Uma boa conversa comercial costuma começar antes da mensagem direta: começa quando a outra pessoa já reconhece por que sua leitura daquele problema pode ser útil."
-    : "Autoridade comercial não é postar mais. É ser lembrado por uma leitura útil quando o problema aparece.";
-
-  return {
-    title: `Ponte editorial: ${bridgeTitle}`,
-    post: reviewPortugueseCopy(`${opening}\n\n${middle}\n\n${ending}`),
-    objective: brief.objective,
-    persona,
-    territory,
-    bridge: bridgeTitle,
-    timing: "Evergreen",
-    primaryStepps: ["Practical Value"],
-    secondaryStepps: human ? ["Stories"] : ["Social Currency"],
-    whyThisWorks: reviewPortugueseList([
-      `Parte de uma questão relevante para ${persona}, não de uma apresentação da BU.`,
-      `Conecta ${territory} à autoridade da pessoa sem transformar o perfil em vitrine institucional.`,
-      "Entrega um critério de decisão aplicável em vez de publicidade.",
-      human ? "Usa contexto real fornecido pelo usuário sem inventar experiências adicionais." : "Não inventa experiência pessoal quando o usuário não fornece contexto.",
-    ]),
-    naturality: human ? "Alta" : "Média",
-    naturalityRationale: human
-      ? "O rascunho incorpora contexto real fornecido pelo usuário e evita fórmulas genéricas."
-      : "O rascunho evita histórias inventadas e clichês, mas pode ganhar mais personalidade com uma opinião ou experiência real do usuário.",
-    trend: null,
-  };
-}
-
-function normalizeDraft(value: Partial<AuthorityContentDraft>, fallback: AuthorityContentDraft): AuthorityContentDraft {
   const allowed = new Set(["Social Currency", "Triggers", "Emotion", "Public", "Practical Value", "Stories"]);
-  const list = (input: unknown, fallbackValue: string[]) => Array.isArray(input)
+  const filteredStepps = (input: unknown) => Array.isArray(input)
     ? input.filter((item): item is string => typeof item === "string" && allowed.has(item)).slice(0, 2)
-    : fallbackValue;
-  const naturality = value.naturality === "Alta" || value.naturality === "Média" || value.naturality === "Baixa" ? value.naturality : fallback.naturality;
-  const why = Array.isArray(value.whyThisWorks)
-    ? value.whyThisWorks.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, 5)
-    : fallback.whyThisWorks;
+    : [];
+  const cleanList = (input: unknown, max: number) => Array.isArray(input)
+    ? input.filter((item): item is string => typeof item === "string" && item.trim().length > 0).slice(0, max)
+    : [];
+
+  const post = requiredString(value.post, "post");
+  const expertReading = requiredString(value.expertReading, "leitura do especialista");
+  const thesis = requiredString(value.thesis, "tese");
+  const expertTips = cleanList(value.expertTips, 4);
+  const whyThisWorks = cleanList(value.whyThisWorks, 5);
+
+  if (expertTips.length < 2 || whyThisWorks.length < 2) {
+    throw new Error("O Gemini não entregou profundidade editorial suficiente. Tente gerar novamente.");
+  }
+
+  const naturality = value.naturality === "Alta" || value.naturality === "Média" || value.naturality === "Baixa" ? value.naturality : "Média";
 
   return {
-    title: reviewPortugueseCopy(valid(value.title, fallback.title)),
-    post: reviewPortugueseCopy(valid(value.post, fallback.post)),
-    objective: reviewPortugueseCopy(valid(value.objective, fallback.objective)),
-    persona: reviewPortugueseCopy(valid(value.persona, fallback.persona)),
-    territory: reviewPortugueseCopy(valid(value.territory, fallback.territory)),
-    bridge: reviewPortugueseCopy(valid(value.bridge, fallback.bridge)),
-    timing: reviewPortugueseCopy(valid(value.timing, fallback.timing)),
-    primaryStepps: list(value.primaryStepps, fallback.primaryStepps),
-    secondaryStepps: list(value.secondaryStepps, fallback.secondaryStepps),
-    whyThisWorks: reviewPortugueseList(why.length ? why : fallback.whyThisWorks),
+    title: reviewPortugueseCopy(optionalString(value.title) || `Ponte editorial: ${bridge?.title ?? territory}`),
+    post: reviewPortugueseCopy(post),
+    expertReading: reviewPortugueseCopy(expertReading),
+    thesis: reviewPortugueseCopy(thesis),
+    expertTips: reviewPortugueseList(expertTips),
+    objective: reviewPortugueseCopy(optionalString(value.objective) || brief.objective),
+    persona: reviewPortugueseCopy(optionalString(value.persona) || persona),
+    territory: reviewPortugueseCopy(optionalString(value.territory) || territory),
+    bridge: reviewPortugueseCopy(optionalString(value.bridge) || bridge?.title || `${territory} + ${persona}`),
+    timing: reviewPortugueseCopy(optionalString(value.timing) || "Contextual"),
+    primaryStepps: filteredStepps(value.primaryStepps),
+    secondaryStepps: filteredStepps(value.secondaryStepps),
+    whyThisWorks: reviewPortugueseList(whyThisWorks),
     naturality,
-    naturalityRationale: reviewPortugueseCopy(valid(value.naturalityRationale, fallback.naturalityRationale)),
+    naturalityRationale: reviewPortugueseCopy(requiredString(value.naturalityRationale, "justificativa de naturalidade")),
     trend: null,
+    generationMode: "gemini",
   };
 }
 
-function valid(value: unknown, fallback: string) {
-  return typeof value === "string" && value.trim().length > 0 ? value : fallback;
+function requiredString(value: unknown, field: string) {
+  if (typeof value !== "string" || value.trim().length < 12) {
+    throw new Error(`O Gemini não retornou ${field} com qualidade suficiente.`);
+  }
+  return value.trim();
+}
+
+function optionalString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : "";
 }
