@@ -33,8 +33,7 @@ export async function createAuthorityContentDraftWithProvider(
   userGeminiApiKey?: string | null,
 ): Promise<AuthorityContentDraft> {
   const fallback = createFallbackDraft(assessment, brief);
-  const provider = resolveProviderForCapability("ai.generateContent", process.env.DEFAULT_AI_PROVIDER)
-    ?? resolveProviderForCapability("ai.generateContentPlan", process.env.DEFAULT_AI_PROVIDER);
+  const provider = resolveProviderForCapability("ai.generateContentPlan", process.env.DEFAULT_AI_PROVIDER);
   const geminiApiKey = userGeminiApiKey || process.env.GEMINI_API_KEY;
 
   if (provider?.key !== "gemini" || !geminiApiKey) return fallback;
