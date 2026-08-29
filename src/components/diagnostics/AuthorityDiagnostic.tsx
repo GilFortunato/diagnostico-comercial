@@ -170,14 +170,12 @@ export function AuthorityDiagnostic() {
   }
 
   const topDimensions = assessment?.dimensions.slice().sort((a, b) => a.score - b.score).slice(0, 6) ?? [];
-  const bestBridge = assessment?.bridgeOpportunities?.[0];
   const authoritySellingScore = assessment?.authoritySellingScore ?? assessment?.overallScore ?? 0;
   const buAffinityScore = assessment?.buAffinityScore ?? 0;
   const activationPotentialScore = assessment?.activationPotentialScore ?? 0;
 
   function handleNextAction(action: string) {
     if (!assessment) return;
-
     if (action === "Refazer diagnóstico") return runDiagnostic();
     if (action === "Comparar evolução") return compareEvolution();
     if (action === "Gerar plano de 30 dias") return generateThirtyDayPlan();
@@ -186,7 +184,6 @@ export function AuthorityDiagnostic() {
       const headline = assessment.profileReview?.find((item) => item.field === "headline");
       if (headline) return openProfileImprovement(headline);
     }
-
     const recommendation = buildNextBestAction(assessment);
     setActionPanel({ eyebrow: "Próxima melhor ação", title: recommendation.title, description: recommendation.reason, items: recommendation.actions });
   }
@@ -197,11 +194,7 @@ export function AuthorityDiagnostic() {
     setActionPanel(null);
     startPlanTransition(async () => {
       try {
-        const response = await fetch("/api/diagnostics/authority/plan", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ assessment, history }),
-        });
+        const response = await fetch("/api/diagnostics/authority/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assessment, history }) });
         const result = (await response.json()) as AuthorityThirtyDayPlan | { error?: string };
         if (!response.ok) return setFormError("error" in result && result.error ? result.error : "Não foi possível gerar o plano de 30 dias.");
         setThirtyDayPlan(result as AuthorityThirtyDayPlan);
@@ -212,18 +205,7 @@ export function AuthorityDiagnostic() {
   }
 
   function openBridge(bridge: NonNullable<AuthorityAssessment["bridgeOpportunities"]>[number]) {
-    setActionPanel({
-      eyebrow: "Construir pontes",
-      title: bridge.title,
-      description: bridge.description,
-      items: [
-        `Sua autoridade: ${bridge.whyItWorks.personalAuthority}`,
-        `Conexão com a BU: ${bridge.whyItWorks.businessUnitConnection}`,
-        `Interesse da persona: ${bridge.whyItWorks.personaInterest}`,
-        `Momento de mercado: ${bridge.whyItWorks.marketMoment}`,
-        `Risco: ${bridge.whyItWorks.risk}`,
-      ],
-    });
+    setActionPanel({ eyebrow: "Construir pontes", title: bridge.title, description: bridge.description, items: [`Sua autoridade: ${bridge.whyItWorks.personalAuthority}`, `Conexão com a BU: ${bridge.whyItWorks.businessUnitConnection}`, `Interesse da persona: ${bridge.whyItWorks.personaInterest}`, `Momento de mercado: ${bridge.whyItWorks.marketMoment}`, `Risco: ${bridge.whyItWorks.risk}`] });
   }
 
   function openProfileImprovement(item: AuthorityAssessment["profileReview"][number]) {
@@ -246,11 +228,7 @@ export function AuthorityDiagnostic() {
     setFormError(null);
     startContentTransition(async () => {
       try {
-        const response = await fetch("/api/diagnostics/authority/content", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ assessment, brief: contentBrief }),
-        });
+        const response = await fetch("/api/diagnostics/authority/content", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assessment, brief: contentBrief }) });
         const result = (await response.json()) as ContentDraft | { error?: string };
         if (!response.ok) return setFormError("error" in result && result.error ? result.error : "Não foi possível criar o conteúdo agora.");
         setContentDraft(result as ContentDraft);
@@ -263,119 +241,38 @@ export function AuthorityDiagnostic() {
   return (
     <section className="grid gap-6 lg:grid-cols-[340px_1fr]">
       <aside className="share-card space-y-4 rounded-lg p-5">
-        <div>
-          <div className="h-2 w-44 rounded-r-md share-tab-accent" style={{ "--accent-color": selectedBu.brandPack.accent } as React.CSSProperties} />
-          <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Unidade de Negócio</p>
-          <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{selectedBu.name}</h2>
-          <p className="mt-2 text-sm leading-6 text-zinc-600">{selectedBu.description}</p>
-        </div>
-        <div className="grid gap-2">
-          {demoBusinessUnits.map((unit) => (
-            <button key={unit.id} type="button" onClick={() => switchBu(unit.id)} className={`rounded-md border px-3 py-3 text-left text-sm transition ${unit.id === businessUnitId ? "border-[var(--share-green-950)] bg-[var(--share-green-950)] text-white" : "border-[var(--share-line)] bg-white text-zinc-700 hover:border-[var(--share-green-700)]"}`}>
-              <span className="flex items-center justify-between gap-3"><span>{unit.name}</span><span className="h-2 w-9 rounded-full" style={{ backgroundColor: unit.brandPack.accent }} /></span>
-            </button>
-          ))}
-        </div>
-        <div className="rounded-md p-3 text-sm text-zinc-700" style={{ backgroundColor: selectedBu.brandPack.surface }}>
-          <p className="font-medium text-[var(--share-green-950)]">Contexto ativo</p>
-          <p className="mt-1">Tom: {selectedBu.brandPack.voice}</p>
-          <p className="mt-1">As recomendações usam a linguagem e os temas desta BU.</p>
-        </div>
+        <div><div className="h-2 w-44 rounded-r-md share-tab-accent" style={{ "--accent-color": selectedBu.brandPack.accent } as React.CSSProperties} /><p className="mt-5 text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Unidade de Negócio</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{selectedBu.name}</h2><p className="mt-2 text-sm leading-6 text-zinc-600">{selectedBu.description}</p></div>
+        <div className="grid gap-2">{demoBusinessUnits.map((unit) => <button key={unit.id} type="button" onClick={() => switchBu(unit.id)} className={`rounded-md border px-3 py-3 text-left text-sm transition ${unit.id === businessUnitId ? "border-[var(--share-green-950)] bg-[var(--share-green-950)] text-white" : "border-[var(--share-line)] bg-white text-zinc-700 hover:border-[var(--share-green-700)]"}`}><span className="flex items-center justify-between gap-3"><span>{unit.name}</span><span className="h-2 w-9 rounded-full" style={{ backgroundColor: unit.brandPack.accent }} /></span></button>)}</div>
+        <div className="rounded-md p-3 text-sm text-zinc-700" style={{ backgroundColor: selectedBu.brandPack.surface }}><p className="font-medium text-[var(--share-green-950)]">Contexto ativo</p><p className="mt-1">Tom: {selectedBu.brandPack.voice}</p><p className="mt-1">As recomendações usam a linguagem e os temas desta BU.</p></div>
       </aside>
 
       <div className="space-y-6">
         <div className="share-card rounded-lg p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Diagnóstico guiado</p>
-          <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Diagnóstico de autoridade comercial</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">Avalia se um potencial cliente percebe profundidade, repertório e confiança comercial no perfil.</p>
-          <div className="mt-5 grid gap-4">
-            <Input icon={<Link className="h-4 w-4 text-[#0a66c2]" />} label="URL do seu perfil no LinkedIn" placeholder="https://www.linkedin.com/in/seu-perfil" value={form.profileUrl} onChange={(value) => updateField("profileUrl", value)} />
-            <div className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Objetivo sugerido pela BU</p><p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-700">{suggestedObjective}</p></div>
-                <button type="button" onClick={() => updateField("objective", suggestedObjective)} className="rounded-md border border-[var(--share-green-800)] px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]">Usar sugestão</button>
-              </div>
-            </div>
-            <Input label="Objetivo comercial" value={form.objective} onChange={(value) => updateField("objective", value)} />
-            <details className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3">
-              <summary className="cursor-pointer text-sm font-semibold text-[var(--share-green-900)]">Complementar manualmente</summary>
-              <div className="mt-4 grid gap-4">
-                <Input label="Headline do LinkedIn" value={form.headline} onChange={(value) => updateField("headline", value)} />
-                <Textarea label="Sobre" value={form.about} onChange={(value) => updateField("about", value)} rows={4} />
-                <Input label="Temas de autoridade" value={form.themes} onChange={(value) => updateField("themes", value)} />
-                <Textarea label="Provas, cases e resultados" value={form.proofPoints} onChange={(value) => updateField("proofPoints", value)} />
-                <Textarea label="Conteúdos recentes" value={form.recentContent} onChange={(value) => updateField("recentContent", value)} />
-                <Textarea label="Interações e networking" value={form.interactionSignals} onChange={(value) => updateField("interactionSignals", value)} />
-              </div>
-            </details>
-          </div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Diagnóstico guiado</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Diagnóstico de autoridade comercial</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">Avalia se um potencial cliente percebe profundidade, repertório e confiança comercial no perfil.</p>
+          <div className="mt-5 grid gap-4"><Input icon={<Link className="h-4 w-4 text-[#0a66c2]" />} label="URL do seu perfil no LinkedIn" placeholder="https://www.linkedin.com/in/seu-perfil" value={form.profileUrl} onChange={(value) => updateField("profileUrl", value)} /><div className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Objetivo sugerido pela BU</p><p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-700">{suggestedObjective}</p></div><button type="button" onClick={() => updateField("objective", suggestedObjective)} className="rounded-md border border-[var(--share-green-800)] px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]">Usar sugestão</button></div></div><Input label="Objetivo comercial" value={form.objective} onChange={(value) => updateField("objective", value)} /><details className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3"><summary className="cursor-pointer text-sm font-semibold text-[var(--share-green-900)]">Complementar manualmente</summary><div className="mt-4 grid gap-4"><Input label="Headline do LinkedIn" value={form.headline} onChange={(value) => updateField("headline", value)} /><Textarea label="Sobre" value={form.about} onChange={(value) => updateField("about", value)} rows={4} /><Input label="Temas de autoridade" value={form.themes} onChange={(value) => updateField("themes", value)} /><Textarea label="Provas, cases e resultados" value={form.proofPoints} onChange={(value) => updateField("proofPoints", value)} /><Textarea label="Conteúdos recentes" value={form.recentContent} onChange={(value) => updateField("recentContent", value)} /><Textarea label="Interações e networking" value={form.interactionSignals} onChange={(value) => updateField("interactionSignals", value)} /></div></details></div>
           {isPending && collectionSteps.length ? <div className="mt-5 grid gap-2 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4 sm:grid-cols-2 lg:grid-cols-4">{collectionSteps.map((step, index) => <span key={step} className="inline-flex items-center gap-2 text-sm text-zinc-700">{index < collectionSteps.length - 1 ? <CheckCircle2 className="h-4 w-4 text-[var(--share-green-800)]" /> : <RefreshCw className="h-4 w-4 animate-spin text-[var(--share-green-800)]" />}{step}</span>)}</div> : null}
           {formError ? <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</p> : null}
-          <div className="mt-5 flex flex-wrap gap-3">
-            <button type="button" onClick={runDiagnostic} className="share-button-primary inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-55" disabled={isPending}><Sparkles className="h-4 w-4" />{assessment ? "Refazer diagnóstico" : "Analisar meu LinkedIn"}</button>
-            <button type="button" onClick={compareEvolution} className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"><BarChart3 className="h-4 w-4" />Comparar evolução</button>
-          </div>
+          <div className="mt-5 flex flex-wrap gap-3"><button type="button" onClick={runDiagnostic} className="share-button-primary inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-55" disabled={isPending}><Sparkles className="h-4 w-4" />{assessment ? "Refazer diagnóstico" : "Analisar meu LinkedIn"}</button><button type="button" onClick={compareEvolution} className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"><BarChart3 className="h-4 w-4" />Comparar evolução</button></div>
         </div>
 
         {assessment ? <div className="grid gap-6">
-          <section className="share-green-panel rounded-lg p-5 text-white">
-            <div className="grid gap-4 lg:grid-cols-[1fr_1.5fr]">
-              <div>
-                <p className="text-sm font-medium text-white/72">Minha autoridade</p>
-                <div className="mt-3 flex items-end gap-2"><span className="text-7xl font-semibold text-[var(--share-lime)]">{authoritySellingScore}</span><span className="pb-2 text-white/70">/100</span></div>
-                <p className="mt-4 text-sm leading-6 text-white/78">{assessment.summary}</p>
-                {assessment.input.profileUrl ? <a className="mt-4 inline-flex text-sm font-semibold text-[var(--share-lime)] underline-offset-4 hover:underline" href={assessment.input.profileUrl} target="_blank" rel="noreferrer">Perfil avaliado no LinkedIn</a> : null}
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3"><MetricCard label="Autoridade pessoal" value={authoritySellingScore} /><MetricCard label={`Aderência à ${selectedBu.shortName}`} value={buAffinityScore} /><MetricCard label="Potencial de ativação" value={activationPotentialScore} /></div>
-            </div>
-          </section>
+          <section className="share-green-panel rounded-lg p-5 text-white"><div className="grid gap-4 lg:grid-cols-[1fr_1.5fr]"><div><p className="text-sm font-medium text-white/72">Minha autoridade</p><div className="mt-3 flex items-end gap-2"><span className="text-7xl font-semibold text-[var(--share-lime)]">{authoritySellingScore}</span><span className="pb-2 text-white/70">/100</span></div><p className="mt-4 text-sm leading-6 text-white/78">{assessment.summary}</p>{assessment.input.profileUrl ? <a className="mt-4 inline-flex text-sm font-semibold text-[var(--share-lime)] underline-offset-4 hover:underline" href={assessment.input.profileUrl} target="_blank" rel="noreferrer">Perfil avaliado no LinkedIn</a> : null}</div><div className="grid gap-3 sm:grid-cols-3"><MetricCard label="Autoridade pessoal" value={authoritySellingScore} /><MetricCard label={`Aderência à ${selectedBu.shortName}`} value={buAffinityScore} /><MetricCard label="Potencial de ativação" value={activationPotentialScore} /></div></div></section>
 
-          <section className="share-card rounded-lg p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">O que encontramos no seu perfil</p>
-            <h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Evidências que sustentam o diagnóstico</h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Mostramos o dado encontrado, a leitura estratégica e uma sugestão de melhoria. A BU funciona como lente comercial, sem substituir sua marca pessoal.</p>
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              {(assessment.profileReview ?? []).map((item) => {
-                const insight = buildProfileReviewInsight(item, assessment, selectedBu.shortName);
-                return <article key={item.field} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4">
-                  <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-zinc-950">{item.label}</p><p className="mt-1 text-xs text-zinc-500">Fonte: {item.sourceLabel} · {confidenceLabel(item.confidence)}</p></div><button type="button" onClick={() => openProfileImprovement(item)} className="text-sm font-semibold text-[var(--share-green-900)] underline-offset-4 hover:underline">Sugestão de melhoria</button></div>
-                  <div className="mt-4"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Encontramos</p><p className="mt-1 line-clamp-4 text-sm leading-6 text-zinc-700">{item.value || insight.emptyState}</p></div>
-                  <div className="mt-4 border-t border-[var(--share-line)] pt-4"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Leitura do especialista</p><p className="mt-2 text-sm leading-6 text-zinc-700">{insight.analysis}</p><div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold"><span className="rounded-full bg-white px-2.5 py-1 text-[var(--share-green-900)]">Autoridade pessoal: {insight.authoritySignal}</span><span className="rounded-full bg-white px-2.5 py-1 text-[var(--share-green-900)]">Aderência à {selectedBu.shortName}: {insight.buSignal}</span></div></div>
-                </article>;
-              })}
-            </div>
-            {actionPanel?.eyebrow === "Sugestão de melhoria" ? <ActionPanelCard panel={actionPanel} /> : null}
-          </section>
+          <section className="share-card rounded-lg p-5"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">O que encontramos no seu perfil</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Evidências que sustentam o diagnóstico</h3><p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Mostramos o dado encontrado, a leitura estratégica e uma sugestão de melhoria. A BU funciona como lente comercial, sem substituir sua marca pessoal.</p><div className="mt-4 grid gap-3 lg:grid-cols-2">{(assessment.profileReview ?? []).map((item) => { const insight = buildProfileReviewInsight(item, assessment, selectedBu.shortName); return <article key={item.field} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-zinc-950">{item.label}</p><p className="mt-1 text-xs text-zinc-500">Fonte: {item.sourceLabel} · {confidenceLabel(item.confidence)}</p></div><button type="button" onClick={() => openProfileImprovement(item)} className="text-sm font-semibold text-[var(--share-green-900)] underline-offset-4 hover:underline">Sugestão de melhoria</button></div><div className="mt-4"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Encontramos</p><p className="mt-1 line-clamp-4 text-sm leading-6 text-zinc-700">{item.value || insight.emptyState}</p></div><div className="mt-4 border-t border-[var(--share-line)] pt-4"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Leitura do especialista</p><p className="mt-2 text-sm leading-6 text-zinc-700">{insight.analysis}</p><div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold"><span className="rounded-full bg-white px-2.5 py-1 text-[var(--share-green-900)]">Autoridade pessoal: {insight.authoritySignal}</span><span className="rounded-full bg-white px-2.5 py-1 text-[var(--share-green-900)]">Aderência à {selectedBu.shortName}: {insight.buSignal}</span></div></div></article>; })}</div>{actionPanel?.eyebrow === "Sugestão de melhoria" ? <ActionPanelCard panel={actionPanel} /> : null}</section>
 
-          <section className="share-card rounded-lg p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Você × BU</p>
-            <h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Onde já existe ponte e onde existe lacuna</h3>
-            <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[640px] text-left text-sm"><thead className="text-xs uppercase tracking-wide text-zinc-500"><tr><th className="border-b border-[var(--share-line)] py-2">Tema</th><th className="border-b border-[var(--share-line)] py-2">Você</th><th className="border-b border-[var(--share-line)] py-2">BU</th><th className="border-b border-[var(--share-line)] py-2">Aderência</th><th className="border-b border-[var(--share-line)] py-2">Leitura</th></tr></thead><tbody>{(assessment.themeAlignment ?? []).map((item) => <tr key={item.theme} className="border-b border-[var(--share-line)] last:border-0"><td className="py-3 font-medium text-zinc-950">{item.theme}</td><td className="py-3 text-zinc-700">{item.personSignal}</td><td className="py-3 text-zinc-700">{item.businessUnitSignal}</td><td className="py-3 font-semibold text-zinc-950">{item.affinity}/100</td><td className="py-3 text-zinc-600">{item.gap}</td></tr>)}</tbody></table></div>
-          </section>
+          <section className="share-card rounded-lg p-5"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Você × BU</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Onde já existe ponte e onde existe lacuna</h3><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[640px] text-left text-sm"><thead className="text-xs uppercase tracking-wide text-zinc-500"><tr><th className="border-b border-[var(--share-line)] py-2">Tema</th><th className="border-b border-[var(--share-line)] py-2">Você</th><th className="border-b border-[var(--share-line)] py-2">BU</th><th className="border-b border-[var(--share-line)] py-2">Aderência</th><th className="border-b border-[var(--share-line)] py-2">Leitura</th></tr></thead><tbody>{(assessment.themeAlignment ?? []).map((item) => <tr key={item.theme} className="border-b border-[var(--share-line)] last:border-0"><td className="py-3 font-medium text-zinc-950">{item.theme}</td><td className="py-3 text-zinc-700">{item.personSignal}</td><td className="py-3 text-zinc-700">{item.businessUnitSignal}</td><td className="py-3 font-semibold text-zinc-950">{item.affinity}/100</td><td className="py-3 text-zinc-600">{item.gap}</td></tr>)}</tbody></table></div></section>
 
-          <section className="share-card rounded-lg p-5">
-            <div className="flex items-center gap-2"><Target className="h-4 w-4 text-[var(--share-green-800)]" /><h3 className="text-lg font-semibold text-[var(--share-green-950)]">Melhores pontes</h3></div>
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">{(assessment.bridgeOpportunities ?? []).map((bridge) => <button key={bridge.id} type="button" onClick={() => openBridge(bridge)} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4 text-left transition hover:border-[var(--share-green-800)] hover:bg-white"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-zinc-950">{bridge.title}</p><p className="mt-2 text-sm leading-6 text-zinc-600">{bridge.description}</p></div><ArrowRight className="h-4 w-4 shrink-0 text-[var(--share-green-800)]" /></div><div className="mt-3 grid grid-cols-3 gap-2 text-xs text-zinc-600"><span>Você: {bridge.personAffinity}</span><span>BU: {bridge.businessUnitAffinity}</span><span>Conversa: {bridge.conversationPotential}</span></div></button>)}</div>
-          </section>
+          <section className="share-card rounded-lg p-5"><div className="flex items-center gap-2"><Target className="h-4 w-4 text-[var(--share-green-800)]" /><h3 className="text-lg font-semibold text-[var(--share-green-950)]">Melhores pontes</h3></div><div className="mt-4 grid gap-3 lg:grid-cols-2">{(assessment.bridgeOpportunities ?? []).map((bridge) => <button key={bridge.id} type="button" onClick={() => openBridge(bridge)} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4 text-left transition hover:border-[var(--share-green-800)] hover:bg-white"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-zinc-950">{bridge.title}</p><p className="mt-2 text-sm leading-6 text-zinc-600">{bridge.description}</p></div><ArrowRight className="h-4 w-4 shrink-0 text-[var(--share-green-800)]" /></div><div className="mt-3 grid grid-cols-3 gap-2 text-xs text-zinc-600"><span>Você: {bridge.personAffinity}</span><span>BU: {bridge.businessUnitAffinity}</span><span>Conversa: {bridge.conversationPotential}</span></div></button>)}</div></section>
 
           <div className="share-card rounded-lg p-5"><h3 className="text-lg font-semibold text-[var(--share-green-950)]">Lacunas prioritárias</h3><div className="mt-4 grid gap-3 md:grid-cols-2">{topDimensions.map((dimension) => <div key={dimension.key} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3"><div className="flex items-center justify-between gap-3"><p className="text-sm font-medium text-zinc-900">{dimension.label}</p><span className="text-sm font-semibold text-zinc-950">{dimension.score}</span></div><div className="mt-3 h-2 rounded-full bg-[#dfe8dc]"><div className="h-2 rounded-full" style={{ width: `${dimension.score}%`, backgroundColor: selectedBu.brandPack.accent }} /></div><p className="mt-3 text-xs leading-5 text-zinc-600">{dimension.rationale}</p></div>)}</div></div>
 
           <div className="grid gap-6 lg:grid-cols-2"><ResultList title="Pontos fortes" icon={<CheckCircle2 className="h-4 w-4" />} items={assessment.strengths} /><ResultList title="Recomendações" icon={<Activity className="h-4 w-4" />} items={assessment.recommendations} /></div>
-
           <div className="grid gap-6 lg:grid-cols-2"><PlanPanel title="Minha autoridade" subtitle={assessment.personalAuthorityPlan?.cycleLabel ?? "Plano permanente"} items={assessment.personalAuthorityPlan?.actions ?? []} highlight={assessment.personalAuthorityPlan?.priority ?? "Evoluir autoridade pessoal com provas reais."} /><div className="share-card rounded-lg p-5"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">{assessment.businessUnitActivationPlan?.horizon ?? "Sprint semanal"}</p><h3 className="mt-1 text-lg font-semibold text-[var(--share-green-950)]">{assessment.businessUnitActivationPlan?.title ?? `Sprint ${selectedBu.name}`}</h3><p className="mt-2 text-sm leading-6 text-zinc-600">{assessment.businessUnitActivationPlan?.objective}</p><div className="mt-4 grid gap-2">{(assessment.businessUnitActivationPlan?.actions ?? []).map((item) => <div key={`${item.day}-${item.focus}`} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">{item.day} · {item.focus}</p><p className="mt-1 text-sm text-zinc-700">{item.action}</p><p className="mt-1 text-xs text-zinc-500">Área conectada: {item.module}</p></div>)}</div></div></div>
 
-          <section className="share-card rounded-lg p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Próxima melhor ação</p>
-            <h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">{buildNextBestAction(assessment).title}</h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">{buildNextBestAction(assessment).reason}</p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3"><button type="button" onClick={() => handleNextAction("O que devo fazer agora?")} className="share-button-primary min-h-11 rounded-md px-4 py-2 text-sm font-semibold">O que devo fazer agora?</button><button type="button" onClick={openContentComposer} className="min-h-11 rounded-md border border-[var(--share-green-800)] bg-white px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]">Criar conteúdo recomendado</button><button type="button" onClick={generateThirtyDayPlan} disabled={isPlanPending} className="min-h-11 rounded-md border border-[var(--share-line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]">{isPlanPending ? "Gerando plano..." : "Gerar plano de 30 dias"}</button></div>
-            {isPlanPending ? <PlanGenerationStatus /> : null}
-            {actionPanel && actionPanel.eyebrow !== "Sugestão de melhoria" ? <ActionPanelCard panel={actionPanel} /> : null}
-          </section>
+          <section className="share-card rounded-lg p-5"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Próxima melhor ação</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">{buildNextBestAction(assessment).title}</h3><p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">{buildNextBestAction(assessment).reason}</p><div className="mt-4 grid gap-2 sm:grid-cols-3"><button type="button" onClick={() => handleNextAction("O que devo fazer agora?")} className="share-button-primary min-h-11 rounded-md px-4 py-2 text-sm font-semibold">O que devo fazer agora?</button><button type="button" onClick={openContentComposer} className="min-h-11 rounded-md border border-[var(--share-green-800)] bg-white px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]">Criar conteúdo recomendado</button><button type="button" onClick={generateThirtyDayPlan} disabled={isPlanPending} className="min-h-11 rounded-md border border-[var(--share-line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]">{isPlanPending ? "Gerando plano..." : "Gerar plano de 30 dias"}</button></div>{isPlanPending ? <PlanGenerationStatus /> : null}{actionPanel && actionPanel.eyebrow !== "Sugestão de melhoria" ? <ActionPanelCard panel={actionPanel} /> : null}</section>
 
           {contentComposerOpen ? <ContentComposer assessment={assessment} brief={contentBrief} setBrief={setContentBrief} draft={contentDraft} isPending={isContentPending} onGenerate={generateContentDraft} onClose={() => setContentComposerOpen(false)} /> : null}
           {thirtyDayPlan ? <ThirtyDayPlanPanel plan={thirtyDayPlan} view={planView} onViewChange={setPlanView} /> : null}
-
           <section className="share-card rounded-lg p-5"><h3 className="text-lg font-semibold text-[var(--share-green-950)]">Como esta análise foi feita?</h3><p className="mt-2 text-sm leading-6 text-zinc-600">Cada conclusão separa dados encontrados no perfil, informações declaradas, contexto da BU e inferências da IA. Nenhuma ação externa é executada sem aprovação.</p><div className="mt-4 grid gap-2 lg:grid-cols-2">{assessment.sources.map((source) => <SourceEvidence key={`${source.confidence}-${source.title}`} source={source} />)}</div></section>
         </div> : null}
 
@@ -396,26 +293,10 @@ function buildNextBestAction(assessment: AuthorityAssessment) {
 function ContentComposer({ assessment, brief, setBrief, draft, isPending, onGenerate, onClose }: { assessment: AuthorityAssessment; brief: ContentBrief; setBrief: React.Dispatch<React.SetStateAction<ContentBrief>>; draft: ContentDraft | null; isPending: boolean; onGenerate: () => void; onClose: () => void }) {
   const objectives: ContentBrief["objective"][] = ["Autoridade", "Conversa", "Provocação", "Valor prático", "Storytelling", "Relacionamento", "Ativação da BU"];
   const strategies: ContentBrief["strategy"][] = ["Recomendada", "Autoridade", "Mais pessoal", "Mais provocativo", "Mais prático", "Mais conversacional"];
-  return <section className="share-card rounded-lg p-5">
-    <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Inteligência de conteúdo</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Transforme a melhor ponte em conteúdo que pareça seu</h3><p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">O conteúdo cruza seu perfil, a BU, a persona, a ponte escolhida e STEPPS. Tendência só entra quando houver fonte e relevância real.</p></div><button type="button" onClick={onClose} className="text-sm font-semibold text-zinc-500 hover:text-zinc-900">Fechar</button></div>
-    <div className="mt-5 grid gap-4 lg:grid-cols-2">
-      <label className="grid gap-1.5"><span className="text-sm font-medium text-zinc-700">Objetivo do conteúdo</span><select value={brief.objective} onChange={(e) => setBrief((v) => ({ ...v, objective: e.target.value as ContentBrief["objective"] }))} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2 text-sm">{objectives.map((item) => <option key={item}>{item}</option>)}</select></label>
-      <label className="grid gap-1.5"><span className="text-sm font-medium text-zinc-700">Ponte</span><select value={brief.bridgeId ?? ""} onChange={(e) => setBrief((v) => ({ ...v, bridgeId: e.target.value }))} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2 text-sm"><option value="">Escolher automaticamente</option>{assessment.bridgeOpportunities?.map((bridge) => <option key={bridge.id} value={bridge.id}>{bridge.title}</option>)}</select></label>
-      <label className="grid gap-1.5 lg:col-span-2"><span className="text-sm font-medium text-zinc-700">Quer colocar algo seu?</span><textarea value={brief.humanContext} onChange={(e) => setBrief((v) => ({ ...v, humanContext: e.target.value }))} rows={3} placeholder="Ex.: Em uma reunião recente, percebi que..." className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2 text-sm leading-6" /><span className="text-xs text-zinc-500">Opcional. Uma experiência ou opinião real aumenta a naturalidade. A plataforma não inventará histórias em seu nome.</span></label>
-      <label className="grid gap-1.5"><span className="text-sm font-medium text-zinc-700">Estratégia</span><select value={brief.strategy} onChange={(e) => setBrief((v) => ({ ...v, strategy: e.target.value as ContentBrief["strategy"] }))} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2 text-sm">{strategies.map((item) => <option key={item}>{item}</option>)}</select></label>
-      <div className="flex items-end"><button type="button" onClick={onGenerate} disabled={isPending} className="share-button-primary min-h-11 w-full rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-60">{isPending ? "Construindo estratégia e texto..." : "Criar rascunho"}</button></div>
-    </div>
-    {draft ? <ContentDraftPanel draft={draft} /> : null}
-  </section>;
+  return <section className="share-card rounded-lg p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Inteligência de conteúdo</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Transforme a melhor ponte em conteúdo que pareça seu</h3><p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">O conteúdo cruza seu perfil, a BU, a persona, a ponte escolhida e STEPPS. Tendência só entra quando houver fonte e relevância real.</p></div><button type="button" onClick={onClose} className="text-sm font-semibold text-zinc-500 hover:text-zinc-900">Fechar</button></div><div className="mt-5 grid gap-4 lg:grid-cols-2"><label className="grid gap-1.5"><span className="text-sm font-medium text-zinc-700">Objetivo do conteúdo</span><select value={brief.objective} onChange={(e) => setBrief((v) => ({ ...v, objective: e.target.value as ContentBrief["objective"] }))} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2 text-sm">{objectives.map((item) => <option key={item}>{item}</option>)}</select></label><label className="grid gap-1.5"><span className="text-sm font-medium text-zinc-700">Ponte</span><select value={brief.bridgeId ?? ""} onChange={(e) => setBrief((v) => ({ ...v, bridgeId: e.target.value }))} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2 text-sm"><option value="">Escolher automaticamente</option>{assessment.bridgeOpportunities?.map((bridge) => <option key={bridge.id} value={bridge.id}>{bridge.title}</option>)}</select></label><label className="grid gap-1.5 lg:col-span-2"><span className="text-sm font-medium text-zinc-700">Quer colocar algo seu?</span><textarea value={brief.humanContext} onChange={(e) => setBrief((v) => ({ ...v, humanContext: e.target.value }))} rows={3} placeholder="Ex.: Em uma reunião recente, percebi que..." className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2 text-sm leading-6" /><span className="text-xs text-zinc-500">Opcional. Uma experiência ou opinião real aumenta a naturalidade. A plataforma não inventará histórias em seu nome.</span></label><label className="grid gap-1.5"><span className="text-sm font-medium text-zinc-700">Estratégia</span><select value={brief.strategy} onChange={(e) => setBrief((v) => ({ ...v, strategy: e.target.value as ContentBrief["strategy"] }))} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2 text-sm">{strategies.map((item) => <option key={item}>{item}</option>)}</select></label><div className="flex items-end"><button type="button" onClick={onGenerate} disabled={isPending} className="share-button-primary min-h-11 w-full rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-60">{isPending ? "Construindo estratégia e texto..." : "Criar rascunho"}</button></div></div>{draft ? <ContentDraftPanel draft={draft} /> : null}</section>;
 }
 
-function ContentDraftPanel({ draft }: { draft: ContentDraft }) {
-  return <div className="mt-6 grid gap-5">
-    <div className="rounded-lg border border-[var(--share-green-800)] bg-[#f4fbef] p-5"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Rascunho para sua revisão</p><h4 className="mt-1 text-lg font-semibold text-[var(--share-green-950)]">{draft.title}</h4><p className="mt-2 text-sm text-zinc-600">Nada será publicado sem sua aprovação.</p><div className="mt-4 whitespace-pre-wrap rounded-md bg-white p-4 text-sm leading-7 text-zinc-800">{draft.post}</div></div>
-    <div className="grid gap-4 lg:grid-cols-2"><div className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Por que escrevemos assim?</p><dl className="mt-3 grid gap-2 text-sm text-zinc-700"><div><dt className="font-semibold">Objetivo</dt><dd>{draft.objective}</dd></div><div><dt className="font-semibold">Persona</dt><dd>{draft.persona}</dd></div><div><dt className="font-semibold">Território</dt><dd>{draft.territory}</dd></div><div><dt className="font-semibold">Ponte</dt><dd>{draft.bridge}</dd></div><div><dt className="font-semibold">Momento</dt><dd>{draft.timing}</dd></div></dl></div><div className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">STEPPS e naturalidade</p><p className="mt-3 text-sm font-semibold text-zinc-950">Principal: {draft.primaryStepps.join(" + ")}</p><p className="mt-1 text-sm text-zinc-600">Secundário: {draft.secondaryStepps.join(" + ") || "Não necessário"}</p><p className="mt-3 text-sm font-semibold text-zinc-950">Naturalidade: {draft.naturality}</p><p className="mt-1 text-sm leading-6 text-zinc-600">{draft.naturalityRationale}</p></div></div>
-    <div className="rounded-md border border-[var(--share-line)] bg-white p-4"><p className="text-sm font-semibold text-zinc-950">Leitura estratégica</p><ul className="mt-2 space-y-2 text-sm leading-6 text-zinc-600">{draft.whyThisWorks.map((item) => <li key={item}>{item}</li>)}</ul>{draft.trend ? <p className="mt-3 text-xs text-zinc-500">Tendência: {draft.trend.label} · {confidenceLabel(draft.trend.confidence)}{draft.trend.source ? ` · ${draft.trend.source}` : ""}</p> : <p className="mt-3 text-xs text-zinc-500">Nenhuma tendência foi forçada. A pauta pode ser evergreen quando isso produz conteúdo melhor.</p>}</div>
-  </div>;
-}
+function ContentDraftPanel({ draft }: { draft: ContentDraft }) { return <div className="mt-6 grid gap-5"><div className="rounded-lg border border-[var(--share-green-800)] bg-[#f4fbef] p-5"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Rascunho para sua revisão</p><h4 className="mt-1 text-lg font-semibold text-[var(--share-green-950)]">{draft.title}</h4><p className="mt-2 text-sm text-zinc-600">Nada será publicado sem sua aprovação.</p><div className="mt-4 whitespace-pre-wrap rounded-md bg-white p-4 text-sm leading-7 text-zinc-800">{draft.post}</div></div><div className="grid gap-4 lg:grid-cols-2"><div className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Por que escrevemos assim?</p><dl className="mt-3 grid gap-2 text-sm text-zinc-700"><div><dt className="font-semibold">Objetivo</dt><dd>{draft.objective}</dd></div><div><dt className="font-semibold">Persona</dt><dd>{draft.persona}</dd></div><div><dt className="font-semibold">Território</dt><dd>{draft.territory}</dd></div><div><dt className="font-semibold">Ponte</dt><dd>{draft.bridge}</dd></div><div><dt className="font-semibold">Momento</dt><dd>{draft.timing}</dd></div></dl></div><div className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">STEPPS e naturalidade</p><p className="mt-3 text-sm font-semibold text-zinc-950">Principal: {draft.primaryStepps.join(" + ")}</p><p className="mt-1 text-sm text-zinc-600">Secundário: {draft.secondaryStepps.join(" + ") || "Não necessário"}</p><p className="mt-3 text-sm font-semibold text-zinc-950">Naturalidade: {draft.naturality}</p><p className="mt-1 text-sm leading-6 text-zinc-600">{draft.naturalityRationale}</p></div></div><div className="rounded-md border border-[var(--share-line)] bg-white p-4"><p className="text-sm font-semibold text-zinc-950">Leitura estratégica</p><ul className="mt-2 space-y-2 text-sm leading-6 text-zinc-600">{draft.whyThisWorks.map((item) => <li key={item}>{item}</li>)}</ul>{draft.trend ? <p className="mt-3 text-xs text-zinc-500">Tendência: {draft.trend.label} · {confidenceLabel(draft.trend.confidence)}{draft.trend.source ? ` · ${draft.trend.source}` : ""}</p> : <p className="mt-3 text-xs text-zinc-500">Nenhuma tendência foi forçada. A pauta pode ser evergreen quando isso produz conteúdo melhor.</p>}</div></div>; }
 
 function buildProfileReviewInsight(item: AuthorityAssessment["profileReview"][number], assessment: AuthorityAssessment, businessUnitShortName: string) {
   const guidance = assessment.input.businessUnitContext ?? buildBusinessUnitGuidance(assessment.input.businessUnitId);
