@@ -15,61 +15,53 @@ type GeminiAuthorityPayload = {
 
 type GeminiAuthorityPlanPayload = Partial<AuthorityThirtyDayPlan>;
 
-const geminiModel = process.env.GEMINI_MODEL ?? "gemini-1.5-flash";
+const geminiModel = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
-export async function createAuthorityAssessmentWithProvider(input: AuthorityInput, userGeminiApiKey?: string | null, extraSources: ResearchSource[] = []): Promise<AuthorityAssessment> {
-  const fallback = createAuthorityAssessment(input, extraSources);
+export async function createAuthorityAssessmentWithProvider(input: AuthorityInput, extraSources: ResearchSource[] = []): Promise<AuthorityAssessment> {
+  const baseline = createAuthorityAssessment(input, extraSources);
   const provider = resolveProviderForCapability("ai.generateStructuredAssessment", process.env.DEFAULT_AI_PROVIDER);
-  const geminiApiKey = userGeminiApiKey || process.env.GEMINI_API_KEY;
+  const geminiApiKey = process.env.GEMINI_API_KEY;
 
   if (provider?.key !== "gemini" || !geminiApiKey) {
-    return fallback;
+    throw new Error("A inteligência da Share AI está indisponível. O diagnóstico especialista não foi executado.");
   }
 
-  try {
-    const geminiResult = await generateWithGemini(input, geminiApiKey);
-    const authoritySellingScore = normalizeScore(geminiResult.overallScore, fallback.authoritySellingScore);
+  const geminiResult = await generateWithGemini(input, geminiApiKey);
+  const authoritySellingScore = normalizeScore(geminiResult.overallScore, baseline.authoritySellingScore);
 
-    return {
-      ...fallback,
-      adapter: "gemini",
-      overallScore: authoritySellingScore,
-      authoritySellingScore,
-      summary: reviewPortugueseCopy(geminiResult.summary ?? fallback.summary),
-      strengths: reviewPortugueseList(selectList(geminiResult.strengths, fallback.strengths)),
-      gaps: reviewPortugueseList(selectList(geminiResult.gaps, fallback.gaps)),
-      risks: reviewPortugueseList(selectList(geminiResult.risks, fallback.risks)),
-      opportunities: reviewPortugueseList(selectList(geminiResult.opportunities, fallback.opportunities)),
-      recommendations: reviewPortugueseList(selectList(geminiResult.recommendations, fallback.recommendations)),
-      sources: [
-        ...fallback.sources.filter((source) => source.title !== "Avaliação local"),
-        {
-          title: "Análise estruturada pela IA",
-          confidence: "inference",
-          notes: "A IA avaliou somente os dados informados ou autorizados. Nenhuma coleta não autorizada foi executada.",
-        },
-      ],
-    };
-  } catch {
-    return fallback;
-  }
+  return {
+    ...baseline,
+    adapter: "gemini",
+    overallScore: authoritySellingScore,
+    authoritySellingScore,
+    summary: reviewPortugueseCopy(geminiResult.summary ?? baseline.summary),
+    strengths: reviewPortugueseList(selectList(geminiResult.strengths, baseline.strengths)),
+    gaps: reviewPortugueseList(selectList(geminiResult.gaps, baseline.gaps)),
+    risks: reviewPortugueseList(selectList(geminiResult.risks, baseline.risks)),
+    opportunities: reviewPortugueseList(selectList(geminiResult.opportunities, baseline.opportunities)),
+    recommendations: reviewPortugueseList(selectList(geminiResult.recommendations, baseline.recommendations)),
+    sources: [
+      ...baseline.sources.filter((source) => source.title !== "Avaliação local"),
+      {
+        title: "Análise estruturada pela IA",
+        confidence: "inference",
+        notes: "A IA interpretou somente informações fornecidas, públicas ou autorizadas para esta análise.",
+      },
+    ],
+  };
 }
 
-export async function createAuthorityThirtyDayPlanWithProvider(context: AuthorityPlanContext, userGeminiApiKey?: string | null): Promise<AuthorityThirtyDayPlan> {
-  const fallback = createStructuredAuthorityThirtyDayPlan(context);
+export async function createAuthorityThirtyDayPlanWithProvider(context: AuthorityPlanContext): Promise<AuthorityThirtyDayPlan> {
+  const normalizationBaseline = createStructuredAuthorityThirtyDayPlan(context);
   const provider = resolveProviderForCapability("ai.generateContentPlan", process.env.DEFAULT_AI_PROVIDER);
-  const geminiApiKey = userGeminiApiKey || process.env.GEMINI_API_KEY;
+  const geminiApiKey = process.env.GEMINI_API_KEY;
 
   if (provider?.key !== "gemini" || !geminiApiKey) {
-    return fallback;
+    throw new Error("A inteligência da Share AI está indisponível. Nenhum plano especialista foi gerado.");
   }
 
-  try {
-    const generated = await generatePlanWithGemini(context, geminiApiKey);
-    return normalizeAuthorityThirtyDayPlan(generated, fallback);
-  } catch {
-    return fallback;
-  }
+  const generated = await generatePlanWithGemini(context, geminiApiKey);
+  return normalizeAuthorityThirtyDayPlan(generated, normalizationBaseline);
 }
 
 async function generateWithGemini(input: AuthorityInput, apiKey: string): Promise<GeminiAuthorityPayload> {
@@ -82,27 +74,19 @@ async function generateWithGemini(input: AuthorityInput, apiKey: string): Promis
         temperature: 0.35,
         response_mime_type: "application/json",
       },
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: buildPrompt(input),
-            },
-          ],
-        },
-      ],
+      contents: [{ role: "user", parts: [{ text: buildPrompt(input) }] }],
     }),
   });
 
   if (!response.ok) {
-    throw new Error("Não foi possível concluir a análise com a IA.");
+    const body = await response.text().catch(() => "");
+    throw new Error(`Gemini indisponível (${response.status}). ${body.slice(0, 240)}`.trim());
   }
 
   const data = await response.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (typeof text !== "string") {
-    throw new Error("A IA não retornou conteúdo para análise.");
+    throw new Error("O Gemini não retornou conteúdo para o diagnóstico.");
   }
 
   return JSON.parse(text) as GeminiAuthorityPayload;
@@ -123,13 +107,14 @@ async function generatePlanWithGemini(context: AuthorityPlanContext, apiKey: str
   });
 
   if (!response.ok) {
-    throw new Error("Não foi possível gerar o plano com a IA.");
+    const body = await response.text().catch(() => "");
+    throw new Error(`Gemini indisponível (${response.status}). ${body.slice(0, 240)}`.trim());
   }
 
   const data = await response.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (typeof text !== "string") {
-    throw new Error("A IA não retornou conteúdo para o plano.");
+    throw new Error("O Gemini não retornou conteúdo para o plano.");
   }
 
   return JSON.parse(text) as GeminiAuthorityPlanPayload;
@@ -147,6 +132,7 @@ Regras:
 - Use apenas as informações abaixo.
 - Separe autoridade pessoal permanente de aderência temporária à BU.
 - Não use DNA da BU como se fosse informação encontrada no perfil da pessoa.
+- Aponte lacunas com critério de especialista, não apenas presença ou ausência de palavras-chave.
 - Responda somente JSON válido.
 
 Entrada:
@@ -190,7 +176,7 @@ Regras obrigatórias:
 - Se Authority Selling estiver alto e BU Affinity estiver baixo, priorize Bridge Opportunities e ativação da BU.
 - Inclua exatamente 30 ações, uma para cada dia de 1 a 30.
 - Nem todo dia deve ser publicação; use ações de perfil, autoridade, conteúdo, networking, engajamento, pesquisa, relacionamento, ativação da BU, medição e revisão.
-- Nenhuma ação externa deve ser executada automaticamente. Quando houver relacionamento ou abordagem, indique que depende de aprovação humana.
+- A Share AI não publica nem envia mensagens. Quando sugerir conteúdo ou abordagem, trate como atividade que a pessoa executará fora da plataforma.
 - Responda somente JSON válido, sem markdown.
 
 Diagnóstico atual:
