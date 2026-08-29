@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { AuthorityAssessment } from "@/lib/diagnostics/authority";
 import { createAuthorityThirtyDayPlanWithProvider } from "@/lib/ai/authorityProvider";
-import { getUserGeminiApiKey } from "@/lib/connectors/userGeminiCredential";
 
 const requestSchema = z.object({
   assessment: z.object({
@@ -28,10 +27,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Não foi possível gerar o plano com os dados do diagnóstico." }, { status: 400 });
   }
 
-  const assessment = parsed.data.assessment as AuthorityAssessment;
-  const history = parsed.data.history.filter(isAssessment) as AuthorityAssessment[];
-  const plan = await createAuthorityThirtyDayPlanWithProvider({ assessment, history }, await getUserGeminiApiKey());
-  return NextResponse.json(plan);
+  try {
+    const assessment = parsed.data.assessment as AuthorityAssessment;
+    const history = parsed.data.history.filter(isAssessment) as AuthorityAssessment[];
+    const plan = await createAuthorityThirtyDayPlanWithProvider({ assessment, history });
+    return NextResponse.json(plan);
+  } catch (error) {
+    console.error("authority-plan-provider-error", error);
+    return NextResponse.json(
+      { error: "A inteligência da Share AI está indisponível no momento. Para preservar a qualidade, nenhum plano especialista foi gerado. Tente novamente em alguns minutos." },
+      { status: 503 },
+    );
+  }
 }
 
 function isAssessment(value: unknown): value is AuthorityAssessment {
