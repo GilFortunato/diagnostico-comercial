@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CalendarDays, CheckCircle2, FileText, ShieldCheck, Target, TrendingUp } from "lucide-react";
+import { ArrowRight, Brain, CalendarDays, CheckCircle2, FileText, Target, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { LoginButton } from "@/components/auth/LoginButton";
@@ -42,13 +42,13 @@ export function HomeExperience() {
                 <div className="mt-8 grid gap-3 sm:grid-cols-3">
                   <HeroMetric icon={TrendingUp} label="Pontuação" value="0-100" />
                   <HeroMetric icon={Target} label="Foco" value="ICP" />
-                  <HeroMetric icon={ShieldCheck} label="Aprovação" value="Humana" />
+                  <HeroMetric icon={Brain} label="Inteligência" value="Gemini" />
                 </div>
               </div>
 
               <aside className="share-green-panel flex min-h-[420px] flex-col justify-between p-7 text-white md:p-8">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Acesso seguro</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Acesso com Google</p>
                   <h2 className="mt-3 text-3xl font-semibold leading-tight">Entre para iniciar o diagnóstico</h2>
                   <div className="mt-6 grid gap-3 text-sm leading-6 text-white/78">
                     <span className="inline-flex items-center gap-2">
@@ -57,11 +57,11 @@ export function HomeExperience() {
                     </span>
                     <span className="inline-flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-[var(--share-lime)]" />
-                      LinkedIn e IA com autorizações separadas
+                      Inteligência Gemini disponibilizada pela Share AI
                     </span>
                     <span className="inline-flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-[var(--share-lime)]" />
-                      Nada é publicado sem revisão humana
+                      Conteúdos e abordagens são entregues como rascunhos para você usar
                     </span>
                   </div>
                 </div>
@@ -114,7 +114,7 @@ export function HomeExperience() {
                   <HeroMetric icon={TrendingUp} label="Pontuação" value="0-100" />
                   <HeroMetric icon={Target} label="Prioridade" value="Perfil" />
                   <HeroMetric icon={CalendarDays} label="Plano" value="30 dias" />
-                  <HeroMetric icon={ShieldCheck} label="Aprovação" value="Ativa" />
+                  <HeroMetric icon={Brain} label="IA" value="Gemini" />
                 </div>
               </div>
               <p className="mt-6 text-sm leading-6 text-white/70">Diagnóstico focado em percepção de cliente, não em empregabilidade.</p>
@@ -164,22 +164,22 @@ export function HomeExperience() {
           </Link>
         </section>
         {isAdmin ? (
-        <section className="grid gap-4 rounded-lg border border-[var(--share-line)] bg-white p-5 shadow-[0_18px_60px_rgb(0_63_46_/_0.08)] md:grid-cols-[1fr_auto] md:items-center">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Admin</p>
-            <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">DNA das Unidades de Negócio</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
-              Configure produtos, ICPs, personas, territórios, DNA editorial, afirmações e documentos sem transformar uma BU em produto fixo.
-            </p>
-          </div>
-          <Link
-            href="/admin/business-units"
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
-          >
-            Abrir Admin
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </section>
+          <section className="grid gap-4 rounded-lg border border-[var(--share-line)] bg-white p-5 shadow-[0_18px_60px_rgb(0_63_46_/_0.08)] md:grid-cols-[1fr_auto] md:items-center">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Admin</p>
+              <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">DNA das Unidades de Negócio</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
+                Configure produtos, ICPs, personas, territórios, DNA editorial, afirmações e documentos sem transformar uma BU em produto fixo.
+              </p>
+            </div>
+            <Link
+              href="/admin/business-units"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
+            >
+              Abrir Admin
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </section>
         ) : null}
         <div id="diagnostico">
           <AuthorityDiagnostic />
