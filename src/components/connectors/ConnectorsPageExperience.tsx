@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ComponentType } from "react";
-import { ArrowLeft, KeyRound, Network, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Brain, Network, ShieldCheck } from "lucide-react";
 import { LoginButton } from "@/components/auth/LoginButton";
 import { ConnectorReadiness } from "@/components/connectors/ConnectorReadiness";
 
@@ -30,27 +30,31 @@ export function ConnectorsPageExperience({ mode = "status" }: { mode?: "status" 
           <div className="relative max-w-3xl">
             <div className="h-2 w-56 rounded-r-md bg-[var(--share-lime)]" />
             <p className="mt-8 text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">
-              {isAdmin ? "Admin de conectores" : isSetup ? "Configurar conexões" : "Status das conexões"}
+              {isAdmin ? "Admin de conectores" : isSetup ? "Configurar fontes" : "Status das conexões"}
             </p>
             <h1 className="mt-3 text-4xl font-semibold leading-tight md:text-5xl">
-              {isAdmin ? "Capacidades técnicas e fornecedores conectados." : isSetup ? "Ative as fontes uma vez. A Share AI decide quando usar." : "Veja o que está ligado ou desligado antes de rodar o diagnóstico."}
+              {isAdmin
+                ? "Capacidades técnicas e fornecedores conectados."
+                : isSetup
+                  ? "Entre com Google e use a inteligência da Share AI sem configurar uma chave de IA."
+                  : "Veja se a inteligência e as fontes necessárias estão disponíveis."}
             </h1>
             <p className="mt-5 text-base leading-7 text-white/74">
               {isAdmin
                 ? "Esta área mostra IDs de fontes, capacidades e detalhes que não devem aparecer para usuários finais."
                 : isSetup
-                  ? "Google identifica a pessoa. Gemini interpreta os dados autorizados. Apify habilita fontes públicas de LinkedIn para perfil, posts, empresa e decisores."
-                  : "A tela do usuário final mostra apenas o estado das fontes. Credenciais e detalhes técnicos ficam separados."}
+                  ? "O Google identifica a pessoa e a Share AI disponibiliza o Gemini do projeto. Fontes públicas adicionais podem ser ativadas apenas quando forem necessárias."
+                  : "A experiência do usuário mostra apenas o estado dos recursos. Chaves de IA e detalhes técnicos não fazem parte da jornada comercial."}
             </p>
           </div>
         </section>
 
         {mode !== "status" ? (
-        <section className="grid gap-3 md:grid-cols-3">
-          <ConnectorPrinciple icon={ShieldCheck} title="Consentimento separado" text="Login Google não vira autorização Gemini automaticamente." />
-          <ConnectorPrinciple icon={KeyRound} title="Credencial da pessoa" text="Cada usuário informa sua própria chave e pode revogar depois." />
-          <ConnectorPrinciple icon={Network} title="Fontes substituíveis" text="O recurso pede dados; o fornecedor pode mudar sem reescrever o fluxo." />
-        </section>
+          <section className="grid gap-3 md:grid-cols-3">
+            <ConnectorPrinciple icon={ShieldCheck} title="Um login" text="O acesso começa com Google. Não há cadastro manual de chave Gemini por usuário." />
+            <ConnectorPrinciple icon={Brain} title="IA da plataforma" text="O Gemini é administrado pela Share AI. Se estiver indisponível, o recurso especialista para em vez de gerar conteúdo genérico." />
+            <ConnectorPrinciple icon={Network} title="Fontes sob demanda" text="Apify e outras fontes públicas são usadas somente nos fluxos que realmente precisam de pesquisa externa." />
+          </section>
         ) : null}
 
         <ConnectorReadiness mode={mode} />
@@ -59,15 +63,7 @@ export function ConnectorsPageExperience({ mode = "status" }: { mode?: "status" 
   );
 }
 
-function ConnectorPrinciple({
-  icon: Icon,
-  title,
-  text,
-}: {
-  icon: ComponentType<{ className?: string }>;
-  title: string;
-  text: string;
-}) {
+function ConnectorPrinciple({ icon: Icon, title, text }: { icon: ComponentType<{ className?: string }>; title: string; text: string }) {
   return (
     <article className="rounded-lg border border-[var(--share-line)] bg-white p-4 shadow-[0_16px_44px_rgb(0_63_46_/_0.06)]">
       <Icon className="h-5 w-5 text-[var(--share-green-800)]" />
