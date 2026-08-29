@@ -1,0 +1,52 @@
+name: Patch Gemini reconnect UI
+
+on:
+  push:
+    branches:
+      - codex/share-ai-mvp-foundation
+    paths:
+      - .github/workflows/patch-gemini-reconnect-ui.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/share-ai-mvp-foundation
+      - name: Patch connector recovery controls
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/components/connectors/ConnectorReadiness.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          text = text.replace(
+            'O login Google identifica você. A inteligência Gemini é fornecida pela Share AI; você não precisa criar nem colar chave de IA. Fontes públicas adicionais podem ser ativadas quando o fluxo precisar delas.',
+            'O login Google identifica você. A inteligência Gemini é uma conexão única da Share AI; usuários comerciais não precisam configurar chave de IA. Se essa conexão cair, um administrador pode verificar ou reconectar o projeto.'
+          )
+
+          old_status = '''      {mode === "status" ? (\n        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-4 py-3">\n          <p className="text-sm font-medium text-zinc-700">\n            A IA não exige configuração individual. Gerencie apenas as fontes adicionais quando necessário.\n          </p>\n          <Link\n            href="/conectores/configurar"\n            className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"\n          >\n            Gerenciar fontes\n            <ArrowRight className="h-4 w-4" />\n          </Link>\n        </div>\n      ) : null}'''
+          new_status = '''      {mode === "status" ? (\n        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-4 py-3">\n          <p className="text-sm font-medium text-zinc-700">\n            {status.gemini.connected\n              ? "A inteligência está disponível. Gerencie apenas as fontes adicionais quando necessário."\n              : "O Gemini está indisponível. Abra a área administrativa para verificar ou reconectar a inteligência da Share AI."}\n          </p>\n          <Link\n            href={status.gemini.connected ? "/conectores/configurar" : "/admin/connectors"}\n            className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"\n          >\n            {status.gemini.connected ? "Gerenciar fontes" : "Conectar / reconectar Gemini"}\n            <ArrowRight className="h-4 w-4" />\n          </Link>\n        </div>\n      ) : null}'''
+          if old_status not in text:
+            raise SystemExit('Bloco status não encontrado')
+          text = text.replace(old_status, new_status)
+
+          old_offline = '''      {showSetup && !status.gemini.connected ? (\n        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4">\n          <p className="text-sm font-semibold text-amber-950">Inteligência temporariamente indisponível</p>\n          <p className="mt-1 text-sm leading-6 text-amber-900">\n            Nenhuma chave precisa ser informada por você. A conexão Gemini é administrada pela Share AI. Enquanto ela estiver indisponível, os recursos especialistas ficam bloqueados em vez de gerar respostas genéricas.\n          </p>\n        </div>\n      ) : null}'''
+          new_offline = '''      {showSetup && !status.gemini.connected ? (\n        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4">\n          <p className="text-sm font-semibold text-amber-950">Inteligência Gemini indisponível</p>\n          <p className="mt-1 text-sm leading-6 text-amber-900">\n            {showAdminDetails\n              ? "A conexão do Gemini é única para toda a Share AI. Configure ou atualize a credencial do projeto e depois verifique novamente. Enquanto isso, os recursos especialistas permanecem bloqueados."\n              : "A conexão de IA da Share AI está indisponível no momento. Você não precisa criar uma chave individual; tente novamente ou peça ao administrador para reativar a conexão."}\n          </p>\n          <div className="mt-3 flex flex-wrap gap-2">\n            <button\n              type="button"\n              onClick={() => void refreshStatus()}\n              className="inline-flex items-center gap-2 rounded-md border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100"\n            >\n              <RefreshCw className="h-4 w-4" />\n              Verificar novamente\n            </button>\n            {showAdminDetails ? (\n              <>\n                <a\n                  href="https://aistudio.google.com/api-keys"\n                  target="_blank"\n                  rel="noreferrer"\n                  className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"\n                >\n                  Abrir Gemini do projeto\n                  <ExternalLink className="h-4 w-4" />\n                </a>\n                <a\n                  href="https://vercel.com/gilfortunatos-projects/diagnostico-comercial/settings/environment-variables"\n                  target="_blank"\n                  rel="noreferrer"\n                  className="share-button-primary inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold"\n                >\n                  Configurar conexão\n                  <ExternalLink className="h-4 w-4" />\n                </a>\n              </>\n            ) : null}\n          </div>\n        </div>\n      ) : null}\n\n      {showAdminDetails && status.gemini.connected ? (\n        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--share-green-800)]/25 bg-[#f2faef] px-4 py-3">\n          <div>\n            <p className="text-sm font-semibold text-[var(--share-green-950)]">Conexão Gemini ativa</p>\n            <p className="mt-1 text-sm text-zinc-600">A inteligência especialista está disponível para os usuários da Share AI.</p>\n          </div>\n          <div className="flex flex-wrap gap-2">\n            <button\n              type="button"\n              onClick={() => void refreshStatus()}\n              className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"\n            >\n              <RefreshCw className="h-4 w-4" />\n              Verificar conexão\n            </button>\n            <a\n              href="https://vercel.com/gilfortunatos-projects/diagnostico-comercial/settings/environment-variables"\n              target="_blank"\n              rel="noreferrer"\n              className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"\n            >\n              Reconectar / trocar credencial\n              <ExternalLink className="h-4 w-4" />\n            </a>\n          </div>\n        </div>\n      ) : null}'''
+          if old_offline not in text:
+            raise SystemExit('Bloco Gemini offline não encontrado')
+          text = text.replace(old_offline, new_offline)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "Share AI automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/components/connectors/ConnectorReadiness.tsx
+          git commit -m "Add Gemini connect and reconnect controls"
+          git push origin HEAD:codex/share-ai-mvp-foundation
