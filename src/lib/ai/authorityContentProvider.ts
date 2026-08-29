@@ -182,13 +182,19 @@ function normalizeDraft(value: Partial<AuthorityContentDraft>, assessment: Autho
   const expertReading = requiredString(value.expertReading, "leitura do especialista");
   const thesis = requiredString(value.thesis, "tese");
   const expertTips = cleanList(value.expertTips, 4);
-  const whyThisWorks = cleanList(value.whyThisWorks, 5);
+  const strategicReasons = cleanList(value.whyThisWorks, 5);
 
-  if (expertTips.length < 2 || whyThisWorks.length < 2) {
+  if (expertTips.length < 2 || strategicReasons.length < 2) {
     throw new Error("O Gemini não entregou profundidade editorial suficiente. Tente gerar novamente.");
   }
 
   const naturality = value.naturality === "Alta" || value.naturality === "Média" || value.naturality === "Baixa" ? value.naturality : "Média";
+  const visibleExpertReading = [
+    `Leitura do especialista: ${expertReading}`,
+    `Tese recomendada: ${thesis}`,
+    ...expertTips.map((tip) => `Dica do especialista: ${tip}`),
+    ...strategicReasons,
+  ].slice(0, 10);
 
   return {
     title: reviewPortugueseCopy(optionalString(value.title) || `Ponte editorial: ${bridge?.title ?? territory}`),
@@ -203,7 +209,7 @@ function normalizeDraft(value: Partial<AuthorityContentDraft>, assessment: Autho
     timing: reviewPortugueseCopy(optionalString(value.timing) || "Contextual"),
     primaryStepps: filteredStepps(value.primaryStepps),
     secondaryStepps: filteredStepps(value.secondaryStepps),
-    whyThisWorks: reviewPortugueseList(whyThisWorks),
+    whyThisWorks: reviewPortugueseList(visibleExpertReading),
     naturality,
     naturalityRationale: reviewPortugueseCopy(requiredString(value.naturalityRationale, "justificativa de naturalidade")),
     trend: null,
