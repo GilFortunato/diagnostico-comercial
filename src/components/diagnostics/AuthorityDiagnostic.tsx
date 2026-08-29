@@ -271,6 +271,7 @@ export function AuthorityDiagnostic() {
   }
 
   function openProfileImprovement(item: AuthorityAssessment["profileReview"][number]) {
+    if (!assessment) return;
     const insight = buildProfileReviewInsight(item, assessment, selectedBu.shortName);
     setActionPanel({
       eyebrow: "Sugestão de melhoria",
