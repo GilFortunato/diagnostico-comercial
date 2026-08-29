@@ -93,7 +93,7 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadin
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Conexões</p>
           <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">IA e fontes do diagnóstico</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
-            O login Google identifica você. A inteligência Gemini é fornecida pela Share AI; você não precisa criar nem colar chave de IA. Fontes públicas adicionais podem ser ativadas quando o fluxo precisar delas.
+            O login Google identifica você. A inteligência Gemini é uma conexão única da Share AI; usuários comerciais não precisam configurar chave de IA. Se essa conexão cair, um administrador pode verificar ou reconectar o projeto.
           </p>
         </div>
         <span className={`rounded-md px-3 py-2 text-sm font-semibold ${analysisReady ? "bg-[#edf7eb] text-[var(--share-green-900)]" : "bg-amber-50 text-amber-900"}`}>
@@ -125,13 +125,15 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadin
       {mode === "status" ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-4 py-3">
           <p className="text-sm font-medium text-zinc-700">
-            A IA não exige configuração individual. Gerencie apenas as fontes adicionais quando necessário.
+            {status.gemini.connected
+              ? "A inteligência está disponível. Gerencie apenas as fontes adicionais quando necessário."
+              : "O Gemini está indisponível. Abra a área administrativa para verificar ou reconectar a inteligência da Share AI."}
           </p>
           <Link
-            href="/conectores/configurar"
+            href={status.gemini.connected ? "/conectores/configurar" : "/admin/connectors"}
             className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
           >
-            Gerenciar fontes
+            {status.gemini.connected ? "Gerenciar fontes" : "Conectar / reconectar Gemini"}
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -139,10 +141,72 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadin
 
       {showSetup && !status.gemini.connected ? (
         <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm font-semibold text-amber-950">Inteligência temporariamente indisponível</p>
+          <p className="text-sm font-semibold text-amber-950">Inteligência Gemini indisponível</p>
           <p className="mt-1 text-sm leading-6 text-amber-900">
-            Nenhuma chave precisa ser informada por você. A conexão Gemini é administrada pela Share AI. Enquanto ela estiver indisponível, os recursos especialistas ficam bloqueados em vez de gerar respostas genéricas.
+            {showAdminDetails
+              ? "A conexão do Gemini é única para toda a Share AI. Configure ou atualize a credencial do projeto e depois verifique novamente. Enquanto isso, os recursos especialistas permanecem bloqueados."
+              : "A conexão de IA da Share AI está indisponível no momento. Você não precisa criar uma chave individual; tente novamente ou peça ao administrador para reativar a conexão."}
           </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void refreshStatus()}
+              className="inline-flex items-center gap-2 rounded-md border border-amber-300 bg-white px-3 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Verificar novamente
+            </button>
+            {showAdminDetails ? (
+              <>
+                <a
+                  href="https://aistudio.google.com/api-keys"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
+                >
+                  Abrir Gemini do projeto
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+                <a
+                  href="https://vercel.com/gilfortunatos-projects/diagnostico-comercial/settings/environment-variables"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="share-button-primary inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold"
+                >
+                  Configurar conexão
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {showAdminDetails && status.gemini.connected ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--share-green-800)]/25 bg-[#f2faef] px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-[var(--share-green-950)]">Conexão Gemini ativa</p>
+            <p className="mt-1 text-sm text-zinc-600">A inteligência especialista está disponível para os usuários da Share AI.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void refreshStatus()}
+              className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Verificar conexão
+            </button>
+            <a
+              href="https://vercel.com/gilfortunatos-projects/diagnostico-comercial/settings/environment-variables"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
+            >
+              Reconectar / trocar credencial
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          </div>
         </div>
       ) : null}
 
