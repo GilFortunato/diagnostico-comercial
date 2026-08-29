@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { AuthorityAssessment } from "@/lib/diagnostics/authority";
 import { createAuthorityContentDraftWithProvider, type AuthorityContentBrief } from "@/lib/ai/authorityContentProvider";
-import { getUserGeminiApiKey } from "@/lib/connectors/userGeminiCredential";
 
 const requestSchema = z.object({
   assessment: z.object({
@@ -31,8 +30,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Não foi possível criar o conteúdo com os dados informados." }, { status: 400 });
   }
 
-  const assessment = parsed.data.assessment as AuthorityAssessment;
-  const brief = parsed.data.brief as AuthorityContentBrief;
-  const draft = await createAuthorityContentDraftWithProvider(assessment, brief, await getUserGeminiApiKey());
-  return NextResponse.json(draft);
+  try {
+    const assessment = parsed.data.assessment as AuthorityAssessment;
+    const brief = parsed.data.brief as AuthorityContentBrief;
+    const draft = await createAuthorityContentDraftWithProvider(assessment, brief);
+    return NextResponse.json(draft);
+  } catch (error) {
+    console.error("authority-content-provider-error", error);
+    return NextResponse.json(
+      { error: "A inteligência de conteúdo está indisponível no momento. Para preservar a qualidade, nenhum rascunho foi gerado. Tente novamente em alguns minutos." },
+      { status: 503 },
+    );
+  }
 }
