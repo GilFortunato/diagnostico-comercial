@@ -270,6 +270,16 @@ export function AuthorityDiagnostic() {
     });
   }
 
+  function openProfileImprovement(item: AuthorityAssessment["profileReview"][number]) {
+    const insight = buildProfileReviewInsight(item, assessment, selectedBu.shortName);
+    setActionPanel({
+      eyebrow: "Sugestão de melhoria",
+      title: item.label,
+      description: insight.analysis,
+      items: [insight.suggestion],
+    });
+  }
+
   return (
     <section className="grid gap-6 lg:grid-cols-[340px_1fr]">
       <aside className="share-card space-y-4 rounded-lg p-5">
@@ -405,27 +415,42 @@ export function AuthorityDiagnostic() {
             </section>
 
             <section className="share-card rounded-lg p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Revise o que encontramos</p>
-              <h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Dados da pessoa, não da BU</h3>
-              <p className="mt-2 text-sm leading-6 text-zinc-600">A BU é usada como régua de leitura. Ela não preenche headline, Sobre, provas nem conteúdo pessoal.</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">O que encontramos no seu perfil</p>
+              <h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Evidências que sustentam o diagnóstico</h3>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Mostramos o dado encontrado, a leitura estratégica e uma sugestão de melhoria. A BU funciona como lente comercial, sem substituir sua marca pessoal.</p>
               <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                {(assessment.profileReview ?? []).map((item) => (
-                  <div key={item.field} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-950">{item.label}</p>
-                        <p className="mt-1 text-xs text-zinc-500">Fonte: {item.sourceLabel} · {confidenceLabel(item.confidence)}</p>
-                      </div>
-                      {fieldCanEdit(item.field) ? (
-                        <button type="button" onClick={() => updateField(profileReviewFieldToFormKey(item.field), item.value)} className="text-sm font-semibold text-[var(--share-green-900)] underline-offset-4 hover:underline">
-                          Editar
+                {(assessment.profileReview ?? []).map((item) => {
+                  const insight = buildProfileReviewInsight(item, assessment, selectedBu.shortName);
+                  return (
+                    <article key={item.field} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-950">{item.label}</p>
+                          <p className="mt-1 text-xs text-zinc-500">Fonte: {item.sourceLabel} · {confidenceLabel(item.confidence)}</p>
+                        </div>
+                        <button type="button" onClick={() => openProfileImprovement(item)} className="text-sm font-semibold text-[var(--share-green-900)] underline-offset-4 hover:underline">
+                          Sugestão de melhoria
                         </button>
-                      ) : null}
-                    </div>
-                    <p className="mt-3 line-clamp-4 text-sm leading-6 text-zinc-700">{item.value || "Nenhuma informação encontrada. Complete manualmente para melhorar a análise."}</p>
-                  </div>
-                ))}
+                      </div>
+
+                      <div className="mt-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Encontramos</p>
+                        <p className="mt-1 line-clamp-4 text-sm leading-6 text-zinc-700">{item.value || insight.emptyState}</p>
+                      </div>
+
+                      <div className="mt-4 border-t border-[var(--share-line)] pt-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Leitura do especialista</p>
+                        <p className="mt-2 text-sm leading-6 text-zinc-700">{insight.analysis}</p>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+                          <span className="rounded-full bg-white px-2.5 py-1 text-[var(--share-green-900)]">Autoridade pessoal: {insight.authoritySignal}</span>
+                          <span className="rounded-full bg-white px-2.5 py-1 text-[var(--share-green-900)]">Aderência à {selectedBu.shortName}: {insight.buSignal}</span>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
+              {actionPanel?.eyebrow === "Sugestão de melhoria" ? <ActionPanelCard panel={actionPanel} /> : null}
             </section>
 
             <section className="share-card rounded-lg p-5">
@@ -536,7 +561,7 @@ export function AuthorityDiagnostic() {
                 </button>
               </div>
               {isPlanPending ? <PlanGenerationStatus /> : null}
-              {actionPanel ? <ActionPanelCard panel={actionPanel} /> : null}
+              {actionPanel && actionPanel.eyebrow !== "Sugestão de melhoria" ? <ActionPanelCard panel={actionPanel} /> : null}
               <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {assessment.nextActions.map((action) => (
                   action === "Gerar plano de 30 dias" ? null : (
@@ -593,6 +618,81 @@ export function AuthorityDiagnostic() {
       </div>
     </section>
   );
+}
+
+function buildProfileReviewInsight(item: AuthorityAssessment["profileReview"][number], assessment: AuthorityAssessment, businessUnitShortName: string) {
+  const guidance = assessment.input.businessUnitContext ?? buildBusinessUnitGuidance(assessment.input.businessUnitId);
+  const territory = guidance.territories[0] ?? assessment.input.businessUnitName;
+  const persona = guidance.personas[0] ?? guidance.icps[0] ?? "decisores do ICP";
+  const hasValue = item.value.trim().length > 0;
+
+  if (item.field === "headline") {
+    return {
+      authoritySignal: hasValue ? "Média" : "Baixa",
+      buSignal: assessment.buAffinityScore >= 70 ? "Alta" : assessment.buAffinityScore >= 45 ? "Média" : "Baixa",
+      emptyState: "Não encontramos uma headline utilizável nesta análise.",
+      analysis: hasValue
+        ? `A headline comunica sua posição atual, mas precisa ser lida em conjunto com o restante do perfil. O ponto central é verificar se a primeira impressão deixa claro pelo que você quer ser lembrado e se existe uma ponte natural com ${businessUnitShortName}.`
+        : "Sem uma headline clara, o perfil perde força logo na primeira impressão e dificulta a associação com um território de autoridade.",
+      suggestion: `Preserve sua identidade profissional e teste uma headline que combine especialidade, público e impacto. Uma direção possível é conectar ${territory} ao valor que você entrega para ${persona}, sem transformar a headline em uma lista de BUs.`,
+    };
+  }
+
+  if (item.field === "about") {
+    return {
+      authoritySignal: hasValue && item.value.length > 180 ? "Alta" : hasValue ? "Média" : "Baixa",
+      buSignal: assessment.activationPotentialScore >= 70 ? "Alta" : assessment.activationPotentialScore >= 45 ? "Média" : "Baixa",
+      emptyState: "Não encontramos conteúdo suficiente na seção Sobre.",
+      analysis: hasValue
+        ? `O Sobre oferece contexto para entender sua trajetória e seu repertório. A oportunidade é transformar descrição profissional em narrativa de autoridade: problema que você resolve, experiência real, provas e perspectiva própria.`
+        : "Sem um Sobre consistente, a plataforma tem menos evidências para avaliar profundidade, repertório e coerência de posicionamento.",
+      suggestion: `Reestruture o Sobre em quatro blocos: problema que você ajuda a resolver, repertório que sustenta sua visão, uma ou duas provas reais e uma ponte opcional com ${territory}. A BU deve aparecer como contexto comercial, não como identidade pessoal.`,
+    };
+  }
+
+  if (item.field === "proofPoints") {
+    return {
+      authoritySignal: hasValue ? "Média" : "Baixa",
+      buSignal: hasValue && assessment.buAffinityScore >= 55 ? "Média" : "Baixa",
+      emptyState: "Não encontramos provas concretas suficientes no perfil.",
+      analysis: hasValue
+        ? "Há sinais de trajetória e experiência, mas experiência profissional não é automaticamente prova de autoridade. O que fortalece percepção comercial são resultados, projetos com impacto, cases, depoimentos, reconhecimentos ou entregas verificáveis."
+        : "A trajetória pode ser sólida e ainda assim ficar pouco comprovada no perfil. Sem evidências concretas, o leitor precisa acreditar na autoridade apenas pela descrição.",
+      suggestion: "Escolha duas experiências reais e transforme cada uma em prova: contexto, desafio, sua contribuição e resultado. Se não houver número público, use impacto qualitativo verificável sem inventar métricas.",
+    };
+  }
+
+  if (item.field === "posts") {
+    return {
+      authoritySignal: hasValue ? "Média" : "Não avaliada",
+      buSignal: hasValue ? "Média" : "Não avaliada",
+      emptyState: "Não conseguimos analisar publicações recentes com a fonte atual.",
+      analysis: hasValue
+        ? "Conteúdo recente ajuda a medir consistência temática, profundidade e presença em conversas. A leitura deve considerar qualidade e aderência, não apenas frequência."
+        : "Sem publicações recentes, não é possível afirmar com segurança como você constrói autoridade por conteúdo nem quais temas já geram associação espontânea.",
+      suggestion: `Use conteúdos recentes para consolidar dois ou três territórios pessoais e, quando ${businessUnitShortName} estiver em foco, escolha pautas que criem uma ponte legítima com ${territory}. Não force assunto da BU quando não houver conexão real.`,
+    };
+  }
+
+  if (item.field === "interactionSignals") {
+    return {
+      authoritySignal: hasValue ? "Média" : "Não avaliada",
+      buSignal: hasValue ? "Média" : "Não avaliada",
+      emptyState: "Ainda não temos evidências suficientes para avaliar networking estratégico.",
+      analysis: hasValue
+        ? "Networking estratégico não é quantidade de conexões. O sinal relevante é presença em conversas com pessoas e temas que importam para seu mercado, com contribuições que reforcem repertório e confiança."
+        : "Sem dados sobre interações, comentários e conversas, não é correto atribuir força ou fraqueza ao seu networking estratégico.",
+      suggestion: `Priorize interações de qualidade com ${persona}: comentários substantivos, perguntas específicas e conexões contextualizadas. O objetivo é construir familiaridade antes de qualquer abordagem comercial.`,
+    };
+  }
+
+  return {
+    authoritySignal: hasValue ? "Média" : "Não avaliada",
+    buSignal: hasValue ? "Média" : "Não avaliada",
+    emptyState: "Não encontramos informação suficiente nesta dimensão.",
+    analysis: hasValue ? "Esta evidência ajuda a contextualizar sua autoridade, mas deve ser interpretada junto das demais seções do perfil." : "Ainda não existem dados suficientes para uma leitura responsável desta dimensão.",
+    suggestion: `Use esta seção para reforçar evidências reais do seu repertório e, quando fizer sentido, criar uma ponte natural com ${territory}.`,
+  };
 }
 
 function Input({
@@ -694,19 +794,6 @@ function SourceEvidence({ source }: { source: AuthorityAssessment["sources"][num
       <p className="mt-1 text-xs leading-5 opacity-75">{source.notes}</p>
     </div>
   );
-}
-
-function fieldCanEdit(field: AuthorityAssessment["profileReview"][number]["field"]) {
-  return ["headline", "about", "proofPoints", "posts", "interactionSignals"].includes(field);
-}
-
-function profileReviewFieldToFormKey(field: AuthorityAssessment["profileReview"][number]["field"]): keyof FormState {
-  if (field === "posts") return "recentContent";
-  if (field === "proofPoints") return "proofPoints";
-  if (field === "interactionSignals") return "interactionSignals";
-  if (field === "headline") return "headline";
-  if (field === "about") return "about";
-  return "themes";
 }
 
 function ActionPanelCard({ panel }: { panel: ActionPanel }) {
