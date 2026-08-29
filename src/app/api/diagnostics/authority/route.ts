@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const parsed = authorityInputSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid authority assessment input.", issues: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: "Não foi possível gerar o diagnóstico com os dados informados.", issues: parsed.error.flatten() }, { status: 400 });
   }
 
   const apifyToken = await getUserApifyToken();

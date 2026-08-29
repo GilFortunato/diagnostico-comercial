@@ -13,7 +13,7 @@ export async function GET() {
   return NextResponse.json({
     google: {
       connected: googleConnected,
-      label: googleConnected ? "Google Login conectado" : "Google Login pendente",
+      label: googleConnected ? "Login com Google conectado" : "Login com Google pendente",
     },
     gemini: {
       connected: geminiConnected,
@@ -22,7 +22,7 @@ export async function GET() {
     },
     linkedin: {
       connected: apifyConnected || linkedinOauthReady,
-      label: apifyConnected ? "LinkedIn via Apify conectado" : linkedinOauthReady ? "LinkedIn OAuth pronto" : "Conectar LinkedIn",
+      label: apifyConnected ? "LinkedIn conectado por fonte pública" : linkedinOauthReady ? "LinkedIn pronto para autorização" : "Conectar LinkedIn",
       mode: apifyConnected ? "apify-public-profile" : linkedinOauthReady ? "oauth" : "missing-user-credential",
     },
     apify: {

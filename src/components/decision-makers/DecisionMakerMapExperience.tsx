@@ -9,6 +9,7 @@ import { demoBusinessUnits } from "@/lib/tenancy/demo";
 import { defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
 import { decisionMakerPipeline } from "@/lib/decision-makers/capabilityAudit";
 import type { DecisionMakerResult } from "@/lib/decision-makers/search";
+import { confidenceLabel } from "@/lib/copy/editorial";
 
 type ConnectorStatus = {
   google: { connected: boolean; label: string };
@@ -59,12 +60,12 @@ export function DecisionMakerMapExperience() {
       const payload = (await response.json()) as DecisionMakerResult | { error?: string };
 
       if (!response.ok) {
-        throw new Error("error" in payload && payload.error ? payload.error : "Nao foi possivel buscar decisores.");
+        throw new Error("error" in payload && payload.error ? payload.error : "Não foi possível buscar decisores.");
       }
 
       setResult(payload as DecisionMakerResult);
     } catch (searchError) {
-      setError(searchError instanceof Error ? searchError.message : "Nao foi possivel buscar decisores.");
+      setError(searchError instanceof Error ? searchError.message : "Não foi possível buscar decisores.");
     } finally {
       setIsSearching(false);
     }
@@ -90,17 +91,17 @@ export function DecisionMakerMapExperience() {
           <div className="grid gap-8 p-6 md:p-8 lg:grid-cols-[1fr_360px]">
             <div className="relative">
               <div className="h-2 w-60 max-w-full rounded-r-md bg-[var(--share-lime)]" />
-              <p className="mt-8 text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Decision Maker Intelligence</p>
+              <p className="mt-8 text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Inteligência de decisores</p>
               <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight md:text-5xl">
                 Mapa de decisores para abordar a conta certa pelo caminho certo.
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-white/74">
-                A Share AI cruza empresa, BU, sinais publicos e perfis profissionais para diferenciar poder, fit, acessibilidade e qualidade das evidencias.
+                A Share AI cruza empresa, BU, sinais públicos e perfis profissionais para diferenciar poder de decisão, aderência, acessibilidade e qualidade das evidências.
               </p>
             </div>
             <div className="relative grid content-between rounded-lg border border-white/15 bg-white/10 p-5">
               <div>
-                <p className="text-sm font-semibold text-white/74">Conexao para pesquisa</p>
+                <p className="text-sm font-semibold text-white/74">Conexão para pesquisa</p>
                 <div className="mt-4 grid gap-2">
                   <ConnectorMini label="Google" connected={Boolean(status?.google.connected)} />
                   <ConnectorMini label="Gemini" connected={Boolean(status?.gemini.connected)} />
@@ -155,10 +156,10 @@ export function DecisionMakerMapExperience() {
                 </select>
               </label>
               <Field icon={<Sparkles className="h-4 w-4" />} label="Objetivo comercial" value={objective} onChange={setObjective} />
-              <Field icon={<Compass className="h-4 w-4" />} label="Localizacao opcional" value={location} onChange={setLocation} placeholder="Brasil, Sao Paulo, remoto..." />
+              <Field icon={<Compass className="h-4 w-4" />} label="Localização opcional" value={location} onChange={setLocation} placeholder="Brasil, São Paulo, remoto..." />
             </div>
             <div className="mt-5">
-              <p className="text-sm font-semibold text-[var(--share-green-950)]">Areas de interesse</p>
+              <p className="text-sm font-semibold text-[var(--share-green-950)]">Áreas de interesse</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {roleSignals.map((signal) => (
                   <span key={signal} className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">{signal}</span>
@@ -178,11 +179,11 @@ export function DecisionMakerMapExperience() {
               className="share-button-primary mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSearching ? <Sparkles className="h-4 w-4 animate-pulse" /> : <Search className="h-4 w-4" />}
-              {isSearching ? "Preparando mapa" : "Encontrar pessoas estrategicas"}
+              {isSearching ? "Preparando mapa" : "Encontrar pessoas estratégicas"}
             </button>
             {error ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{error}</p> : null}
             <p className="mt-3 text-xs leading-5 text-zinc-500">
-              Sem Apify/Gemini conectados, a busca gera um mapa inicial por BU DNA. Pesquisa externa real entra quando os conectores estiverem on.
+              Sem Apify/Gemini conectados, a busca gera um mapa inicial pelo DNA da BU. A pesquisa externa real entra quando os conectores estiverem ligados.
             </p>
           </aside>
 
@@ -222,12 +223,12 @@ function DecisionMakerSearchResult({ result }: { result: DecisionMakerResult }) 
       <div className="share-card rounded-lg p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Dossie da conta</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Dossiê da conta</p>
             <h2 className="mt-1 text-3xl font-semibold text-[var(--share-green-950)]">{result.company.name}</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-600">BU: {result.company.businessUnitName}</p>
           </div>
           <div className="rounded-md bg-[var(--share-green-950)] px-4 py-3 text-white">
-            <p className="text-xs font-semibold uppercase text-white/60">Aderencia inicial</p>
+            <p className="text-xs font-semibold uppercase text-white/60">Aderência inicial</p>
             <p className="mt-1 text-3xl font-semibold text-[var(--share-lime)]">{result.company.fitScore}/100</p>
           </div>
         </div>
@@ -237,18 +238,18 @@ function DecisionMakerSearchResult({ result }: { result: DecisionMakerResult }) 
           ))}
         </div>
         <div className="mt-4 rounded-md border border-[var(--share-line)] bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Proxima melhor acao</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Próxima melhor ação</p>
           <h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">{result.nextBestAction.title}</h3>
           <p className="mt-2 text-sm leading-6 text-zinc-600">{result.nextBestAction.reason}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">Impacto {result.nextBestAction.impact}</span>
-            <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">Esforco {result.nextBestAction.effort}</span>
+            <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">Impacto {levelLabel(result.nextBestAction.impact)}</span>
+            <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">Esforço {levelLabel(result.nextBestAction.effort)}</span>
           </div>
         </div>
       </div>
 
       <div className="share-card rounded-lg p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Pessoas estrategicas</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Pessoas estratégicas</p>
         <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Mapa inicial por papel decisor</h2>
         <div className="mt-5 grid gap-3 xl:grid-cols-2">
           {result.people.map((person) => (
@@ -261,15 +262,15 @@ function DecisionMakerSearchResult({ result }: { result: DecisionMakerResult }) 
                 <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">{person.probableDecisionRole}</span>
               </div>
               <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-                <Metric label="Fit" value={`${person.fitScore}/100`} />
+                <Metric label="Aderência" value={`${person.fitScore}/100`} />
                 <Metric label="Acesso" value={person.accessibility} />
-                <Metric label="Confianca" value={person.confidence} />
+                <Metric label="Confiança" value={person.confidence} />
               </div>
               <p className="mt-4 text-sm leading-6 text-zinc-700">{person.whyRelevant}</p>
               <p className="mt-3 text-sm leading-6 text-zinc-600">{person.suggestedConversation}</p>
               <p className="mt-3 rounded-md bg-[#fbfdf8] px-3 py-2 text-xs text-zinc-500">{person.contactStatus}</p>
               <details className="mt-3 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3">
-                <summary className="cursor-pointer text-xs font-semibold text-[var(--share-green-900)]">Nao usar nesta abordagem</summary>
+                <summary className="cursor-pointer text-xs font-semibold text-[var(--share-green-900)]">Não usar nesta abordagem</summary>
                 <ul className="mt-2 grid gap-1 text-xs leading-5 text-zinc-600">
                   {person.doNotUse.map((item) => <li key={item}>{item}</li>)}
                 </ul>
@@ -280,12 +281,12 @@ function DecisionMakerSearchResult({ result }: { result: DecisionMakerResult }) 
       </div>
 
       <div className="share-card rounded-lg p-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Fontes e confianca</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Fontes e confiança</p>
         <div className="mt-3 grid gap-2 md:grid-cols-2">
           {result.sources.map((source) => (
             <div key={source.title} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3">
               <p className="text-sm font-semibold text-zinc-950">{source.title}</p>
-              <p className="mt-1 text-xs font-semibold uppercase text-zinc-500">{source.confidence}</p>
+              <p className="mt-1 text-xs font-semibold uppercase text-zinc-500">{confidenceLabel(source.confidence)}</p>
               <p className="mt-2 text-xs leading-5 text-zinc-600">{source.notes}</p>
             </div>
           ))}
@@ -311,7 +312,7 @@ function ConnectorMini({ label, connected }: { label: string; connected: boolean
         {connected ? <CheckCircle2 className="h-4 w-4 text-[var(--share-lime)]" /> : <KeyRound className="h-4 w-4 text-white/45" />}
         {label}
       </span>
-      <span className={connected ? "text-xs font-semibold text-[var(--share-lime)]" : "text-xs font-semibold text-white/45"}>{connected ? "on" : "off"}</span>
+      <span className={connected ? "text-xs font-semibold text-[var(--share-lime)]" : "text-xs font-semibold text-white/45"}>{connected ? "Ligado" : "Desligado"}</span>
     </div>
   );
 }
@@ -350,4 +351,10 @@ function buildDecisionMakerObjective(businessUnitId: string) {
   const product = unit.products[0]?.name ?? unit.name;
   const territory = unit.authorityTerritories[0]?.name ?? "prioridade comercial";
   return `Encontrar decisores para ${product} com foco em ${territory}.`;
+}
+
+function levelLabel(level: "low" | "medium" | "high") {
+  if (level === "low") return "baixo";
+  if (level === "medium") return "médio";
+  return "alto";
 }

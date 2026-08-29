@@ -21,7 +21,7 @@ export async function extractLinkedInProfileWithApify(profileUrl: string, token:
   });
 
   if (!response.ok) {
-    throw new Error("A coleta via Apify nao retornou dados.");
+    throw new Error("A fonte conectada não retornou dados para este perfil.");
   }
 
   const items = (await response.json()) as unknown[];
@@ -31,10 +31,10 @@ export async function extractLinkedInProfileWithApify(profileUrl: string, token:
   return {
     input: mapProfileToAuthorityInput(profile),
     source: {
-      title: "Perfil publico do LinkedIn coletado via Apify",
+      title: "Perfil público do LinkedIn",
       url: profileUrl,
       confidence: "likely",
-      notes: `Dados retornados pelo Actor ${apifyActors.linkedinProfile.actorId} para a URL informada pelo usuario.`,
+      notes: "Informações obtidas por meio do conector de pesquisa autorizado para a URL informada.",
     },
   };
 }

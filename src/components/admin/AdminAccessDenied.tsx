@@ -21,9 +21,9 @@ export function AdminAccessDenied() {
             <ShieldAlert className="h-6 w-6" />
           </span>
           <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Acesso admin</p>
-          <h1 className="mt-2 text-3xl font-semibold text-[var(--share-green-950)]">Area restrita</h1>
+          <h1 className="mt-2 text-3xl font-semibold text-[var(--share-green-950)]">área restrita</h1>
           <p className="mt-3 text-sm leading-6 text-zinc-600">
-            Esta tela mostra configuracoes internas da Share AI e fica disponivel apenas para perfis administradores.
+            Esta tela mostra configuracoes internas da Share AI e fica disponível apenas para perfis administradores.
           </p>
           <Link
             href="/"

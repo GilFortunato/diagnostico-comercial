@@ -30,26 +30,26 @@ export function ConnectorsPageExperience({ mode = "status" }: { mode?: "status" 
           <div className="relative max-w-3xl">
             <div className="h-2 w-56 rounded-r-md bg-[var(--share-lime)]" />
             <p className="mt-8 text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">
-              {isAdmin ? "Admin de conectores" : isSetup ? "Configurar conexoes" : "Status de conexoes"}
+              {isAdmin ? "Admin de conectores" : isSetup ? "Configurar conexões" : "Status das conexões"}
             </p>
             <h1 className="mt-3 text-4xl font-semibold leading-tight md:text-5xl">
-              {isAdmin ? "Capacidades tecnicas e fornecedores conectados." : isSetup ? "Ative as fontes uma vez. A Share AI decide quando usar." : "Veja o que esta on ou off antes de rodar o diagnostico."}
+              {isAdmin ? "Capacidades técnicas e fornecedores conectados." : isSetup ? "Ative as fontes uma vez. A Share AI decide quando usar." : "Veja o que está ligado ou desligado antes de rodar o diagnóstico."}
             </h1>
             <p className="mt-5 text-base leading-7 text-white/74">
               {isAdmin
-                ? "Esta area mostra IDs de actors, capacidades e detalhes que nao devem aparecer para usuarios finais."
+                ? "Esta área mostra IDs de fontes, capacidades e detalhes que não devem aparecer para usuários finais."
                 : isSetup
-                  ? "Google identifica a pessoa. Gemini interpreta os dados autorizados. Apify habilita fontes publicas de LinkedIn para perfil, posts, empresa e decisores."
-                  : "A tela do usuario final mostra apenas o estado das fontes. Credenciais e detalhes tecnicos ficam separados."}
+                  ? "Google identifica a pessoa. Gemini interpreta os dados autorizados. Apify habilita fontes públicas de LinkedIn para perfil, posts, empresa e decisores."
+                  : "A tela do usuário final mostra apenas o estado das fontes. Credenciais e detalhes técnicos ficam separados."}
             </p>
           </div>
         </section>
 
         {mode !== "status" ? (
         <section className="grid gap-3 md:grid-cols-3">
-          <ConnectorPrinciple icon={ShieldCheck} title="Consentimento separado" text="Login Google nao vira autorizacao Gemini automaticamente." />
-          <ConnectorPrinciple icon={KeyRound} title="Credencial da pessoa" text="Cada usuario informa sua propria chave e pode revogar depois." />
-          <ConnectorPrinciple icon={Network} title="Capacidades plugaveis" text="A skill pede dados; o fornecedor pode mudar sem reescrever o fluxo." />
+          <ConnectorPrinciple icon={ShieldCheck} title="Consentimento separado" text="Login Google não vira autorização Gemini automaticamente." />
+          <ConnectorPrinciple icon={KeyRound} title="Credencial da pessoa" text="Cada usuário informa sua própria chave e pode revogar depois." />
+          <ConnectorPrinciple icon={Network} title="Fontes substituíveis" text="O recurso pede dados; o fornecedor pode mudar sem reescrever o fluxo." />
         </section>
         ) : null}
 

@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const businessUnitId = url.searchParams.get("businessUnitId");
 
   if (!businessUnitId) {
-    return NextResponse.json({ error: "businessUnitId is required." }, { status: 400 });
+    return NextResponse.json({ error: "Selecione uma BU antes de comparar a evolução." }, { status: 400 });
   }
 
   const items = await listAuthorityAssessments(businessUnitId);

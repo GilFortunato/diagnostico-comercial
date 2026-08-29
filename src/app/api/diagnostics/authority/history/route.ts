@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   const businessUnitId = url.searchParams.get("businessUnitId");
 
   if (!businessUnitId) {
-    return NextResponse.json({ error: "businessUnitId is required." }, { status: 400 });
+    return NextResponse.json({ error: "Selecione uma BU antes de consultar o histórico." }, { status: 400 });
   }
 
   return NextResponse.json({ items: await listAuthorityAssessments(businessUnitId), adapter: "demo-local" });

@@ -1,5 +1,6 @@
 import { createAuthorityAssessment, type AuthorityAssessment, type AuthorityInput, type ResearchSource } from "@/lib/diagnostics/authority";
 import { resolveProviderForCapability } from "@/lib/ai/providers";
+import { ptBrEditorialInstruction, reviewPortugueseCopy, reviewPortugueseList, silentEditorialReviewInstruction } from "@/lib/copy/editorial";
 
 type GeminiAuthorityPayload = {
   overallScore?: number;
@@ -24,23 +25,25 @@ export async function createAuthorityAssessmentWithProvider(input: AuthorityInpu
 
   try {
     const geminiResult = await generateWithGemini(input, geminiApiKey);
+    const authoritySellingScore = normalizeScore(geminiResult.overallScore, fallback.authoritySellingScore);
 
     return {
       ...fallback,
       adapter: "gemini",
-      overallScore: normalizeScore(geminiResult.overallScore, fallback.overallScore),
-      summary: geminiResult.summary ?? fallback.summary,
-      strengths: selectList(geminiResult.strengths, fallback.strengths),
-      gaps: selectList(geminiResult.gaps, fallback.gaps),
-      risks: selectList(geminiResult.risks, fallback.risks),
-      opportunities: selectList(geminiResult.opportunities, fallback.opportunities),
-      recommendations: selectList(geminiResult.recommendations, fallback.recommendations),
+      overallScore: authoritySellingScore,
+      authoritySellingScore,
+      summary: reviewPortugueseCopy(geminiResult.summary ?? fallback.summary),
+      strengths: reviewPortugueseList(selectList(geminiResult.strengths, fallback.strengths)),
+      gaps: reviewPortugueseList(selectList(geminiResult.gaps, fallback.gaps)),
+      risks: reviewPortugueseList(selectList(geminiResult.risks, fallback.risks)),
+      opportunities: reviewPortugueseList(selectList(geminiResult.opportunities, fallback.opportunities)),
+      recommendations: reviewPortugueseList(selectList(geminiResult.recommendations, fallback.recommendations)),
       sources: [
-        ...fallback.sources.filter((source) => source.title !== "Avaliacao heuristica local"),
+        ...fallback.sources.filter((source) => source.title !== "Avaliação local"),
         {
-          title: "Analise estruturada via Google Gemini",
+          title: "Análise estruturada pela IA",
           confidence: "inference",
-          notes: "A IA avaliou somente os dados informados ou autorizados. Nenhum scraping de LinkedIn foi executado.",
+          notes: "A IA avaliou somente os dados informados ou autorizados. Nenhuma coleta não autorizada foi executada.",
         },
       ],
     };
@@ -73,13 +76,13 @@ async function generateWithGemini(input: AuthorityInput, apiKey: string): Promis
   });
 
   if (!response.ok) {
-    throw new Error("Gemini request failed.");
+    throw new Error("Não foi possível concluir a análise com a IA.");
   }
 
   const data = await response.json();
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (typeof text !== "string") {
-    throw new Error("Gemini response was empty.");
+    throw new Error("A IA não retornou conteúdo para análise.");
   }
 
   return JSON.parse(text) as GeminiAuthorityPayload;
@@ -87,25 +90,29 @@ async function generateWithGemini(input: AuthorityInput, apiKey: string): Promis
 
 function buildPrompt(input: AuthorityInput) {
   return `
-Voce e um avaliador senior de autoridade comercial B2B. Avalie o perfil com foco em percepcao de cliente, reputacao e potencial de gerar conversa comercial.
+Você é um avaliador sênior de autoridade comercial B2B. Avalie o perfil com foco em percepção de cliente, reputação e potencial de gerar conversa comercial.
+${ptBrEditorialInstruction}
+${silentEditorialReviewInstruction}
 
 Regras:
-- Nao invente dados externos.
-- Nao afirme que acessou ou raspou LinkedIn.
-- Use apenas as informacoes abaixo.
-- Responda somente JSON valido.
+- Não invente dados externos.
+- Não afirme que acessou ou raspou LinkedIn.
+- Use apenas as informações abaixo.
+- Separe autoridade pessoal permanente de aderência temporária à BU.
+- Não use DNA da BU como se fosse informação encontrada no perfil da pessoa.
+- Responda somente JSON válido.
 
 Entrada:
 BU: ${input.businessUnitName}
-URL de referencia: ${input.profileUrl || "nao informada"}
+URL de referência: ${input.profileUrl || "não informada"}
 Objetivo comercial: ${input.objective}
 Headline: ${input.headline}
 Sobre: ${input.about}
 Temas: ${input.themes}
 Provas e resultados: ${input.proofPoints}
-Conteudos recentes: ${input.recentContent}
-Interacoes e networking: ${input.interactionSignals}
-BU DNA: ${JSON.stringify(input.businessUnitContext ?? {}, null, 2)}
+Conteúdos recentes: ${input.recentContent}
+Interações e networking: ${input.interactionSignals}
+DNA da BU: ${JSON.stringify(input.businessUnitContext ?? {}, null, 2)}
 
 Formato:
 {

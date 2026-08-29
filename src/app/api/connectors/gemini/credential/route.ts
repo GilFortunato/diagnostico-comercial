@@ -14,7 +14,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const parsed = credentialSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return NextResponse.json({ error: "Informe uma chave Gemini valida." }, { status: 400 });
+    return NextResponse.json({ error: "Informe uma chave Gemini válida." }, { status: 400 });
   }
 
   try {
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     await saveUserGeminiApiKey(parsed.data.apiKey);
     return NextResponse.json({ connected: true });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Nao foi possivel conectar Gemini." }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Não foi possível conectar Gemini." }, { status: 400 });
   }
 }
 

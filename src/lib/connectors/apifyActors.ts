@@ -14,7 +14,7 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
     key: "linkedinProfile",
     actorId: "unseenuser/linkedin-profile",
     label: "Perfil pessoal",
-    purpose: "Extrair headline, sobre, experiencias, educacao, skills e certificacoes do perfil publico.",
+    purpose: "Extrair headline, sobre, experiências, educação, habilidades e certificações do perfil público.",
     stage: "authority",
     defaultInput: { urls: [] },
   },
@@ -22,7 +22,7 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
     key: "linkedinProfilePosts",
     actorId: "harvestapi/linkedin-profile-posts",
     label: "Posts do perfil",
-    purpose: "Coletar posts publicos, engajamento, comentarios e midia para avaliar consistencia de autoridade.",
+    purpose: "Coletar posts públicos, engajamento, comentários e mídia para avaliar consistência de autoridade.",
     stage: "authority",
     defaultInput: {
       targetUrls: [],
@@ -35,7 +35,7 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
     key: "linkedinCompanyEmployees",
     actorId: "harvestapi/linkedin-company-employees",
     label: "Funcionarios da empresa",
-    purpose: "Mapear colaboradores e filtrar possiveis decisores para a etapa de rapport.",
+    purpose: "Mapear colaboradores e filtrar possíveis decisores para a etapa de rapport.",
     stage: "decision_maker",
     defaultInput: {
       companies: [],
@@ -47,7 +47,7 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
     key: "linkedinCompanyDetails",
     actorId: "harvestapi/linkedin-company",
     label: "Dados da empresa",
-    purpose: "Coletar dados publicos da pagina da empresa para contexto comercial e personalizacao.",
+    purpose: "Coletar dados públicos da página da empresa para contexto comercial e personalização.",
     stage: "rapport",
     defaultInput: {
       companyLinkedinUrls: [],

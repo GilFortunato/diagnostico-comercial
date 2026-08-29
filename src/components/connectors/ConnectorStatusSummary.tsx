@@ -44,7 +44,7 @@ export function ConnectorStatusSummary() {
       <section className="share-card rounded-lg p-5">
         <span className="inline-flex items-center gap-2 text-sm text-zinc-500">
           <RefreshCw className="h-4 w-4 animate-spin" />
-          Verificando conexoes
+          Verificando conexões
         </span>
       </section>
     );
@@ -61,10 +61,10 @@ export function ConnectorStatusSummary() {
           </span>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Status dos conectores</p>
-            <h2 className="mt-1 text-2xl font-semibold">{isReady ? "Conectores on" : "Conectores off"}</h2>
+            <h2 className="mt-1 text-2xl font-semibold">{isReady ? "Conectores ligados" : "Conectores desligados"}</h2>
             <p className="mt-1 text-sm leading-6 text-white/72">
               {isReady
-                ? "Google, Gemini e LinkedIn via Apify prontos para o diagnostico."
+                ? "Google, Gemini e LinkedIn via Apify prontos para o diagnóstico."
                 : "Falta ativar Gemini e/ou LinkedIn via Apify antes da analise completa."}
             </p>
           </div>
@@ -99,7 +99,7 @@ function CompactStep({ label, connected }: { label: string; connected: boolean }
         {label}
       </span>
       <span className={connected ? "text-xs font-semibold text-[var(--share-lime)]" : "text-xs font-semibold text-white/45"}>
-        {connected ? "on" : "off"}
+        {connected ? "Ligado" : "Desligado"}
       </span>
     </div>
   );

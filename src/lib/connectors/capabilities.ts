@@ -79,7 +79,7 @@ export const connectorCatalog: ConnectorDefinition[] = [
   },
   {
     key: "public-web-research",
-    name: "Pesquisa publica permitida",
+    name: "Pesquisa pública permitida",
     kind: "data_source",
     status: "disconnected",
     capabilities: ["research.publicBusinessProfile"],

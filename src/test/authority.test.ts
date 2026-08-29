@@ -9,13 +9,13 @@ const baseInput = {
   businessUnitName: defaultBu.name,
   businessUnitContext: buildBusinessUnitGuidance(defaultBu.id),
   profileUrl: "https://www.linkedin.com/in/prosper-demo",
-  objective: "Ser reconhecido por liderancas de RH como referencia em IA aplicada a educacao corporativa.",
-  headline: "Educacao corporativa e IA aplicada ao desenvolvimento de talentos para empresas",
+  objective: "Ser reconhecido por lideranças de RH como referencia em IA aplicada a educacao corporativa.",
+  headline: "Educação corporativa e IA aplicada ao desenvolvimento de talentos para empresas",
   about:
-    "Ajudo liderancas e times de RH a aplicar IA em programas de desenvolvimento com criterio, contexto humano e impacto real no negocio.",
-  themes: "IA aplicada a RH, educacao corporativa, desenvolvimento de talentos",
-  proofPoints: "Cases com clientes, projetos de treinamento e resultados relatados por liderancas.",
-  recentContent: "Posts, artigos e comentarios sobre aprendizagem corporativa e IA.",
+    "Ajudo lideranças e times de RH a aplicar IA em programas de desenvolvimento com critério, contexto humano e impacto real no negócio.",
+  themes: "IA aplicada a RH, educação corporativa, desenvolvimento de talentos",
+  proofPoints: "Cases com clientes, projetos de treinamento e resultados relatados por lideranças.",
+  recentContent: "Posts, artigos e comentários sobre aprendizagem corporativa e IA.",
   interactionSignals: "Conversas com RH, diretores, gestores de treinamento e decisores.",
 };
 
@@ -26,8 +26,12 @@ test("authority assessment returns a bounded commercial authority score", () => 
   assert.equal(assessment.dimensions.length, 20);
   assert.ok(assessment.overallScore >= 0);
   assert.ok(assessment.overallScore <= 100);
+  assert.equal(assessment.authoritySellingScore, assessment.overallScore);
+  assert.ok(assessment.buAffinityScore >= 0);
+  assert.ok(assessment.activationPotentialScore >= assessment.buAffinityScore);
+  assert.ok(assessment.bridgeOpportunities.length > 0);
   assert.ok(assessment.sources.some((source) => source.confidence === "confirmed"));
-  assert.ok(assessment.nextActions.includes("Comparar evolucao"));
+  assert.ok(assessment.nextActions.includes("Comparar evolução"));
 });
 
 test("authority comparison calculates score movement", () => {
@@ -41,7 +45,7 @@ test("authority comparison calculates score movement", () => {
   assert.equal(comparison.delta, latest.overallScore - first.overallScore);
 });
 
-test("authority assessment changes when business unit criteria changes", () => {
+test("business unit changes affinity without rewriting personal authority", () => {
   const shareBu = getBusinessUnitDna("bu_share");
   const prosperAssessment = createAuthorityAssessment(baseInput);
   const shareAssessment = createAuthorityAssessment({
@@ -51,11 +55,28 @@ test("authority assessment changes when business unit criteria changes", () => {
     businessUnitContext: buildBusinessUnitGuidance(shareBu.id),
   });
 
-  assert.notEqual(prosperAssessment.overallScore, shareAssessment.overallScore);
-  assert.notDeepEqual(
-    prosperAssessment.dimensions.map((dimension) => dimension.weight),
-    shareAssessment.dimensions.map((dimension) => dimension.weight),
-  );
+  assert.equal(prosperAssessment.authoritySellingScore, shareAssessment.authoritySellingScore);
+  assert.notEqual(prosperAssessment.buAffinityScore, shareAssessment.buAffinityScore);
   assert.ok(prosperAssessment.sources.some((source) => source.title.includes(defaultBu.name)));
   assert.ok(shareAssessment.sources.some((source) => source.title.includes(shareBu.name)));
+});
+
+test("business unit starter input does not fabricate personal profile data", () => {
+  const starter = getBusinessUnitDna(defaultBusinessUnitId);
+  const input = buildBusinessUnitGuidance(starter.id);
+  assert.ok(input.territories.length > 0);
+  assert.equal(baseInput.businessUnitContext.name, starter.name);
+
+  const emptyStarter = {
+    ...baseInput,
+    headline: "",
+    about: "",
+    themes: "",
+    proofPoints: "",
+    recentContent: "",
+    interactionSignals: "",
+  };
+  const assessment = createAuthorityAssessment(emptyStarter);
+  assert.ok(assessment.profileReview.every((item) => item.confidence === "unverified"));
+  assert.ok(assessment.buAffinityScore < 55);
 });

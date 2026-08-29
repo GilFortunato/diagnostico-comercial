@@ -43,7 +43,7 @@ export function LoginButton({ variant = "dark" }: { variant?: "dark" | "light" }
       type="button"
       onClick={() => hasGoogleProvider && signIn("google")}
       disabled={!hasGoogleProvider}
-      title={!hasGoogleProvider ? "Configure GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET na Vercel." : undefined}
+      title={!hasGoogleProvider ? "Configuração do Google pendente na Vercel." : undefined}
       className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
         isLight
           ? "bg-[var(--share-green-950)] text-white hover:bg-[var(--share-green-800)]"
@@ -51,7 +51,7 @@ export function LoginButton({ variant = "dark" }: { variant?: "dark" | "light" }
       }`}
     >
       <LogIn className="h-4 w-4" />
-      {hasGoogleProvider ? "Entrar com Google" : "Google Login indisponivel"}
+      {hasGoogleProvider ? "Entrar com Google" : "Login com Google indisponível"}
     </button>
   );
 }

@@ -7,6 +7,7 @@ import { LoginButton } from "@/components/auth/LoginButton";
 import { defaultBusinessUnitId } from "@/lib/business-units/dna";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
 import type { ContentOpportunityResult } from "@/lib/content/intelligence";
+import { confidenceLabel } from "@/lib/copy/editorial";
 
 export function ContentIntelligenceExperience() {
   const [businessUnitId, setBusinessUnitId] = useState(defaultBusinessUnitId);
@@ -27,7 +28,7 @@ export function ContentIntelligenceExperience() {
       });
       const payload = (await response.json()) as ContentOpportunityResult | { error?: string };
       if (!response.ok) {
-        setError("error" in payload && payload.error ? payload.error : "Nao foi possivel gerar oportunidade editorial.");
+        setError("error" in payload && payload.error ? payload.error : "Não foi possível gerar oportunidade editorial.");
         return;
       }
       setResult(payload as ContentOpportunityResult);
@@ -50,10 +51,10 @@ export function ContentIntelligenceExperience() {
       <div className="mx-auto grid max-w-7xl gap-6 px-5 py-8">
         <section className="share-green-panel rounded-lg p-6 text-white md:p-8">
           <div className="h-2 w-56 rounded-r-md bg-[var(--share-lime)]" />
-          <p className="mt-8 text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Inteligencia editorial</p>
+          <p className="mt-8 text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Inteligência editorial</p>
           <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight md:text-5xl">Sobre o que vale a pena falar agora?</h1>
           <p className="mt-5 max-w-3xl text-base leading-7 text-white/74">
-            A Share AI combina BU Content DNA, voz pessoal, objetivo, ICP e STEPPS para sugerir uma pauta com fonte e confianca.
+            A Share AI combina DNA editorial da BU, voz pessoal, objetivo, ICP e STEPPS para sugerir uma pauta com fonte e confiança.
           </p>
         </section>
 
@@ -73,7 +74,7 @@ export function ContentIntelligenceExperience() {
               Criar oportunidade
             </button>
             {error ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
-            <p className="mt-4 text-sm leading-6 text-zinc-600">BU ativa: {selectedBu.name}. Nada e publicado sem aprovacao humana.</p>
+            <p className="mt-4 text-sm leading-6 text-zinc-600">BU ativa: {selectedBu.name}. Nada é publicado sem aprovação humana.</p>
           </aside>
 
           {result ? (
@@ -83,9 +84,9 @@ export function ContentIntelligenceExperience() {
                 <h2 className="mt-1 text-3xl font-semibold text-[var(--share-green-950)]">{result.title}</h2>
                 <p className="mt-3 text-sm leading-6 text-zinc-600">{result.whyNow}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Badge label={`BU ${result.businessUnitName}`} />
-                  <Badge label={`Territorio ${result.territory}`} />
-                  <Badge label={`Aderencia ${result.adherenceScore}%`} />
+                  <Badge label={`BU: ${result.businessUnitName}`} />
+                  <Badge label={`Território: ${result.territory}`} />
+                  <Badge label={`Aderência: ${result.adherenceScore}%`} />
                 </div>
               </div>
 
@@ -95,11 +96,11 @@ export function ContentIntelligenceExperience() {
               </div>
 
               <div className="share-card rounded-lg p-5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Fontes e confianca</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Fontes e confiança</p>
                 <div className="mt-3 grid gap-2 md:grid-cols-3">
                   {result.sources.map((source) => (
                     <div key={source.title} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3">
-                      <p className="text-xs font-semibold uppercase text-zinc-500">{source.confidence}</p>
+                      <p className="text-xs font-semibold uppercase text-zinc-500">{confidenceLabel(source.confidence)}</p>
                       <p className="mt-1 text-sm font-semibold text-zinc-950">{source.title}</p>
                       <p className="mt-2 text-xs leading-5 text-zinc-600">{source.notes}</p>
                     </div>
@@ -110,8 +111,8 @@ export function ContentIntelligenceExperience() {
           ) : (
             <section className="share-card grid place-items-center rounded-lg p-8 text-center">
               <CheckCircle2 className="h-10 w-10 text-[var(--share-green-800)]" />
-              <h2 className="mt-4 text-2xl font-semibold text-[var(--share-green-950)]">Radar pronto para orientar conteudo</h2>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-600">Informe o objetivo e gere uma pauta com estratégia STEPPS, contexto da BU e governanca de claims.</p>
+              <h2 className="mt-4 text-2xl font-semibold text-[var(--share-green-950)]">Radar pronto para orientar conteúdo</h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-600">Informe o objetivo e gere uma pauta com estratégia STEPPS, contexto da BU e controle de afirmações.</p>
             </section>
           )}
         </section>

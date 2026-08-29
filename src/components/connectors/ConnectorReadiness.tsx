@@ -51,7 +51,7 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadin
 
     try {
       await fetch("/api/connectors/gemini/credential", { method: "DELETE" });
-      setMessage("Gemini desconectado deste usuario.");
+      setMessage("Gemini desconectado deste usuário.");
       await refreshStatus();
     } finally {
       setIsSaving(false);
@@ -81,10 +81,10 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadin
       await Promise.all(tasks);
       setGeminiApiKey("");
       setApifyToken("");
-      setMessage("Conexoes salvas. A plataforma ja sabe quando usar Gemini, perfil, posts, empresa e decisores.");
+      setMessage("Conexões salvas. A plataforma já sabe quando usar Gemini, perfil, posts, empresa e decisores.");
       await refreshStatus();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Nao foi possivel conectar tudo.");
+      setMessage(error instanceof Error ? error.message : "Não foi possível conectar tudo.");
     } finally {
       setIsSaving(false);
     }
@@ -96,7 +96,7 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadin
 
     try {
       await fetch("/api/connectors/apify/credential", { method: "DELETE" });
-      setMessage("Apify desconectado deste usuario.");
+      setMessage("Apify desconectado deste usuário.");
       await refreshStatus();
     } finally {
       setIsSaving(false);
@@ -108,7 +108,7 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadin
       <section className="share-card rounded-lg p-5">
         <span className="inline-flex items-center gap-2 text-sm text-zinc-500">
           <RefreshCw className="h-4 w-4 animate-spin" />
-          Verificando conexoes
+          Verificando conexões
         </span>
       </section>
     );
@@ -121,11 +121,11 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadin
     <section className="share-card rounded-lg p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Conexoes</p>
-          <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Fontes e IA do diagnostico</h2>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Conexões</p>
+          <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Fontes e IA do diagnóstico</h2>
         </div>
         <span className="rounded-md bg-[#edf7eb] px-3 py-2 text-sm font-semibold text-[var(--share-green-900)]">
-          {status.gemini.connected && status.apify.connected ? "Analise pronta" : "Conecte as fontes"}
+          {status.gemini.connected && status.apify.connected ? "Análise pronta" : "Conecte as fontes"}
         </span>
       </div>
 
@@ -133,19 +133,19 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadin
         <ConnectorTile
           icon={<CheckCircle2 className="h-4 w-4" />}
           title={status.google.label}
-          description="Identifica o usuario e libera o cockpit."
+          description="Identifica o usuário e libera o cockpit."
           connected={status.google.connected}
         />
         <ConnectorTile
           icon={<Brain className="h-4 w-4" />}
           title={status.gemini.label}
-          description={status.gemini.connected ? "As respostas do diagnostico passam pelo provider Gemini." : "A pessoa conecta a propria chave Gemini para liberar a IA."}
+          description={status.gemini.connected ? "A análise de IA está pronta para usar os dados autorizados." : "A pessoa conecta a própria chave Gemini para liberar a IA."}
           connected={status.gemini.connected}
         />
         <ConnectorTile
           icon={<LinkIcon className="h-4 w-4" />}
           title={status.linkedin.label}
-          description={status.linkedin.connected ? "Perfil, posts, empresa e decisores via Actors Apify." : "Conecte Apify para importar dados publicos pela URL."}
+          description={status.linkedin.connected ? "Perfil, posts, empresa e decisores prontos por fonte conectada." : "Conecte Apify para importar dados públicos pela URL."}
           connected={status.linkedin.connected}
         />
       </div>
@@ -153,13 +153,13 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadin
       {mode === "status" ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-4 py-3">
           <p className="text-sm font-medium text-zinc-700">
-            Status visivel para o usuario. Credenciais e detalhes tecnicos ficam em telas separadas.
+            Status visível para o usuário. Credenciais e detalhes técnicos ficam em telas separadas.
           </p>
           <Link
             href="/conectores/configurar"
             className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
           >
-            Gerenciar conexoes
+            Gerenciar conexões
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -197,7 +197,7 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadin
           <div className="grid content-start gap-3">
             {!status.gemini.connected ? (
               <label className="grid gap-1.5">
-                <span className="text-sm font-semibold text-[var(--share-green-950)]">Chave Gemini deste usuario</span>
+                <span className="text-sm font-semibold text-[var(--share-green-950)]">Chave Gemini deste usuário</span>
                 <input
                   value={geminiApiKey}
                   onChange={(event) => setGeminiApiKey(event.target.value)}
@@ -209,7 +209,7 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadin
             ) : null}
             {!status.apify.connected ? (
               <label className="grid gap-1.5">
-                <span className="text-sm font-semibold text-[var(--share-green-950)]">Token Apify deste usuario</span>
+                <span className="text-sm font-semibold text-[var(--share-green-950)]">Token Apify deste usuário</span>
                 <input
                   value={apifyToken}
                   onChange={(event) => setApifyToken(event.target.value)}
@@ -264,7 +264,7 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadin
       ) : null}
       {showAdminDetails ? (
       <div className="mt-4 grid gap-2">
-        <p className="text-sm font-semibold text-[var(--share-green-950)]">Actors preparados</p>
+        <p className="text-sm font-semibold text-[var(--share-green-950)]">Fontes técnicas preparadas</p>
         <div className="grid gap-2 md:grid-cols-2">
           {status.apify.actors.map((actor) => (
             <div key={actor.key} className="rounded-md border border-[var(--share-line)] bg-white p-3">
@@ -295,7 +295,7 @@ async function connectCredential(url: string, body: Record<string, string>, labe
   const result = (await response.json()) as { error?: string };
 
   if (!response.ok) {
-    throw new Error(result.error ?? `Nao foi possivel conectar ${label}.`);
+    throw new Error(result.error ?? `Não foi possível conectar ${label}.`);
   }
 }
 

@@ -1,43 +1,43 @@
-# Share AI Foundation
+# Fundação da Share AI
 
-This MVP starts with a modular monolith for Vercel and Next.js App Router.
+Este MVP começa como um monólito modular para Vercel e Next.js App Router.
 
-## Core Decisions
+## Decisões principais
 
-- Next.js + TypeScript provide the app, API routes, and server-side orchestration.
-- PostgreSQL/Neon is the system of record. `prisma/schema.prisma` defines the initial data model.
-- Google login and Gemini authorization are separate concepts. Login uses Auth.js; Gemini is a connector credential owned by the user or organization.
-- Skills depend on capabilities such as `ai.generateStructuredAssessment` and `research.publicBusinessProfile`, not vendor names.
-- Credentials are handled only by backend code and represented by encrypted payloads.
-- Human approval is modeled before any external action such as publishing, sending messages, CRM updates, or third-party automations.
+- Next.js + TypeScript sustentam a aplicação, as rotas de API e a orquestração no backend.
+- PostgreSQL/Neon é a fonte de registro. `prisma/schema.prisma` define o modelo inicial de dados.
+- Login Google e autorização Gemini são conceitos separados. O login usa Auth.js; Gemini é uma credencial de conector pertencente ao usuário ou à organização.
+- Os recursos dependem de capacidades, como `ai.generateStructuredAssessment` e `research.publicBusinessProfile`, não de nomes de fornecedores.
+- Credenciais são manipuladas apenas no backend e representadas por payloads criptografados.
+- A aprovação humana é modelada antes de qualquer ação externa, como publicar, enviar mensagens, atualizar CRM ou acionar automações de terceiros.
 
-## Current Adapter State
+## Estado atual do repositório
 
-The repository includes a demo repository adapter for local MVP flow while Neon credentials are not configured. It is intentionally marked as `demo-local` in UI/API responses. The Prisma schema is the contract for replacing this with a real database repository.
+O repositório inclui uma camada local de demonstração para o fluxo do MVP enquanto as credenciais Neon não estão configuradas. O schema Prisma é o contrato para substituir essa camada por persistência real no banco.
 
-## First Functional Flow
+## Primeiro fluxo funcional
 
-`Authority Assessment` evaluates commercial authority, not employability. It accepts a LinkedIn profile/context, BU, goals, themes, evidence, and activity signals. It returns:
+O diagnóstico de autoridade avalia autoridade comercial, não empregabilidade. Ele recebe perfil/contexto do LinkedIn, BU, objetivos, temas, evidências e sinais de atividade. Ele retorna:
 
-- score 0-100;
-- dimension scores;
-- strengths and gaps;
-- risks and opportunities;
-- recommendations;
-- 30-day plan;
-- sources and confidence;
-- history and evolution comparison.
+- pontuação de 0 a 100;
+- pontuações por dimensão;
+- pontos fortes e lacunas;
+- riscos e oportunidades;
+- recomendações;
+- plano de 30 dias;
+- fontes e confiança;
+- histórico e comparação de evolução.
 
-## Environment Variables
+## Variáveis de ambiente
 
-Required for production:
+Obrigatórias em produção:
 
-- `DATABASE_URL`: Neon/PostgreSQL connection string.
-- `NEXTAUTH_SECRET`: Auth.js signing secret.
-- `GOOGLE_CLIENT_ID`: Google OAuth client id.
-- `GOOGLE_CLIENT_SECRET`: Google OAuth client secret.
-- `CREDENTIAL_ENCRYPTION_KEY`: 32-byte base64 key for connector credentials.
+- `DATABASE_URL`: string de conexão do Neon/PostgreSQL.
+- `NEXTAUTH_SECRET`: segredo de assinatura do Auth.js.
+- `GOOGLE_CLIENT_ID`: client ID do Google OAuth.
+- `GOOGLE_CLIENT_SECRET`: client secret do Google OAuth.
+- `CREDENTIAL_ENCRYPTION_KEY`: chave base64 de 32 bytes para credenciais dos conectores.
 
-Optional until Gemini is connected:
+Opcional até o Gemini ser conectado:
 
-- `DEFAULT_AI_PROVIDER`: provider key, for example `gemini`.
+- `DEFAULT_AI_PROVIDER`: chave do provedor, por exemplo `gemini`.

@@ -4,15 +4,15 @@ import Link from "next/link";
 
 const steps = [
   {
-    title: "Abra a area de chaves",
-    description: "Entre no Google AI Studio e acesse Chaves de API. Se nao houver projeto importado, clique em Importar projetos ou crie uma nova chave.",
+    title: "Abra a área de chaves",
+    description: "Entre no Google AI Studio e acesse Chaves de API. Se não houver projeto importado, clique em Importar projetos ou crie uma nova chave.",
     image: "/guides/gemini/gemini-step-1.png",
     width: 1830,
     height: 679,
   },
   {
     title: "Crie ou escolha um projeto",
-    description: "De um nome simples ao projeto. Esse projeto sera usado pelo Google para organizar a chave e o uso da API.",
+    description: "Dê um nome simples ao projeto. Esse projeto será usado pelo Google para organizar a chave e o uso da API.",
     image: "/guides/gemini/gemini-step-2.png",
     width: 568,
     height: 229,
@@ -57,7 +57,7 @@ export default function GeminiHelpPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Conectar Gemini</p>
           <h1 className="mt-2 max-w-3xl text-4xl font-semibold leading-tight">Como pegar sua chave Gemini</h1>
           <p className="mt-4 max-w-3xl text-base leading-7 text-white/78">
-            Cada usuario conecta a propria chave. Ela e validada no Google e guardada protegida no backend do Share AI.
+            Cada usuário conecta a própria chave. Ela é validada no Google e guardada de forma protegida na Share AI.
           </p>
         </section>
 
@@ -83,7 +83,7 @@ export default function GeminiHelpPage() {
         <section className="share-card rounded-lg p-5">
           <h2 className="text-xl font-semibold text-[var(--share-green-950)]">Depois de copiar</h2>
           <p className="mt-3 text-sm leading-6 text-zinc-600">
-            Volte ao Share AI, cole a chave no card Conectar Gemini e clique em Conectar Gemini. Se o Google aceitar a chave, o diagnostico passa a usar Gemini.
+            Volte ao Share AI, cole a chave no card Conectar Gemini e clique em Conectar Gemini. Se o Google aceitar a chave, o diagnóstico passa a usar Gemini.
           </p>
         </section>
       </div>

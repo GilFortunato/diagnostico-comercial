@@ -29,10 +29,10 @@ export type DecisionMakerResult = {
     id: string;
     displayName: string;
     role: string;
-    probableDecisionRole: "Decisor economico" | "Decisor funcional" | "Champion" | "Influenciador" | "Porta de entrada";
+    probableDecisionRole: "Decisor econômico" | "Decisor funcional" | "Champion" | "Influenciador" | "Porta de entrada";
     fitScore: number;
-    accessibility: "Baixa" | "Media" | "Alta";
-    confidence: "Inferencia" | "Nao verificado";
+    accessibility: "Baixa" | "Média" | "Alta";
+    confidence: "Inferência" | "Não verificado";
     whyRelevant: string;
     suggestedConversation: string;
     contactStatus: string;
@@ -46,7 +46,7 @@ export type DecisionMakerResult = {
 };
 
 const roleByIndex: DecisionMakerResult["people"][number]["probableDecisionRole"][] = [
-  "Decisor economico",
+  "Decisor econômico",
   "Decisor funcional",
   "Champion",
   "Influenciador",
@@ -74,15 +74,15 @@ export function createDecisionMakerSearch(input: DecisionMakerSearchInput): Deci
       role: title,
       probableDecisionRole: decisionRole,
       fitScore: score,
-      accessibility: index <= 1 ? "Media" : index <= 3 ? "Alta" : "Baixa",
-      confidence: "Inferencia",
-      whyRelevant: `${title} tende a participar de decisoes ligadas a ${territory} quando a conta possui uma agenda aderente ao objetivo informado.`,
-      suggestedConversation: `Pesquisar sinais profissionais sobre ${territory} antes de abordar ${title}. A primeira conversa deve validar contexto, nao vender imediatamente.`,
+      accessibility: index <= 1 ? "Média" : index <= 3 ? "Alta" : "Baixa",
+      confidence: "Inferência",
+      whyRelevant: `${title} tende a participar de decisões ligadas a ${territory} quando a conta possui uma agenda aderente ao objetivo informado.`,
+      suggestedConversation: `Pesquisar sinais profissionais sobre ${territory} antes de abordar ${title}. A primeira conversa deve validar contexto, não vender imediatamente.`,
       contactStatus: "Nenhum contato profissional verificado nesta etapa.",
       doNotUse: [
-        "Nao usar dados pessoais ou sensiveis.",
-        "Nao presumir budget, organograma ou interesse sem fonte.",
-        "Nao enviar pitch antes de validar o contexto profissional.",
+        "Não usar dados pessoais ou sensíveis.",
+        "Não presumir orçamento, organograma ou interesse sem fonte.",
+        "Não enviar pitch antes de validar o contexto profissional.",
       ],
     };
   });
@@ -96,28 +96,28 @@ export function createDecisionMakerSearch(input: DecisionMakerSearchInput): Deci
       rationale: [
         `Objetivo informado: ${parsed.objective}.`,
         product ? `Produto inicial considerado: ${product.name}.` : `BU considerada: ${unit.name}.`,
-        buyingAreas.length ? `Areas compradoras provaveis: ${buyingAreas.slice(0, 5).join(", ")}.` : "Areas compradoras ainda nao configuradas no BU DNA.",
-        parsed.location ? `Localizacao usada como filtro futuro: ${parsed.location}.` : "Sem filtro de localizacao nesta busca inicial.",
+        buyingAreas.length ? `Áreas compradoras prováveis: ${buyingAreas.slice(0, 5).join(", ")}.` : "Áreas compradoras ainda não configuradas no DNA da BU.",
+        parsed.location ? `Localização usada como filtro futuro: ${parsed.location}.` : "Sem filtro de localização nesta busca inicial.",
       ],
       buyingAreas,
     },
     nextBestAction: {
-      title: people[1]?.role ? `Validar sinais publicos de ${people[1].role}` : "Completar ICP da BU antes de abordar",
+      title: people[1]?.role ? `Validar sinais públicos de ${people[1].role}` : "Completar ICP da BU antes de abordar",
       impact: "high",
       effort: "low",
-      reason: "Ainda nao ha fonte externa confirmada. A melhor proxima acao e enriquecer poucos papeis antes de criar abordagem.",
+      reason: "Ainda não há fonte externa confirmada. A melhor próxima ação é enriquecer poucos papéis antes de criar abordagem.",
     },
     people,
     sources: [
       {
-        title: "BU DNA configurado",
+        title: "DNA da BU configurado",
         confidence: "inference",
         notes: "Mapa gerado a partir do contexto institucional da BU, sem pesquisa externa.",
       },
       {
-        title: "Empresa informada pelo usuario",
+        title: "Empresa informada pelo usuário",
         confidence: "unverified",
-        notes: "A empresa ainda nao foi validada por fonte publica nesta etapa.",
+        notes: "A empresa ainda não foi validada por fonte pública nesta etapa.",
       },
     ],
   };
