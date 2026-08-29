@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import type { ReactNode } from "react";
-import { Brain, CheckCircle2, ExternalLink, Link, LockKeyhole, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowRight, Brain, CheckCircle2, ExternalLink, Link as LinkIcon, LockKeyhole, RefreshCw, Trash2 } from "lucide-react";
 
 type ConnectorStatus = {
   google: { connected: boolean; label: string };
@@ -22,7 +23,9 @@ type ConnectorStatus = {
   };
 };
 
-export function ConnectorReadiness() {
+type ConnectorReadinessMode = "status" | "setup" | "admin";
+
+export function ConnectorReadiness({ mode = "status" }: { mode?: ConnectorReadinessMode }) {
   const [status, setStatus] = useState<ConnectorStatus | null>(null);
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [apifyToken, setApifyToken] = useState("");
@@ -111,6 +114,9 @@ export function ConnectorReadiness() {
     );
   }
 
+  const showSetup = mode === "setup" || mode === "admin";
+  const showAdminDetails = mode === "admin";
+
   return (
     <section className="share-card rounded-lg p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -137,14 +143,29 @@ export function ConnectorReadiness() {
           connected={status.gemini.connected}
         />
         <ConnectorTile
-          icon={<Link className="h-4 w-4" />}
+          icon={<LinkIcon className="h-4 w-4" />}
           title={status.linkedin.label}
           description={status.linkedin.connected ? "Perfil, posts, empresa e decisores via Actors Apify." : "Conecte Apify para importar dados publicos pela URL."}
           connected={status.linkedin.connected}
         />
       </div>
 
-      {!status.gemini.connected || !status.apify.connected ? (
+      {mode === "status" ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-4 py-3">
+          <p className="text-sm font-medium text-zinc-700">
+            Status visivel para o usuario. Credenciais e detalhes tecnicos ficam em telas separadas.
+          </p>
+          <Link
+            href="/conectores/configurar"
+            className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
+          >
+            Gerenciar conexoes
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      ) : null}
+
+      {showSetup && (!status.gemini.connected || !status.apify.connected) ? (
         <div className="mt-4 grid gap-4 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4 lg:grid-cols-[320px_1fr]">
           <div className="rounded-md border border-[var(--share-line)] bg-white p-4">
             <p className="text-sm font-semibold text-[var(--share-green-950)]">Ativar base completa</p>
@@ -213,7 +234,7 @@ export function ConnectorReadiness() {
           </div>
         </div>
       ) : null}
-      {status.gemini.connected ? (
+      {showSetup && status.gemini.connected ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--share-line)] bg-[#f2faef] px-4 py-3">
           <p className="text-sm font-medium text-[var(--share-green-950)]">Gemini pronto para analisar os dados autorizados.</p>
           <button
@@ -227,7 +248,7 @@ export function ConnectorReadiness() {
           </button>
         </div>
       ) : null}
-      {status.apify.connected ? (
+      {showSetup && status.apify.connected ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#0a66c2]/25 bg-[#f4f8ff] px-4 py-3">
           <p className="text-sm font-medium text-[var(--share-green-950)]">Apify pronto para perfil, posts, empresa e decisores.</p>
           <button
@@ -241,6 +262,7 @@ export function ConnectorReadiness() {
           </button>
         </div>
       ) : null}
+      {showAdminDetails ? (
       <div className="mt-4 grid gap-2">
         <p className="text-sm font-semibold text-[var(--share-green-950)]">Actors preparados</p>
         <div className="grid gap-2 md:grid-cols-2">
@@ -258,6 +280,7 @@ export function ConnectorReadiness() {
           ))}
         </div>
       </div>
+      ) : null}
       {message ? <p className="mt-3 text-sm font-medium text-[var(--share-green-900)]">{message}</p> : null}
     </section>
   );

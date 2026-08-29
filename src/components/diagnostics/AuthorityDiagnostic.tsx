@@ -5,7 +5,6 @@ import { Activity, BarChart3, CheckCircle2, History, Link, RefreshCw, ShieldChec
 import type { AuthorityAssessment } from "@/lib/diagnostics/authority";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
 import { buildBusinessUnitGuidance, defaultBusinessUnitId, getBusinessUnitStarterInput } from "@/lib/business-units/dna";
-import { StatusPill } from "@/components/app/StatusPill";
 
 type FormState = {
   profileUrl: string;
@@ -26,23 +25,56 @@ type CompareState = {
   message: string;
 };
 
+type ActionPanel = {
+  title: string;
+  eyebrow: string;
+  description: string;
+  items: string[];
+};
+
+const historyLimit = 20;
+
 export function AuthorityDiagnostic() {
   const [businessUnitId, setBusinessUnitId] = useState(defaultBusinessUnitId);
   const selectedBu = useMemo(() => demoBusinessUnits.find((item) => item.id === businessUnitId) ?? demoBusinessUnits[0], [businessUnitId]);
   const [form, setForm] = useState<FormState>(getBusinessUnitStarterInput(businessUnitId));
-  const [assessment, setAssessment] = useState<AuthorityAssessment | null>(null);
-  const [history, setHistory] = useState<AuthorityAssessment[]>([]);
+  const [assessment, setAssessment] = useState<AuthorityAssessment | null>(() => loadLocalHistory(defaultBusinessUnitId)[0] ?? null);
+  const [history, setHistory] = useState<AuthorityAssessment[]>(() => loadLocalHistory(defaultBusinessUnitId));
   const [comparison, setComparison] = useState<CompareState | null>(null);
+  const [actionPanel, setActionPanel] = useState<ActionPanel | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const canRunDiagnostic = form.profileUrl.includes("linkedin.com/in/") && form.objective.trim().length >= 10;
 
+  async function refreshHistory(targetBusinessUnitId = businessUnitId, options: { restoreLatest?: boolean } = {}) {
+    const localItems = loadLocalHistory(targetBusinessUnitId);
+    let serverItems: AuthorityAssessment[] = [];
+
+    try {
+      const response = await fetch(`/api/diagnostics/authority/history?businessUnitId=${targetBusinessUnitId}`);
+      const result = (await response.json()) as { items?: AuthorityAssessment[] };
+      serverItems = result.items ?? [];
+    } catch {
+      serverItems = [];
+    }
+
+    const items = mergeHistory(localItems, serverItems).slice(0, historyLimit);
+    setHistory(items);
+    if (options.restoreLatest) {
+      setAssessment(items[0] ?? null);
+    }
+    return items;
+  }
+
   function switchBu(nextBusinessUnitId: string) {
+    const nextHistory = loadLocalHistory(nextBusinessUnitId);
     setBusinessUnitId(nextBusinessUnitId);
     setForm(getBusinessUnitStarterInput(nextBusinessUnitId));
-    setAssessment(null);
-    setHistory([]);
+    setAssessment(nextHistory[0] ?? null);
+    setHistory(nextHistory);
     setComparison(null);
+    setActionPanel(null);
+    void refreshHistory(nextBusinessUnitId, { restoreLatest: true });
   }
 
   function updateField(key: keyof FormState, value: string) {
@@ -62,23 +94,121 @@ export function AuthorityDiagnostic() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, businessUnitId, businessUnitName: selectedBu.name, businessUnitContext: buildBusinessUnitGuidance(businessUnitId) }),
       });
-      const result = (await response.json()) as AuthorityAssessment;
-      setAssessment(result);
-      await refreshHistory();
+      const result = (await response.json()) as AuthorityAssessment | { error?: string };
+      if (!response.ok) {
+        setFormError("error" in result && result.error ? result.error : "Nao foi possivel gerar o diagnostico.");
+        return;
+      }
+      const nextAssessment = result as AuthorityAssessment;
+      saveLocalHistory(nextAssessment);
+      setAssessment(nextAssessment);
+      setActionPanel(null);
+      await refreshHistory(businessUnitId);
     });
-  }
-
-  async function refreshHistory() {
-    const response = await fetch(`/api/diagnostics/authority/history?businessUnitId=${businessUnitId}`);
-    const result = (await response.json()) as { items: AuthorityAssessment[] };
-    setHistory(result.items);
   }
 
   function compareEvolution() {
     startTransition(async () => {
-      const response = await fetch(`/api/diagnostics/authority/compare?businessUnitId=${businessUnitId}`);
-      setComparison((await response.json()) as CompareState);
+      const result = await fetchComparison();
+      setComparison(result);
       await refreshHistory();
+    });
+  }
+
+  async function fetchComparison() {
+    const items = await refreshHistory(businessUnitId);
+    if (items.length < 2) {
+      return {
+        available: false,
+        delta: 0,
+        firstScore: items[0]?.overallScore,
+        latestScore: items[0]?.overallScore,
+        message: "Crie um segundo diagnostico para comparar evolucao.",
+      };
+    }
+
+    const sorted = [...items].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const first = sorted[0];
+    const latest = sorted.at(-1);
+    const delta = latest ? latest.overallScore - first.overallScore : 0;
+    return {
+      available: true,
+      delta,
+      firstScore: first.overallScore,
+      latestScore: latest?.overallScore,
+      message: `Evolucao de ${delta} pontos desde o primeiro diagnostico.`,
+    };
+  }
+
+  function handleNextAction(action: string) {
+    if (!assessment) return;
+
+    if (action === "Refazer diagnostico") {
+      runDiagnostic();
+      return;
+    }
+
+    if (action === "Comparar evolucao") {
+      startTransition(async () => {
+        const result = await fetchComparison();
+        setComparison(result);
+        setActionPanel({
+          eyebrow: "Comparacao",
+          title: "Evolucao preparada",
+          description: "A comparacao usa o primeiro e o ultimo diagnostico salvos nesta BU.",
+          items: [result.message],
+        });
+        await refreshHistory();
+      });
+      return;
+    }
+
+    if (action === "Gerar plano de 30 dias") {
+      setActionPanel({
+        eyebrow: "Plano de execucao",
+        title: "30 dias para aumentar autoridade comercial",
+        description: "Plano organizado por semana, com acoes de alto impacto antes de qualquer acao externa.",
+        items: assessment.plan30Days.map((week) => `Semana ${week.week}: ${week.objective} - ${week.actions.map((item) => item.action).join(" ")}`),
+      });
+      return;
+    }
+
+    if (action === "Criar post agora") {
+      const topic = assessment.opportunities[0] ?? "um aprendizado comercial relevante";
+      setActionPanel({
+        eyebrow: "Rascunho aprovado por humano",
+        title: "Post consultivo para LinkedIn",
+        description: "Rascunho para revisar antes de publicar. A plataforma nao publica nada sem aprovacao.",
+        items: [
+          `Gancho: O que muda quando ${topic.toLocaleLowerCase("pt-BR")}`,
+          `Corpo: conte uma situacao real, explique o criterio de decisao e mostre uma implicacao pratica para ${assessment.input.businessUnitName}.`,
+          "CTA: Qual desses sinais sua empresa ja consegue medir hoje?",
+        ],
+      });
+      return;
+    }
+
+    if (action === "Melhorar headline") {
+      const guidance = buildBusinessUnitGuidance(businessUnitId);
+      const territory = guidance.territories[0] ?? selectedBu.name;
+      const cta = guidance.recommendedCtas[0] ?? "conversas comerciais";
+      setActionPanel({
+        eyebrow: "Headline",
+        title: "Sugestao de posicionamento",
+        description: "Use como ponto de partida e ajuste para soar como a pessoa, nao como propaganda.",
+        items: [
+          `${territory} para liderancas B2B | Transformo conhecimento em decisao comercial | ${cta}`,
+          `${assessment.input.businessUnitName}: aprendizagem aplicada, dados e autoridade para times que precisam vender melhor`,
+        ],
+      });
+      return;
+    }
+
+    setActionPanel({
+      eyebrow: "Proximo passo",
+      title: "O que fazer agora",
+      description: "Prioridade calculada a partir das menores dimensoes do diagnostico atual.",
+      items: topDimensions.slice(0, 3).map((dimension) => `${dimension.label}: ${dimension.rationale}`),
     });
   }
 
@@ -184,11 +314,9 @@ export function AuthorityDiagnostic() {
                   Perfil avaliado no LinkedIn
                 </a>
               ) : null}
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-5 grid gap-2">
                 {assessment.sources.map((source) => (
-                  <StatusPill key={source.title} tone={source.confidence === "confirmed" ? "ready" : "neutral"}>
-                    {source.confidence}: {source.title}
-                  </StatusPill>
+                  <SourceEvidence key={`${source.confidence}-${source.title}`} source={source} />
                 ))}
               </div>
             </div>
@@ -226,9 +354,15 @@ export function AuthorityDiagnostic() {
                   </div>
                 ))}
               </div>
-              <div className="mt-5 flex flex-wrap gap-2">
+              {actionPanel ? <ActionPanelCard panel={actionPanel} /> : null}
+              <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {assessment.nextActions.map((action) => (
-                  <button key={action} type="button" className="rounded-md border border-[var(--share-line)] bg-white px-3 py-2 text-sm font-medium text-[var(--share-green-900)] hover:bg-[#edf7eb]">
+                  <button
+                    key={action}
+                    type="button"
+                    onClick={() => handleNextAction(action)}
+                    className="inline-flex min-h-11 items-center justify-center rounded-md border border-[var(--share-line)] bg-white px-3 py-2 text-center text-sm font-semibold text-[var(--share-green-900)] transition hover:border-[var(--share-green-800)] hover:bg-[#edf7eb]"
+                  >
                     {action}
                   </button>
                 ))}
@@ -319,6 +453,78 @@ function ResultList({ title, icon, items }: { title: string; icon: React.ReactNo
   );
 }
 
+function SourceEvidence({ source }: { source: AuthorityAssessment["sources"][number] }) {
+  const tone =
+    source.confidence === "confirmed"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+      : source.confidence === "likely"
+        ? "border-sky-200 bg-sky-50 text-sky-950"
+        : "border-white/15 bg-white/10 text-white";
+
+  return (
+    <div className={`rounded-md border px-3 py-2 ${tone}`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-wide">{source.confidence}</p>
+        {source.url ? (
+          <a className="text-xs font-semibold underline-offset-4 hover:underline" href={source.url} target="_blank" rel="noreferrer">
+            abrir fonte
+          </a>
+        ) : null}
+      </div>
+      <p className="mt-1 text-sm font-semibold">{source.title}</p>
+      <p className="mt-1 text-xs leading-5 opacity-75">{source.notes}</p>
+    </div>
+  );
+}
+
+function ActionPanelCard({ panel }: { panel: ActionPanel }) {
+  return (
+    <div className="mt-5 rounded-lg border border-[var(--share-green-800)] bg-[#f4fbef] p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">{panel.eyebrow}</p>
+      <h4 className="mt-1 text-lg font-semibold text-[var(--share-green-950)]">{panel.title}</h4>
+      <p className="mt-2 text-sm leading-6 text-zinc-600">{panel.description}</p>
+      <div className="mt-3 grid gap-2">
+        {panel.items.map((item) => (
+          <p key={item} className="rounded-md border border-[var(--share-line)] bg-white px-3 py-2 text-sm leading-6 text-zinc-700">
+            {item}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function historyStorageKey(businessUnitId: string) {
+  return `share-ai:authority-history:${businessUnitId}`;
+}
+
+function loadLocalHistory(businessUnitId: string): AuthorityAssessment[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(historyStorageKey(businessUnitId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as AuthorityAssessment[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalHistory(assessment: AuthorityAssessment) {
+  if (typeof window === "undefined") return;
+
+  const current = loadLocalHistory(assessment.input.businessUnitId);
+  const next = mergeHistory([assessment], current).slice(0, historyLimit);
+  window.localStorage.setItem(historyStorageKey(assessment.input.businessUnitId), JSON.stringify(next));
+}
+
+function mergeHistory(...groups: AuthorityAssessment[][]) {
+  const byId = new Map<string, AuthorityAssessment>();
+  groups.flat().forEach((item) => byId.set(item.id, item));
+  return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
 type VisualBusinessUnitContext = {
   positioning?: string;
   pillars?: Array<{ title: string; description: string; offers: string[] }>;
@@ -331,28 +537,31 @@ function BusinessUnitContextPanel({ businessUnit }: { businessUnit: (typeof demo
   if (!context?.pillars?.length) return null;
 
   return (
-    <div className="overflow-hidden rounded-lg text-white shadow-[0_24px_80px_rgb(0_63_46_/_0.16)]" style={{ background: `linear-gradient(135deg, ${businessUnit.brandPack.primary} 0%, ${businessUnit.brandPack.secondary ?? "var(--share-green-950)"} 100%)` }}>
-      <div className="p-5 md:p-6">
+    <div className="share-card overflow-hidden rounded-lg">
+      <div className="border-b border-[var(--share-line)] bg-[#fbfdf8] p-5 md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: businessUnit.brandPack.accent }}>{businessUnit.name}</p>
-            <h3 className="mt-2 text-2xl font-semibold md:text-3xl">Contexto da BU ativo</h3>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/82">{context.positioning}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">{businessUnit.name}</p>
+            <h3 className="mt-2 text-2xl font-semibold text-[var(--share-green-950)] md:text-3xl">DNA comercial da BU</h3>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-600">{context.positioning}</p>
           </div>
-          <div className="rounded-md border border-white/20 px-4 py-3 text-right">
-            <p className="text-xs text-white/70">Brand Pack</p>
-            <p className="mt-1 text-xl font-semibold" style={{ color: businessUnit.brandPack.accent }}>{businessUnit.brandPack.voice}</p>
+          <div className="rounded-md border border-[var(--share-line)] bg-white px-4 py-3 text-right">
+            <p className="text-xs text-zinc-500">Brand Pack</p>
+            <p className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">{businessUnit.brandPack.voice}</p>
           </div>
         </div>
+      </div>
 
-        <div className="mt-6 grid gap-3 xl:grid-cols-5">
+      <div className="p-5 md:p-6">
+        <div className="grid gap-3 xl:grid-cols-5">
           {context.pillars.map((pillar) => (
-            <article key={pillar.title} className="rounded-md border border-white/15 bg-white/10 p-4">
-              <h4 className="text-sm font-semibold" style={{ color: businessUnit.brandPack.accent }}>{pillar.title}</h4>
-              <p className="mt-2 min-h-20 text-xs leading-5 text-white/78">{pillar.description}</p>
+            <article key={pillar.title} className="rounded-md border border-[var(--share-line)] bg-white p-4">
+              <div className="h-1.5 w-12 rounded-full" style={{ backgroundColor: businessUnit.brandPack.accent }} />
+              <h4 className="mt-3 text-sm font-semibold text-[var(--share-green-950)]">{pillar.title}</h4>
+              <p className="mt-2 min-h-20 text-xs leading-5 text-zinc-600">{pillar.description}</p>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {pillar.offers.map((offer) => (
-                  <span key={offer} className="rounded-full bg-white/14 px-2 py-1 text-[11px] font-medium text-white">
+                  <span key={offer} className="rounded-md bg-[#edf7eb] px-2 py-1 text-[11px] font-semibold text-[var(--share-green-900)]">
                     {offer}
                   </span>
                 ))}
@@ -362,21 +571,21 @@ function BusinessUnitContextPanel({ businessUnit }: { businessUnit: (typeof demo
         </div>
 
         <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1.2fr]">
-          <div className="rounded-md border border-[#2ef2ce]/70 bg-white/8 p-4">
-            <p className="text-sm font-semibold" style={{ color: businessUnit.brandPack.accent }}>Diferenciais para autoridade comercial</p>
-            <div className="mt-3 grid gap-2 text-sm leading-5 text-white/82 sm:grid-cols-2">
+          <div className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4">
+            <p className="text-sm font-semibold text-[var(--share-green-950)]">Diferenciais para autoridade comercial</p>
+            <div className="mt-3 grid gap-2 text-sm leading-5 text-zinc-700 sm:grid-cols-2">
               {(context.differentiators ?? []).map((item) => (
                 <span key={item}>{item}</span>
               ))}
             </div>
           </div>
-          <div className="rounded-md border border-white/15 bg-white/10 p-4">
-            <p className="text-sm font-semibold" style={{ color: businessUnit.brandPack.accent }}>Jornada de evolucao</p>
+          <div className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4">
+            <p className="text-sm font-semibold text-[var(--share-green-950)]">Jornada de evolucao</p>
             <div className="mt-3 grid gap-2 md:grid-cols-3">
               {(context.aiMaturity ?? []).map((step) => (
-                <div key={step.level} className="rounded-md bg-white/12 p-3">
-                  <p className="text-xs font-semibold uppercase text-white">{step.level}</p>
-                  <p className="mt-2 text-xs leading-5 text-white/78">{step.title}</p>
+                <div key={step.level} className="rounded-md bg-white p-3">
+                  <p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">{step.level}</p>
+                  <p className="mt-2 text-xs leading-5 text-zinc-600">{step.title}</p>
                 </div>
               ))}
             </div>

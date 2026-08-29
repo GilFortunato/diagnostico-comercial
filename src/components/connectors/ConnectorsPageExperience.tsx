@@ -6,7 +6,10 @@ import { ArrowLeft, KeyRound, Network, ShieldCheck } from "lucide-react";
 import { LoginButton } from "@/components/auth/LoginButton";
 import { ConnectorReadiness } from "@/components/connectors/ConnectorReadiness";
 
-export function ConnectorsPageExperience() {
+export function ConnectorsPageExperience({ mode = "status" }: { mode?: "status" | "setup" | "admin" }) {
+  const isAdmin = mode === "admin";
+  const isSetup = mode === "setup";
+
   return (
     <main className="share-shell min-h-screen text-[var(--share-ink)]">
       <header className="border-b border-white/15 bg-[var(--share-green-950)]/95 text-white backdrop-blur">
@@ -26,21 +29,31 @@ export function ConnectorsPageExperience() {
           <div className="absolute right-24 top-20 h-14 w-14 rounded-full border border-[var(--share-lime)]/45" />
           <div className="relative max-w-3xl">
             <div className="h-2 w-56 rounded-r-md bg-[var(--share-lime)]" />
-            <p className="mt-8 text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Centro de conexoes</p>
-            <h1 className="mt-3 text-4xl font-semibold leading-tight md:text-5xl">Ative as fontes uma vez. A Share AI decide quando usar.</h1>
+            <p className="mt-8 text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">
+              {isAdmin ? "Admin de conectores" : isSetup ? "Configurar conexoes" : "Status de conexoes"}
+            </p>
+            <h1 className="mt-3 text-4xl font-semibold leading-tight md:text-5xl">
+              {isAdmin ? "Capacidades tecnicas e fornecedores conectados." : isSetup ? "Ative as fontes uma vez. A Share AI decide quando usar." : "Veja o que esta on ou off antes de rodar o diagnostico."}
+            </h1>
             <p className="mt-5 text-base leading-7 text-white/74">
-              Google identifica a pessoa. Gemini interpreta os dados autorizados. Apify habilita os conectores publicos de LinkedIn para perfil, posts, empresa e decisores.
+              {isAdmin
+                ? "Esta area mostra IDs de actors, capacidades e detalhes que nao devem aparecer para usuarios finais."
+                : isSetup
+                  ? "Google identifica a pessoa. Gemini interpreta os dados autorizados. Apify habilita fontes publicas de LinkedIn para perfil, posts, empresa e decisores."
+                  : "A tela do usuario final mostra apenas o estado das fontes. Credenciais e detalhes tecnicos ficam separados."}
             </p>
           </div>
         </section>
 
+        {mode !== "status" ? (
         <section className="grid gap-3 md:grid-cols-3">
           <ConnectorPrinciple icon={ShieldCheck} title="Consentimento separado" text="Login Google nao vira autorizacao Gemini automaticamente." />
           <ConnectorPrinciple icon={KeyRound} title="Credencial da pessoa" text="Cada usuario informa sua propria chave e pode revogar depois." />
           <ConnectorPrinciple icon={Network} title="Capacidades plugaveis" text="A skill pede dados; o fornecedor pode mudar sem reescrever o fluxo." />
         </section>
+        ) : null}
 
-        <ConnectorReadiness />
+        <ConnectorReadiness mode={mode} />
       </div>
     </main>
   );

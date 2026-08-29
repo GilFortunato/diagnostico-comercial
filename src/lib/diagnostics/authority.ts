@@ -103,10 +103,22 @@ export const authorityDimensions: AuthorityDimension[] = [
 const normalize = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
 
 const hasAny = (text: string, terms: string[]) =>
-  terms.some((term) => text.toLocaleLowerCase("pt-BR").includes(term));
+  terms.some((term) => text.toLocaleLowerCase("pt-BR").includes(term.toLocaleLowerCase("pt-BR")));
 
 function scoreDimension(dimension: AuthorityDimension, input: AuthorityInput): AuthorityDimensionScore {
+  const guidance = input.businessUnitContext ?? buildBusinessUnitGuidance(input.businessUnitId);
   const combined = `${input.headline} ${input.about} ${input.themes} ${input.proofPoints} ${input.recentContent} ${input.interactionSignals}`;
+  const combinedLower = combined.toLocaleLowerCase("pt-BR");
+  const priorityTerms = uniqueList([
+    ...guidance.territories,
+    ...guidance.products,
+    ...guidance.icps,
+    ...guidance.personas,
+    ...guidance.recommendedTerms,
+  ]);
+  const matchedPriorityTerms = priorityTerms.filter((term) => combinedLower.includes(term.toLocaleLowerCase("pt-BR")));
+  const avoidedTerms = guidance.avoidedTerms.filter((term) => combinedLower.includes(term.toLocaleLowerCase("pt-BR")));
+  const proofTerms = guidance.proofPoints.filter((term) => combinedLower.includes(term.toLocaleLowerCase("pt-BR")));
   let score = 42;
   const evidence: string[] = [];
 
@@ -134,18 +146,57 @@ function scoreDimension(dimension: AuthorityDimension, input: AuthorityInput): A
     score += 8;
     evidence.push("Interacoes citam publico comercialmente relevante.");
   }
+  if (matchedPriorityTerms.length) {
+    const bonus = Math.min(8, matchedPriorityTerms.length * 2);
+    score += bonus;
+    evidence.push(`Aderencia a BU: ${matchedPriorityTerms.slice(0, 4).join(", ")}.`);
+  }
+  if (proofTerms.length) {
+    score += 4;
+    evidence.push(`Usa provas reconhecidas pela BU: ${proofTerms.slice(0, 2).join(", ")}.`);
+  }
+  if (avoidedTerms.length) {
+    score -= Math.min(24, avoidedTerms.length * 8);
+    evidence.push(`Termos desalinhados com a BU: ${avoidedTerms.slice(0, 3).join(", ")}.`);
+  }
 
   if (["authority_proof", "cases_results"].includes(dimension.key) && input.proofPoints.length < 30) score -= 22;
   if (["published_content", "frequency", "theme_consistency"].includes(dimension.key) && input.recentContent.length < 30) score -= 18;
   if (["comments_quality", "strategic_network", "relevant_conversations"].includes(dimension.key) && input.interactionSignals.length < 30) score -= 16;
   if (dimension.key === "cta" && !hasAny(combined, ["conversa", "contato", "fale", "agenda", "diagnostico"])) score -= 12;
   if (dimension.key === "icp_relevance" && !hasAny(combined, ["cliente", "empresa", "b2b", "rh", "lider", "gestor", "comercial"])) score -= 10;
+  if (["bu_themes", "icp_relevance", "theme_consistency", "reference_potential"].includes(dimension.key)) {
+    score += matchedPriorityTerms.length ? Math.min(14, matchedPriorityTerms.length * 4) : -18;
+  }
+  if (["personal_institutional", "non_advertising_experience"].includes(dimension.key) && avoidedTerms.length) {
+    score -= 10;
+  }
+  if (["headline_clarity", "about_clarity", "cta"].includes(dimension.key) && guidance.recommendedCtas.length && !hasAny(combined, guidance.recommendedCtas)) {
+    score -= 6;
+  }
 
   return {
-    ...dimension,
+    ...applyBusinessUnitWeight(dimension, input.businessUnitId),
     score: normalize(score),
     rationale: buildRationale(dimension.label, normalize(score)),
     evidence: evidence.length ? evidence : ["Sem evidencia suficiente; classificacao depende de informacoes fornecidas pelo usuario."],
+  };
+}
+
+function applyBusinessUnitWeight(dimension: AuthorityDimension, businessUnitId: string): AuthorityDimension {
+  const prosperFocus = ["icp_relevance", "bu_themes", "theme_consistency", "published_content", "reference_potential"];
+  const educationFocus = ["credibility", "authority_proof", "strategic_network", "about_clarity", "personal_institutional"];
+  const shareFocus = ["positioning", "cta", "non_advertising_experience", "credibility", "personal_institutional"];
+  const focus =
+    businessUnitId === "bu_prosper"
+      ? prosperFocus
+      : businessUnitId === "bu_education_recruit"
+        ? educationFocus
+        : shareFocus;
+
+  return {
+    ...dimension,
+    weight: focus.includes(dimension.key) ? dimension.weight + 3 : dimension.weight,
   };
 }
 
@@ -153,6 +204,10 @@ function buildRationale(label: string, score: number) {
   if (score >= 75) return `${label} esta forte para gerar confianca comercial.`;
   if (score >= 55) return `${label} existe, mas precisa de mais prova e consistencia.`;
   return `${label} ainda nao sustenta autoridade comercial de forma clara.`;
+}
+
+function uniqueList(values: string[]) {
+  return [...new Set(values.filter(Boolean))];
 }
 
 export function createAuthorityAssessment(input: AuthorityInput, extraSources: ResearchSource[] = []): AuthorityAssessment {
@@ -270,6 +325,11 @@ function buildSources(input: AuthorityInput, extraSources: ResearchSource[] = []
       title: "Dados informados pelo usuario",
       confidence: "confirmed",
       notes: "Entradas declaradas no formulario do diagnostico.",
+    },
+    {
+      title: `Regua da BU ${input.businessUnitName}`,
+      confidence: "confirmed",
+      notes: "Score ponderado por territorios, ICP, termos recomendados, termos evitados, CTAs e provas da unidade selecionada.",
     },
   ];
 

@@ -1,14 +1,14 @@
 import { getServerSession } from "next-auth";
-import { BusinessUnitsAdminExperience } from "@/components/admin/BusinessUnitsAdminExperience";
+import { ConnectorsPageExperience } from "@/components/connectors/ConnectorsPageExperience";
+import { AdminAccessDenied } from "@/components/admin/AdminAccessDenied";
 import { authOptions } from "@/lib/auth/options";
 import { isAdminEmail } from "@/lib/auth/admin";
-import { AdminAccessDenied } from "@/components/admin/AdminAccessDenied";
 
-export default async function AdminBusinessUnitsPage() {
+export default async function AdminConnectorsPage() {
   const session = await getServerSession(authOptions);
   if (!isAdminEmail(session?.user?.email)) {
     return <AdminAccessDenied />;
   }
 
-  return <BusinessUnitsAdminExperience />;
+  return <ConnectorsPageExperience mode="admin" />;
 }

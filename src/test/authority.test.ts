@@ -40,3 +40,22 @@ test("authority comparison calculates score movement", () => {
   assert.equal(comparison.available, true);
   assert.equal(comparison.delta, latest.overallScore - first.overallScore);
 });
+
+test("authority assessment changes when business unit criteria changes", () => {
+  const shareBu = getBusinessUnitDna("bu_share");
+  const prosperAssessment = createAuthorityAssessment(baseInput);
+  const shareAssessment = createAuthorityAssessment({
+    ...baseInput,
+    businessUnitId: shareBu.id,
+    businessUnitName: shareBu.name,
+    businessUnitContext: buildBusinessUnitGuidance(shareBu.id),
+  });
+
+  assert.notEqual(prosperAssessment.overallScore, shareAssessment.overallScore);
+  assert.notDeepEqual(
+    prosperAssessment.dimensions.map((dimension) => dimension.weight),
+    shareAssessment.dimensions.map((dimension) => dimension.weight),
+  );
+  assert.ok(prosperAssessment.sources.some((source) => source.title.includes(defaultBu.name)));
+  assert.ok(shareAssessment.sources.some((source) => source.title.includes(shareBu.name)));
+});

@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Building2, CheckCircle2, Compass, KeyRound, Network, Search, ShieldAlert, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building2, CheckCircle2, Compass, KeyRound, Search, ShieldAlert, Sparkles } from "lucide-react";
 import { LoginButton } from "@/components/auth/LoginButton";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
 import { defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
-import { decisionMakerActorAudit, decisionMakerPipeline, recommendationLabel } from "@/lib/decision-makers/capabilityAudit";
+import { decisionMakerPipeline } from "@/lib/decision-makers/capabilityAudit";
+import type { DecisionMakerResult } from "@/lib/decision-makers/search";
 
 type ConnectorStatus = {
   google: { connected: boolean; label: string };
@@ -22,6 +23,9 @@ export function DecisionMakerMapExperience() {
   const [businessUnitId, setBusinessUnitId] = useState(defaultBusinessUnitId);
   const [objective, setObjective] = useState(buildDecisionMakerObjective(defaultBusinessUnitId));
   const [location, setLocation] = useState("");
+  const [result, setResult] = useState<DecisionMakerResult | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/connectors/status")
@@ -35,6 +39,36 @@ export function DecisionMakerMapExperience() {
   const titleSignals = selectedBu.icps[0]?.decisionMakers ?? selectedBu.personas.map((persona) => persona.name);
   const readyCount = status ? [status.google.connected, status.gemini.connected, status.apify.connected].filter(Boolean).length : 0;
   const isReady = Boolean(status?.google.connected && status.gemini.connected && status.apify.connected);
+  const canSearch = company.trim().length >= 2 && objective.trim().length >= 10;
+
+  async function runSearch() {
+    if (!canSearch) {
+      setError("Informe empresa e objetivo comercial antes de buscar decisores.");
+      return;
+    }
+
+    setIsSearching(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/decision-makers/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company, businessUnitId, objective, location }),
+      });
+      const payload = (await response.json()) as DecisionMakerResult | { error?: string };
+
+      if (!response.ok) {
+        throw new Error("error" in payload && payload.error ? payload.error : "Nao foi possivel buscar decisores.");
+      }
+
+      setResult(payload as DecisionMakerResult);
+    } catch (searchError) {
+      setError(searchError instanceof Error ? searchError.message : "Nao foi possivel buscar decisores.");
+    } finally {
+      setIsSearching(false);
+    }
+  }
 
   return (
     <main className="share-shell min-h-screen text-[var(--share-ink)]">
@@ -111,6 +145,7 @@ export function DecisionMakerMapExperience() {
                   onChange={(event) => {
                     setBusinessUnitId(event.target.value);
                     setObjective(buildDecisionMakerObjective(event.target.value));
+                    setResult(null);
                   }}
                   className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2 text-sm outline-none focus:border-[var(--share-green-800)]"
                 >
@@ -138,21 +173,27 @@ export function DecisionMakerMapExperience() {
             </div>
             <button
               type="button"
-              disabled
-              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-200 px-4 py-3 text-sm font-semibold text-zinc-500"
+              onClick={runSearch}
+              disabled={isSearching || !canSearch}
+              className="share-button-primary mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Search className="h-4 w-4" />
-              Encontrar pessoas estrategicas
+              {isSearching ? <Sparkles className="h-4 w-4 animate-pulse" /> : <Search className="h-4 w-4" />}
+              {isSearching ? "Preparando mapa" : "Encontrar pessoas estrategicas"}
             </button>
-            <p className="mt-3 text-xs leading-5 text-zinc-500">Execucao sera liberada na proxima fase, apos adapter/capability de pesquisa com controle de custo.</p>
+            {error ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{error}</p> : null}
+            <p className="mt-3 text-xs leading-5 text-zinc-500">
+              Sem Apify/Gemini conectados, a busca gera um mapa inicial por BU DNA. Pesquisa externa real entra quando os conectores estiverem on.
+            </p>
           </aside>
 
           <div className="grid gap-6">
+            {result ? <DecisionMakerSearchResult result={result} /> : null}
+
             <section className="share-card rounded-lg p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Fluxo tecnico proposto</p>
-                  <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Pesquisa progressiva, sem enriquecer tudo de uma vez</h2>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Como a busca trabalha</p>
+                  <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Pesquisa progressiva, com controle humano</h2>
                 </div>
                 <span className="rounded-md px-3 py-2 text-sm font-semibold" style={{ backgroundColor: selectedBu.brandPack.surface, color: selectedBu.brandPack.primary }}>
                   {selectedBu.name}
@@ -168,36 +209,98 @@ export function DecisionMakerMapExperience() {
               </div>
             </section>
 
-            <section className="share-card rounded-lg p-5">
-              <div className="flex items-center gap-2">
-                <Network className="h-5 w-5 text-[var(--share-green-800)]" />
-                <h2 className="text-2xl font-semibold text-[var(--share-green-950)]">Auditoria de capacidades</h2>
-              </div>
-              <div className="mt-5 grid gap-3">
-                {decisionMakerActorAudit.map((row) => (
-                  <article key={`${row.capability}-${row.actorId}`} className="rounded-md border border-[var(--share-line)] bg-white p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-950">{row.capability}</p>
-                        <p className="mt-1 text-xs font-mono text-zinc-500">{row.actorId}</p>
-                      </div>
-                      <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">
-                        {recommendationLabel(row.recommendation)}
-                      </span>
-                    </div>
-                    <p className="mt-3 text-sm leading-6 text-zinc-700">{row.coverage}</p>
-                    <div className="mt-3 grid gap-2 md:grid-cols-2">
-                      <AuditNote title="Limitacao" text={row.limitation} />
-                      <AuditNote title="Custo/risco" text={row.costRisk} />
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
           </div>
         </section>
       </div>
     </main>
+  );
+}
+
+function DecisionMakerSearchResult({ result }: { result: DecisionMakerResult }) {
+  return (
+    <section className="grid gap-4">
+      <div className="share-card rounded-lg p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Dossie da conta</p>
+            <h2 className="mt-1 text-3xl font-semibold text-[var(--share-green-950)]">{result.company.name}</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-600">BU: {result.company.businessUnitName}</p>
+          </div>
+          <div className="rounded-md bg-[var(--share-green-950)] px-4 py-3 text-white">
+            <p className="text-xs font-semibold uppercase text-white/60">Aderencia inicial</p>
+            <p className="mt-1 text-3xl font-semibold text-[var(--share-lime)]">{result.company.fitScore}/100</p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-2">
+          {result.company.rationale.map((item) => (
+            <p key={item} className="rounded-md bg-[#fbfdf8] px-3 py-2 text-sm leading-6 text-zinc-700">{item}</p>
+          ))}
+        </div>
+        <div className="mt-4 rounded-md border border-[var(--share-line)] bg-white p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Proxima melhor acao</p>
+          <h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">{result.nextBestAction.title}</h3>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">{result.nextBestAction.reason}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">Impacto {result.nextBestAction.impact}</span>
+            <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">Esforco {result.nextBestAction.effort}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="share-card rounded-lg p-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Pessoas estrategicas</p>
+        <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Mapa inicial por papel decisor</h2>
+        <div className="mt-5 grid gap-3 xl:grid-cols-2">
+          {result.people.map((person) => (
+            <article key={person.id} className="rounded-md border border-[var(--share-line)] bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-zinc-950">{person.displayName}</p>
+                  <p className="mt-1 text-sm text-zinc-600">{person.role}</p>
+                </div>
+                <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">{person.probableDecisionRole}</span>
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
+                <Metric label="Fit" value={`${person.fitScore}/100`} />
+                <Metric label="Acesso" value={person.accessibility} />
+                <Metric label="Confianca" value={person.confidence} />
+              </div>
+              <p className="mt-4 text-sm leading-6 text-zinc-700">{person.whyRelevant}</p>
+              <p className="mt-3 text-sm leading-6 text-zinc-600">{person.suggestedConversation}</p>
+              <p className="mt-3 rounded-md bg-[#fbfdf8] px-3 py-2 text-xs text-zinc-500">{person.contactStatus}</p>
+              <details className="mt-3 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3">
+                <summary className="cursor-pointer text-xs font-semibold text-[var(--share-green-900)]">Nao usar nesta abordagem</summary>
+                <ul className="mt-2 grid gap-1 text-xs leading-5 text-zinc-600">
+                  {person.doNotUse.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              </details>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      <div className="share-card rounded-lg p-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Fontes e confianca</p>
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {result.sources.map((source) => (
+            <div key={source.title} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3">
+              <p className="text-sm font-semibold text-zinc-950">{source.title}</p>
+              <p className="mt-1 text-xs font-semibold uppercase text-zinc-500">{source.confidence}</p>
+              <p className="mt-2 text-xs leading-5 text-zinc-600">{source.notes}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-[#fbfdf8] p-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className="mt-1 font-semibold text-[var(--share-green-950)]">{value}</p>
+    </div>
   );
 }
 
@@ -239,15 +342,6 @@ function Field({
         />
       </span>
     </label>
-  );
-}
-
-function AuditNote({ title, text }: { title: string; text: string }) {
-  return (
-    <div className="rounded-md bg-[#fbfdf8] p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">{title}</p>
-      <p className="mt-1 text-xs leading-5 text-zinc-600">{text}</p>
-    </div>
   );
 }
 

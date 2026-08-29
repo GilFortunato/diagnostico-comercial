@@ -11,6 +11,7 @@ import { defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/
 export function HomeExperience() {
   const { data: session } = useSession();
   const isAuthenticated = Boolean(session?.user);
+  const isAdmin = isPublicAdminEmail(session?.user?.email);
   const defaultBu = getBusinessUnitDna(defaultBusinessUnitId);
 
   if (!isAuthenticated) {
@@ -138,6 +139,7 @@ export function HomeExperience() {
             <ArrowRight className="h-4 w-4" />
           </Link>
         </section>
+        {isAdmin ? (
         <section className="grid gap-4 rounded-lg border border-[var(--share-line)] bg-white p-5 shadow-[0_18px_60px_rgb(0_63_46_/_0.08)] md:grid-cols-[1fr_auto] md:items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Admin</p>
@@ -154,10 +156,19 @@ export function HomeExperience() {
             <ArrowRight className="h-4 w-4" />
           </Link>
         </section>
+        ) : null}
         <AuthorityDiagnostic />
       </div>
     </main>
   );
+}
+
+function isPublicAdminEmail(email?: string | null) {
+  const adminEmails = (process.env.NEXT_PUBLIC_SHARE_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((item) => item.trim().toLocaleLowerCase("pt-BR"))
+    .filter(Boolean);
+  return Boolean(email && adminEmails.includes(email.toLocaleLowerCase("pt-BR")));
 }
 
 function HeroMetric({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
