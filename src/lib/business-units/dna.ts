@@ -99,6 +99,7 @@ export type BusinessUnitDna = {
   icps: BusinessUnitIcp[];
   personas: BusinessUnitPersona[];
   authorityTerritories: AuthorityTerritory[];
+  authorityWeightFocus: string[];
   contentDna: ContentDna;
   documents: Array<{ title: string; kind: string; status: "missing" | "available"; tags: string[] }>;
   updatedAt: string;
@@ -225,6 +226,7 @@ export const prosperDna: BusinessUnitDna = {
       evidenceTypes: ["programas", "metodologias", "resultados documentados"],
     },
   ],
+  authorityWeightFocus: ["icp_relevance", "bu_themes", "theme_consistency", "published_content", "reference_potential"],
   contentDna: {
     tone: "consultivo, pratico e humano",
     formality: "medium",
@@ -278,6 +280,7 @@ export const businessUnitCatalog: BusinessUnitDna[] = [
     icps: [],
     personas: [],
     authorityTerritories: [],
+    authorityWeightFocus: ["positioning", "cta", "non_advertising_experience", "credibility", "personal_institutional"],
     contentDna: {
       tone: "consultivo e objetivo",
       formality: "medium",
@@ -327,6 +330,7 @@ export const businessUnitCatalog: BusinessUnitDna[] = [
     icps: [],
     personas: [],
     authorityTerritories: [],
+    authorityWeightFocus: ["credibility", "authority_proof", "strategic_network", "about_clarity", "personal_institutional"],
     contentDna: {
       tone: "especialista e cuidadoso",
       formality: "medium",
@@ -385,6 +389,7 @@ export function buildBusinessUnitGuidance(id: string) {
     recommendedTerms: unit.positioning.recommendedTerms,
     avoidedTerms: unit.positioning.avoidedTerms,
     proofPoints: unit.positioning.proofPoints,
+    authorityWeightFocus: unit.authorityWeightFocus,
     contentTone: unit.contentDna.tone,
     recommendedCtas: unit.contentDna.recommendedCtas,
     forbiddenClaims: unit.contentDna.forbiddenClaims,

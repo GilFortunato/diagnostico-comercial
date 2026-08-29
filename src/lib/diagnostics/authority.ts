@@ -18,6 +18,7 @@ export const authorityInputSchema = z.object({
       recommendedTerms: z.array(z.string()),
       avoidedTerms: z.array(z.string()),
       proofPoints: z.array(z.string()),
+      authorityWeightFocus: z.array(z.string()).optional().default([]),
       contentTone: z.string(),
       recommendedCtas: z.array(z.string()),
       forbiddenClaims: z.array(z.string()),
@@ -176,24 +177,14 @@ function scoreDimension(dimension: AuthorityDimension, input: AuthorityInput): A
   }
 
   return {
-    ...applyBusinessUnitWeight(dimension, input.businessUnitId),
+    ...applyBusinessUnitWeight(dimension, guidance.authorityWeightFocus ?? []),
     score: normalize(score),
     rationale: buildRationale(dimension.label, normalize(score)),
     evidence: evidence.length ? evidence : ["Sem evidencia suficiente; classificacao depende de informacoes fornecidas pelo usuario."],
   };
 }
 
-function applyBusinessUnitWeight(dimension: AuthorityDimension, businessUnitId: string): AuthorityDimension {
-  const prosperFocus = ["icp_relevance", "bu_themes", "theme_consistency", "published_content", "reference_potential"];
-  const educationFocus = ["credibility", "authority_proof", "strategic_network", "about_clarity", "personal_institutional"];
-  const shareFocus = ["positioning", "cta", "non_advertising_experience", "credibility", "personal_institutional"];
-  const focus =
-    businessUnitId === "bu_prosper"
-      ? prosperFocus
-      : businessUnitId === "bu_education_recruit"
-        ? educationFocus
-        : shareFocus;
-
+function applyBusinessUnitWeight(dimension: AuthorityDimension, focus: string[]): AuthorityDimension {
   return {
     ...dimension,
     weight: focus.includes(dimension.key) ? dimension.weight + 3 : dimension.weight,

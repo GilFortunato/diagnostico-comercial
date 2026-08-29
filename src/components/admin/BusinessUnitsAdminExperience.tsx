@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { ComponentType } from "react";
-import { ArrowLeft, CheckCircle2, Copy, Eye, FileText, Layers3, Pencil, Plus, Radio, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Copy, Eye, FileText, Layers3, Pencil, PlayCircle, Plus, Radio, ShieldCheck } from "lucide-react";
 import { LoginButton } from "@/components/auth/LoginButton";
 import { businessUnitCatalog, defaultBusinessUnitId, type BusinessUnitDna } from "@/lib/business-units/dna";
 
@@ -14,6 +14,7 @@ export function BusinessUnitsAdminExperience() {
   const [selectedId, setSelectedId] = useState(defaultBusinessUnitId);
   const [isEditing, setIsEditing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<string | null>(null);
   const selectedBu = useMemo(() => units.find((unit) => unit.id === selectedId) ?? units[0], [selectedId, units]);
 
   function updateSelectedUnit(patch: Partial<BusinessUnitDna>) {
@@ -58,6 +59,21 @@ export function BusinessUnitsAdminExperience() {
     setSelectedId(copy.id);
     setIsEditing(true);
     setNotice("BU duplicada como rascunho local.");
+  }
+
+  function publishOrDeactivateSelectedUnit() {
+    const nextStatus = selectedBu.status === "published" ? "inactive" : "published";
+    updateSelectedUnit({ status: nextStatus });
+    setNotice(nextStatus === "published" ? "BU publicada localmente para teste." : "BU desativada localmente para teste.");
+  }
+
+  function testSelectedUnit() {
+    const territory = selectedBu.authorityTerritories[0]?.name ?? selectedBu.positioning.recommendedTerms[0] ?? selectedBu.name;
+    const product = selectedBu.products[0]?.name ?? selectedBu.name;
+    const icp = selectedBu.icps[0]?.name ?? "ICP ainda nao configurado";
+    setTestResult(
+      `Usando ${selectedBu.name}, a Share AI priorizaria ${territory}, conectaria a oferta ${product} ao ICP ${icp} e bloquearia claims sem fonte antes de gerar conteudo, rapport ou AIDA.`,
+    );
   }
 
   return (
@@ -133,8 +149,17 @@ export function BusinessUnitsAdminExperience() {
               onEdit={() => setIsEditing((current) => !current)}
               onDuplicate={duplicateSelectedUnit}
               onPreview={() => setNotice(`${selectedBu.name} sera usada como contexto de diagnostico quando selecionada pelo usuario.`)}
+              onPublishToggle={publishOrDeactivateSelectedUnit}
+              onTest={testSelectedUnit}
               onChange={updateSelectedUnit}
             />
+            {testResult ? (
+              <section className="share-card rounded-lg p-5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Teste desta BU</p>
+                <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Resposta simulada da Share AI</h2>
+                <p className="mt-3 rounded-md bg-[#fbfdf8] px-4 py-3 text-sm leading-6 text-zinc-700">{testResult}</p>
+              </section>
+            ) : null}
             <BusinessUnitWizardPreview unit={selectedBu} onCreate={createDraftUnit} />
             <BusinessUnitDnaPanels unit={selectedBu} />
           </div>
@@ -150,6 +175,8 @@ function BusinessUnitOverview({
   onEdit,
   onDuplicate,
   onPreview,
+  onPublishToggle,
+  onTest,
   onChange,
 }: {
   unit: BusinessUnitDna;
@@ -157,6 +184,8 @@ function BusinessUnitOverview({
   onEdit: () => void;
   onDuplicate: () => void;
   onPreview: () => void;
+  onPublishToggle: () => void;
+  onTest: () => void;
   onChange: (patch: Partial<BusinessUnitDna>) => void;
 }) {
   const knowledgeHealth = calculateKnowledgeHealth(unit);
@@ -173,6 +202,8 @@ function BusinessUnitOverview({
           <AdminButton icon={Pencil} label={isEditing ? "Fechar edicao" : "Editar"} onClick={onEdit} />
           <AdminButton icon={Eye} label="Visualizar como usuario" onClick={onPreview} />
           <AdminButton icon={Copy} label="Duplicar" onClick={onDuplicate} />
+          <AdminButton icon={PlayCircle} label="Testar esta BU" onClick={onTest} />
+          <AdminButton icon={CheckCircle2} label={unit.status === "published" ? "Desativar" : "Publicar"} onClick={onPublishToggle} />
         </div>
       </div>
       {isEditing ? (
