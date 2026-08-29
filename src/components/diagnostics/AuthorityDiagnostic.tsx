@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Activity, ArrowRight, BarChart3, CheckCircle2, History, Link, RefreshCw, ShieldCheck, Sparkles, Target } from "lucide-react";
+import { Activity, ArrowRight, BarChart3, CalendarDays, CheckCircle2, History, Link, RefreshCw, Sparkles, Target } from "lucide-react";
 import type { AuthorityAssessment } from "@/lib/diagnostics/authority";
+import type { AuthorityThirtyDayPlan } from "@/lib/diagnostics/authorityPlan";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
 import { buildBusinessUnitGuidance, defaultBusinessUnitId, getBusinessUnitStarterInput } from "@/lib/business-units/dna";
 import { confidenceLabel } from "@/lib/copy/editorial";
@@ -43,9 +44,12 @@ export function AuthorityDiagnostic() {
   const [history, setHistory] = useState<AuthorityAssessment[]>(() => loadLocalHistory(defaultBusinessUnitId));
   const [comparison, setComparison] = useState<CompareState | null>(null);
   const [actionPanel, setActionPanel] = useState<ActionPanel | null>(null);
+  const [thirtyDayPlan, setThirtyDayPlan] = useState<AuthorityThirtyDayPlan | null>(null);
+  const [planView, setPlanView] = useState<"calendar" | "timeline" | "list">("timeline");
   const [formError, setFormError] = useState<string | null>(null);
   const [collectionSteps, setCollectionSteps] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [isPlanPending, startPlanTransition] = useTransition();
   const canRunDiagnostic = form.profileUrl.includes("linkedin.com/in/") && form.objective.trim().length >= 10;
   const suggestedObjective = useMemo(() => getBusinessUnitStarterInput(businessUnitId).objective, [businessUnitId]);
 
@@ -77,6 +81,7 @@ export function AuthorityDiagnostic() {
     setHistory(nextHistory);
     setComparison(null);
     setActionPanel(null);
+    setThirtyDayPlan(null);
     void refreshHistory(nextBusinessUnitId, { restoreLatest: true });
   }
 
@@ -108,6 +113,7 @@ export function AuthorityDiagnostic() {
       saveLocalHistory(nextAssessment);
       setAssessment(nextAssessment);
       setActionPanel(null);
+      setThirtyDayPlan(null);
       await refreshHistory(businessUnitId);
       setCollectionSteps([]);
     });
@@ -170,12 +176,7 @@ export function AuthorityDiagnostic() {
     }
 
     if (action === "Gerar plano de 30 dias") {
-      setActionPanel({
-        eyebrow: "Plano de execução",
-        title: "30 dias para aumentar autoridade comercial",
-        description: "Plano organizado por semana, com ações de alto impacto antes de qualquer ação externa.",
-        items: assessment.plan30Days.map((week) => `Semana ${week.week}: ${week.objective} - ${week.actions.map((item) => item.action).join(" ")}`),
-      });
+      generateThirtyDayPlan();
       return;
     }
 
@@ -221,6 +222,30 @@ export function AuthorityDiagnostic() {
           : "Seu perfil já sustenta uma ação consultiva; avance para conteúdo ou rapport com revisão humana.",
         topDimensions[0] ? `${topDimensions[0].label}: ${topDimensions[0].rationale}` : "Refaça a análise quando tiver novas evidências.",
       ],
+    });
+  }
+
+  function generateThirtyDayPlan() {
+    if (!assessment) return;
+
+    setFormError(null);
+    setActionPanel(null);
+    startPlanTransition(async () => {
+      try {
+        const response = await fetch("/api/diagnostics/authority/plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assessment, history }),
+        });
+        const result = (await response.json()) as AuthorityThirtyDayPlan | { error?: string };
+        if (!response.ok) {
+          setFormError("error" in result && result.error ? result.error : "Não foi possível gerar o plano de 30 dias.");
+          return;
+        }
+        setThirtyDayPlan(result as AuthorityThirtyDayPlan);
+      } catch {
+        setFormError("Não foi possível gerar o plano de 30 dias. Tente novamente.");
+      }
     });
   }
 
@@ -499,21 +524,22 @@ export function AuthorityDiagnostic() {
             </div>
 
             <div className="share-card rounded-lg p-5">
-              <h3 className="text-lg font-semibold text-[var(--share-green-950)]">Ciclo de 30 dias</h3>
-              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {(assessment.plan30Days ?? []).map((week) => (
-                  <div key={week.week} className="rounded-md p-4" style={{ backgroundColor: selectedBu.brandPack.surface }}>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Semana {week.week}</p>
-                    <p className="mt-1 font-medium text-zinc-950">{week.objective}</p>
-                    <ul className="mt-3 space-y-2 text-sm leading-5 text-zinc-600">
-                      {week.actions.map((action) => <li key={action.action}>{action.action}</li>)}
-                    </ul>
-                  </div>
-                ))}
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Próxima melhor ação</p>
+                  <h3 className="mt-1 text-lg font-semibold text-[var(--share-green-950)]">Transforme o diagnóstico em execução</h3>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">O plano completo só é criado quando você pedir. Ele combina evolução pessoal e ativação da BU, sem repetir os cards acima.</p>
+                </div>
+                <button type="button" onClick={generateThirtyDayPlan} disabled={isPlanPending} className="share-button-primary inline-flex min-h-11 items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-55">
+                  {isPlanPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CalendarDays className="h-4 w-4" />}
+                  Gerar plano de 30 dias
+                </button>
               </div>
+              {isPlanPending ? <PlanGenerationStatus /> : null}
               {actionPanel ? <ActionPanelCard panel={actionPanel} /> : null}
               <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {assessment.nextActions.map((action) => (
+                  action === "Gerar plano de 30 dias" ? null : (
                   <button
                     key={action}
                     type="button"
@@ -522,9 +548,12 @@ export function AuthorityDiagnostic() {
                   >
                     {action}
                   </button>
+                  )
                 ))}
               </div>
             </div>
+
+            {thirtyDayPlan ? <ThirtyDayPlanPanel plan={thirtyDayPlan} view={planView} onViewChange={setPlanView} /> : null}
 
             <section className="share-card rounded-lg p-5">
               <h3 className="text-lg font-semibold text-[var(--share-green-950)]">Como esta análise foi feita?</h3>
@@ -555,12 +584,10 @@ export function AuthorityDiagnostic() {
           </div>
           <div className="share-card rounded-lg p-5">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-[var(--share-green-800)]" />
-              <h3 className="font-semibold text-zinc-950">Comparação e controle humano</h3>
+              <BarChart3 className="h-4 w-4 text-[var(--share-green-800)]" />
+              <h3 className="font-semibold text-zinc-950">Evolução</h3>
             </div>
-            <p className="mt-4 text-sm leading-6 text-zinc-600">{comparison?.message ?? "Gere diagnósticos e use Comparar evolução para medir progresso."}</p>
-            <p className="mt-3 text-sm leading-6 text-zinc-600">O LinkedIn conectado entra por autorização oficial. Até lá, o diagnóstico usa apenas dados informados e fontes permitidas.</p>
-            <p className="mt-3 text-sm leading-6 text-zinc-600">Ações externas, como publicar, enviar mensagem ou acionar CRM, exigem prévia e aprovação humana.</p>
+            <p className="mt-4 text-sm leading-6 text-zinc-600">{comparison?.message ?? "Gere diagnósticos em momentos diferentes e use Comparar evolução para medir o progresso."}</p>
           </div>
         </div>
       </div>
@@ -696,6 +723,107 @@ function ActionPanelCard({ panel }: { panel: ActionPanel }) {
         ))}
       </div>
     </div>
+  );
+}
+
+function PlanGenerationStatus() {
+  const steps = ["Analisando lacunas", "Revisando sua autoridade", "Cruzando foco da BU", "Analisando melhores pontes", "Priorizando ações"];
+  return (
+    <div className="mt-5 grid gap-2 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4 sm:grid-cols-2 lg:grid-cols-5">
+      {steps.map((step, index) => (
+        <span key={step} className="inline-flex items-center gap-2 text-sm text-zinc-700">
+          {index < steps.length - 1 ? <CheckCircle2 className="h-4 w-4 text-[var(--share-green-800)]" /> : <RefreshCw className="h-4 w-4 animate-spin text-[var(--share-green-800)]" />}
+          {step}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ThirtyDayPlanPanel({ plan, view, onViewChange }: { plan: AuthorityThirtyDayPlan; view: "calendar" | "timeline" | "list"; onViewChange: (view: "calendar" | "timeline" | "list") => void }) {
+  return (
+    <section className="share-card rounded-lg p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Plano estratégico de 30 dias</p>
+          <h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">{plan.title}</h3>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">{plan.summary}</p>
+          <p className="mt-2 text-xs leading-5 text-zinc-500">{plan.generationNote}</p>
+        </div>
+        <div className="inline-flex overflow-hidden rounded-md border border-[var(--share-line)] bg-white text-sm font-semibold text-[var(--share-green-900)]">
+          {(["calendar", "timeline", "list"] as const).map((option) => (
+            <button key={option} type="button" onClick={() => onViewChange(option)} className={`px-3 py-2 ${view === option ? "bg-[#edf7eb]" : "hover:bg-[#fbfdf8]"}`}>
+              {option === "calendar" ? "Calendário" : option === "timeline" ? "Linha do tempo" : "Lista"}
+            </button>
+          ))}
+        </div>
+      </div>
+      {view === "calendar" ? <PlanCalendar actions={plan.actions} /> : view === "list" ? <PlanList actions={plan.actions} /> : <PlanTimeline actions={plan.actions} />}
+    </section>
+  );
+}
+
+function PlanTimeline({ actions }: { actions: AuthorityThirtyDayPlan["actions"] }) {
+  return (
+    <div className="mt-5 grid gap-3">
+      {actions.map((item) => <PlanActionCard key={item.day} item={item} />)}
+    </div>
+  );
+}
+
+function PlanList({ actions }: { actions: AuthorityThirtyDayPlan["actions"] }) {
+  return (
+    <div className="mt-5 divide-y divide-[var(--share-line)] rounded-md border border-[var(--share-line)] bg-white">
+      {actions.map((item) => (
+        <div key={item.day} className="grid gap-2 px-4 py-3 md:grid-cols-[70px_1fr_auto] md:items-center">
+          <p className="text-sm font-semibold text-[var(--share-green-950)]">Dia {item.day}</p>
+          <div>
+            <p className="text-sm font-semibold text-zinc-950">{item.title}</p>
+            <p className="mt-1 text-sm leading-6 text-zinc-600">{item.action}</p>
+          </div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">{item.scope === "PERSONAL" ? "Pessoal" : "BU"}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PlanCalendar({ actions }: { actions: AuthorityThirtyDayPlan["actions"] }) {
+  return (
+    <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-5 lg:grid-cols-7">
+      {actions.map((item) => (
+        <div key={item.day} className="min-h-28 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Dia {item.day}</p>
+          <p className="mt-2 text-sm font-semibold text-zinc-950">{item.title}</p>
+          <p className="mt-1 line-clamp-3 text-xs leading-5 text-zinc-600">{item.action}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PlanActionCard({ item }: { item: AuthorityThirtyDayPlan["actions"][number] }) {
+  return (
+    <article className="grid gap-3 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4 md:grid-cols-[76px_1fr_auto] md:items-start">
+      <div className="rounded-md bg-[#edf7eb] px-3 py-2 text-center">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Dia</p>
+        <p className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{item.day}</p>
+      </div>
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-semibold text-zinc-950">{item.title}</p>
+          <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-[var(--share-green-800)]">{item.scope === "PERSONAL" ? "Pessoal" : "BU"}</span>
+        </div>
+        <p className="mt-2 text-sm leading-6 text-zinc-700">{item.action}</p>
+        <p className="mt-2 text-xs leading-5 text-zinc-500">Por quê: {item.reason}</p>
+      </div>
+      <div className="grid gap-1 text-xs text-zinc-600 md:text-right">
+        <span>Impacto: {item.expectedImpact}</span>
+        <span>Esforço: {item.effort}</span>
+        <span>{item.estimatedTime}</span>
+        <span>{item.relatedModule}</span>
+      </div>
+    </article>
   );
 }
 

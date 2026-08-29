@@ -134,11 +134,6 @@ export type AuthorityAssessment = {
     horizon: string;
     actions: Array<{ day: string; focus: string; action: string; module: string }>;
   };
-  plan30Days: Array<{
-    week: number;
-    objective: string;
-    actions: Array<{ action: string; effort: "low" | "medium" | "high"; impact: "medium" | "high" }>;
-  }>;
   sources: ResearchSource[];
   nextActions: string[];
 };
@@ -291,7 +286,7 @@ export function createAuthorityAssessment(input: AuthorityInput, extraSources: R
     opportunities: reviewPortugueseList(opportunities),
     recommendations: reviewPortugueseList(recommendations),
     personalAuthorityPlan: {
-      cycleLabel: "Ciclo de 30 dias",
+      cycleLabel: "Plano permanente",
       priority: weak[0]?.label ? `Fortalecer ${weak[0].label.toLocaleLowerCase("pt-BR")}.` : "Transformar repertório em provas claras de autoridade.",
       progressLabel: `${strong.length}/${Math.min(8, dimensions.length)} sinais fortes mapeados`,
       actions: [
@@ -313,56 +308,6 @@ export function createAuthorityAssessment(input: AuthorityInput, extraSources: R
         { day: "Dia 5", focus: "Rapport", action: "Preparar abordagem individual com base na ponte mais natural.", module: "Rapport" },
       ],
     },
-    plan30Days: [
-      {
-        week: 1,
-        objective: "Reposicionar perfil",
-        actions: [
-          {
-            action: `Ajustar headline para conectar ${primaryTerritory}, ICP e impacto real.`,
-            effort: "low",
-            impact: "high",
-          },
-          {
-            action: `Atualizar Sobre com problema, experiência, prova e CTA: ${guidance.recommendedCtas[0] ?? "convite para conversa"}.`,
-            effort: "medium",
-            impact: "high",
-          },
-        ],
-      },
-      {
-        week: 2,
-        objective: "Evidenciar repertório",
-        actions: [
-          {
-            action: `Publicar insight sobre uma dor concreta de ${primaryIcp}.`,
-            effort: "medium",
-            impact: "high",
-          },
-          {
-            action: `Registrar um aprendizado associado a ${primaryProduct}, sem expor dados sensíveis.`,
-            effort: "medium",
-            impact: "high",
-          },
-        ],
-      },
-      {
-        week: 3,
-        objective: "Entrar nas conversas certas",
-        actions: [
-          { action: "Comentar em 10 conversas de decisores com contribuição substantiva.", effort: "medium", impact: "medium" },
-          { action: "Conectar-se com perfis estratégicos com mensagem personalizada.", effort: "medium", impact: "medium" },
-        ],
-      },
-      {
-        week: 4,
-        objective: "Consolidar memória e comparação",
-        actions: [
-          { action: "Refazer diagnóstico e comparar evolução por dimensão.", effort: "low", impact: "high" },
-          { action: "Gerar próximas pautas a partir das lacunas remanescentes.", effort: "low", impact: "medium" },
-        ],
-      },
-    ],
     sources: buildSources(parsed, extraSources),
     nextActions: [
       "Refazer diagnóstico",

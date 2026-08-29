@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compareAuthorityAssessments, createAuthorityAssessment } from "@/lib/diagnostics/authority";
+import { createStructuredAuthorityThirtyDayPlan } from "@/lib/diagnostics/authorityPlan";
 import { buildBusinessUnitGuidance, defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
 
 const defaultBu = getBusinessUnitDna(defaultBusinessUnitId);
@@ -79,4 +80,30 @@ test("business unit starter input does not fabricate personal profile data", () 
   const assessment = createAuthorityAssessment(emptyStarter);
   assert.ok(assessment.profileReview.every((item) => item.confidence === "unverified"));
   assert.ok(assessment.buAffinityScore < 55);
+});
+
+test("thirty-day plan creates a daily plan without reusing legacy weekly cards", () => {
+  const assessment = createAuthorityAssessment(baseInput);
+  const plan = createStructuredAuthorityThirtyDayPlan({ assessment });
+
+  assert.equal(plan.actions.length, 30);
+  assert.deepEqual(plan.actions.map((action) => action.day), Array.from({ length: 30 }, (_, index) => index + 1));
+  assert.ok(plan.actions.some((action) => action.scope === "PERSONAL"));
+  assert.ok(plan.actions.some((action) => action.scope === "BUSINESS_UNIT"));
+  assert.equal(plan.generation, "structured-fallback");
+});
+
+test("thirty-day plan changes its BU activation actions when the BU changes", () => {
+  const shareBu = getBusinessUnitDna("bu_share");
+  const prosperPlan = createStructuredAuthorityThirtyDayPlan({ assessment: createAuthorityAssessment(baseInput) });
+  const sharePlan = createStructuredAuthorityThirtyDayPlan({
+    assessment: createAuthorityAssessment({
+      ...baseInput,
+      businessUnitId: shareBu.id,
+      businessUnitName: shareBu.name,
+      businessUnitContext: buildBusinessUnitGuidance(shareBu.id),
+    }),
+  });
+
+  assert.notEqual(prosperPlan.actions.find((action) => action.scope === "BUSINESS_UNIT")?.businessUnit, sharePlan.actions.find((action) => action.scope === "BUSINESS_UNIT")?.businessUnit);
 });

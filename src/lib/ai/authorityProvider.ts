@@ -1,4 +1,5 @@
 import { createAuthorityAssessment, type AuthorityAssessment, type AuthorityInput, type ResearchSource } from "@/lib/diagnostics/authority";
+import { createStructuredAuthorityThirtyDayPlan, normalizeAuthorityThirtyDayPlan, type AuthorityPlanContext, type AuthorityThirtyDayPlan } from "@/lib/diagnostics/authorityPlan";
 import { resolveProviderForCapability } from "@/lib/ai/providers";
 import { ptBrEditorialInstruction, reviewPortugueseCopy, reviewPortugueseList, silentEditorialReviewInstruction } from "@/lib/copy/editorial";
 
@@ -11,6 +12,8 @@ type GeminiAuthorityPayload = {
   opportunities?: string[];
   recommendations?: string[];
 };
+
+type GeminiAuthorityPlanPayload = Partial<AuthorityThirtyDayPlan>;
 
 const geminiModel = process.env.GEMINI_MODEL ?? "gemini-1.5-flash";
 
@@ -52,6 +55,23 @@ export async function createAuthorityAssessmentWithProvider(input: AuthorityInpu
   }
 }
 
+export async function createAuthorityThirtyDayPlanWithProvider(context: AuthorityPlanContext, userGeminiApiKey?: string | null): Promise<AuthorityThirtyDayPlan> {
+  const fallback = createStructuredAuthorityThirtyDayPlan(context);
+  const provider = resolveProviderForCapability("ai.generateContentPlan", process.env.DEFAULT_AI_PROVIDER);
+  const geminiApiKey = userGeminiApiKey || process.env.GEMINI_API_KEY;
+
+  if (provider?.key !== "gemini" || !geminiApiKey) {
+    return fallback;
+  }
+
+  try {
+    const generated = await generatePlanWithGemini(context, geminiApiKey);
+    return normalizeAuthorityThirtyDayPlan(generated, fallback);
+  } catch {
+    return fallback;
+  }
+}
+
 async function generateWithGemini(input: AuthorityInput, apiKey: string): Promise<GeminiAuthorityPayload> {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
   const response = await fetch(endpoint, {
@@ -86,6 +106,33 @@ async function generateWithGemini(input: AuthorityInput, apiKey: string): Promis
   }
 
   return JSON.parse(text) as GeminiAuthorityPayload;
+}
+
+async function generatePlanWithGemini(context: AuthorityPlanContext, apiKey: string): Promise<GeminiAuthorityPlanPayload> {
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      generationConfig: {
+        temperature: 0.35,
+        response_mime_type: "application/json",
+      },
+      contents: [{ role: "user", parts: [{ text: buildPlanPrompt(context) }] }],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Não foi possível gerar o plano com a IA.");
+  }
+
+  const data = await response.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (typeof text !== "string") {
+    throw new Error("A IA não retornou conteúdo para o plano.");
+  }
+
+  return JSON.parse(text) as GeminiAuthorityPlanPayload;
 }
 
 function buildPrompt(input: AuthorityInput) {
@@ -123,6 +170,67 @@ Formato:
   "risks": [],
   "opportunities": [],
   "recommendations": []
+}
+`;
+}
+
+function buildPlanPrompt({ assessment, history = [] }: AuthorityPlanContext) {
+  const guidance = assessment.input.businessUnitContext ?? {};
+  return `
+Você é especialista sênior em personal branding, social selling, LinkedIn, autoridade comercial, estratégia de conteúdo, networking e ativação comercial B2B.
+Crie um plano estratégico novo de 30 dias. Não reescreva planos existentes e não agrupe a resposta apenas por semanas.
+${ptBrEditorialInstruction}
+${silentEditorialReviewInstruction}
+
+Regras obrigatórias:
+- Use somente os dados do diagnóstico e do contexto abaixo.
+- Não invente tendências, cases, resultados, dados externos ou informações do perfil.
+- Separe ações PESSOAIS de ações de BUSINESS_UNIT. Marca pessoal não é a mesma coisa que ativação da BU.
+- Priorize lacunas reais: prova, posicionamento, conteúdo, networking, aderência à BU e pontes comerciais.
+- Se Authority Selling estiver alto e BU Affinity estiver baixo, priorize Bridge Opportunities e ativação da BU.
+- Inclua exatamente 30 ações, uma para cada dia de 1 a 30.
+- Nem todo dia deve ser publicação; use ações de perfil, autoridade, conteúdo, networking, engajamento, pesquisa, relacionamento, ativação da BU, medição e revisão.
+- Nenhuma ação externa deve ser executada automaticamente. Quando houver relacionamento ou abordagem, indique que depende de aprovação humana.
+- Responda somente JSON válido, sem markdown.
+
+Diagnóstico atual:
+${JSON.stringify({
+  assessmentId: assessment.id,
+  profile: assessment.input,
+  authoritySellingScore: assessment.authoritySellingScore,
+  buAffinityScore: assessment.buAffinityScore,
+  activationPotentialScore: assessment.activationPotentialScore,
+  dimensions: assessment.dimensions.map((dimension) => ({ label: dimension.label, score: dimension.score, rationale: dimension.rationale })),
+  gaps: assessment.gaps,
+  strengths: assessment.strengths,
+  bridgeOpportunities: assessment.bridgeOpportunities,
+  personalAuthorityPlan: assessment.personalAuthorityPlan,
+  businessUnitActivationPlan: assessment.businessUnitActivationPlan,
+  buDna: guidance,
+  historicalAssessments: history.slice(0, 5).map((item) => ({ createdAt: item.createdAt, authoritySellingScore: item.authoritySellingScore ?? item.overallScore, buAffinityScore: item.buAffinityScore })),
+}, null, 2)}
+
+Formato exigido:
+{
+  "title": "",
+  "summary": "",
+  "actions": [
+    {
+      "day": 1,
+      "type": "PROFILE | AUTHORITY | CONTENT | NETWORKING | ENGAGEMENT | RESEARCH | RELATIONSHIP | BU_ACTIVATION | MEASUREMENT | REVIEW",
+      "scope": "PERSONAL | BUSINESS_UNIT",
+      "title": "",
+      "action": "",
+      "reason": "",
+      "expectedImpact": "Baixo | Médio | Alto",
+      "effort": "Baixo | Médio | Alto",
+      "estimatedTime": "",
+      "authorityTerritory": "",
+      "businessUnit": "",
+      "persona": "",
+      "relatedModule": ""
+    }
+  ]
 }
 `;
 }
