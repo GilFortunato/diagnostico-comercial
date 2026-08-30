@@ -98,7 +98,7 @@ export const decisionMakerActorAudit: DecisionMakerActorAudit[] = [
     actorId: "provider:gemini",
     coverage: "Classifica papel provável, aderência, acessibilidade, confiança e próxima melhor ação.",
     limitation: "Não pode inventar pessoas, contatos, relações nem evidências.",
-    costRisk: "Controlado por credencial do usuário; depende de prompt estruturado e entrada verificada.",
+    costRisk: "Controlado pela credencial global da plataforma; depende de prompt estruturado e entrada verificada.",
     recommendation: "reuse_now",
   },
   {

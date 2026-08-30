@@ -1,35 +1,51 @@
 import "server-only";
 import type { AuthorityInput, ResearchSource } from "@/lib/diagnostics/authority";
 import { apifyActors } from "@/lib/connectors/apifyActors";
+import { classifyValidationFailure } from "@/lib/connectors/credentialValidation";
+import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
+import { recordPlatformCredentialFailure } from "@/lib/connectors/platformCredentialService";
+import { resolveApifyCredential } from "@/lib/connectors/platformCredentials";
 
 type LinkedInExtraction = {
   input: Partial<AuthorityInput>;
   source: ResearchSource;
 };
 
-export async function extractLinkedInProfileWithApify(profileUrl: string, token: string): Promise<LinkedInExtraction | null> {
-  const actorId = encodeActorId(process.env.APIFY_LINKEDIN_ACTOR_ID ?? apifyActors.linkedinProfile.actorId);
-  const endpoint = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${token}&timeout=120`;
+export async function extractLinkedInProfileWithApify(profileUrl: string): Promise<LinkedInExtraction | null> {
+  const resolution = await resolveApifyCredential();
+  if (!resolution.available || !resolution.credential) throw new PlatformResourceUnavailableError();
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      urls: [profileUrl],
-      queries: [profileUrl],
-    }),
-  });
+  const actorId = encodeActorId(process.env.APIFY_LINKEDIN_ACTOR_ID ?? apifyActors.linkedinProfile.actorId);
+  const endpoint = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?timeout=120`;
+
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resolution.credential}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ urls: [profileUrl], queries: [profileUrl] }),
+      signal: AbortSignal.timeout(130_000),
+    });
+  } catch {
+    throw new PlatformResourceUnavailableError();
+  }
 
   if (!response.ok) {
-    throw new Error("A fonte conectada não retornou dados para este perfil.");
+    await recordPlatformCredentialFailure("apify", resolution.source, classifyValidationFailure(response.status));
+    throw new PlatformResourceUnavailableError();
   }
 
   const items = (await response.json()) as unknown[];
   const profile = items.find((item) => item && typeof item === "object") as Record<string, unknown> | undefined;
   if (!profile) return null;
+  const input = mapProfileToAuthorityInput(profile);
+  if (!hasExtractedProfileEvidence(input)) return null;
 
   return {
-    input: mapProfileToAuthorityInput(profile),
+    input,
     source: {
       title: "Perfil público do LinkedIn",
       url: profileUrl,
@@ -95,4 +111,9 @@ function valueToText(value: unknown): string {
 
 function joinSections(values: string[]) {
   return values.filter(Boolean).join("\n\n");
+}
+
+function hasExtractedProfileEvidence(input: Partial<AuthorityInput>) {
+  return [input.headline, input.about, input.themes, input.proofPoints, input.recentContent, input.interactionSignals]
+    .some((value) => typeof value === "string" && value.trim().length >= 3);
 }

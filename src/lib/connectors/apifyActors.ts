@@ -34,7 +34,7 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
   linkedinCompanyEmployees: {
     key: "linkedinCompanyEmployees",
     actorId: "harvestapi/linkedin-company-employees",
-    label: "Funcionarios da empresa",
+    label: "Funcionários da empresa",
     purpose: "Mapear colaboradores e filtrar possíveis decisores para a etapa de rapport.",
     stage: "decision_maker",
     defaultInput: {

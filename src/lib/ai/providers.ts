@@ -16,7 +16,7 @@ export const aiProviders: AiProvider[] = [
     key: "gemini",
     label: "Google Gemini",
     capabilities: ["ai.generateStructuredAssessment", "ai.generateContentPlan", "ai.summarizeSources", "ai.extractEvidence"],
-    requiresUserCredential: true,
+    requiresUserCredential: false,
   },
 ];
 

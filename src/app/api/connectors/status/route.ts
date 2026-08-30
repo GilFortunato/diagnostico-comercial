@@ -1,33 +1,36 @@
 import { NextResponse } from "next/server";
-import { apifyActors } from "@/lib/connectors/apifyActors";
-import { getUserApifyToken } from "@/lib/connectors/userApifyCredential";
+import { hasAdminSession } from "@/lib/auth/adminRequest";
+import { toPublicCredentialStatus } from "@/lib/connectors/platformCredentialCore";
+import { resolveApifyCredential, resolveGeminiCredential } from "@/lib/connectors/platformCredentials";
 
 export async function GET() {
+  const [gemini, apify, isAdmin] = await Promise.all([
+    resolveGeminiCredential(),
+    resolveApifyCredential(),
+    hasAdminSession(),
+  ]);
   const googleConnected = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-  const apifyConnected = Boolean(await getUserApifyToken());
-  const geminiConnected = Boolean(process.env.GEMINI_API_KEY);
-  const linkedinOauthReady = Boolean(process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET);
 
   return NextResponse.json({
     google: {
       connected: googleConnected,
-      label: googleConnected ? "Login com Google disponível" : "Login com Google pendente",
+      label: googleConnected ? "Acesso com Google disponível" : "Acesso com Google indisponível",
     },
-    gemini: {
-      connected: geminiConnected,
-      label: geminiConnected ? "Inteligência Gemini disponível" : "Inteligência Gemini indisponível",
-      mode: geminiConnected ? "platform-free-tier" : "missing-platform-credential",
+    intelligence: {
+      available: gemini.available,
+      label: gemini.available ? "Inteligência disponível" : "Inteligência temporariamente indisponível",
     },
-    linkedin: {
-      connected: apifyConnected || linkedinOauthReady,
-      label: apifyConnected ? "LinkedIn disponível por fonte pública" : linkedinOauthReady ? "LinkedIn pronto para autorização" : "Fonte do LinkedIn pendente",
-      mode: apifyConnected ? "apify-public-profile" : linkedinOauthReady ? "oauth" : "missing-user-credential",
+    publicSources: {
+      available: apify.available,
+      label: apify.available ? "Fontes públicas disponíveis" : "Fontes públicas temporariamente indisponíveis",
     },
-    apify: {
-      connected: apifyConnected,
-      label: apifyConnected ? "Fontes públicas conectadas" : "Conectar fontes públicas",
-      actorId: process.env.APIFY_LINKEDIN_ACTOR_ID ?? apifyActors.linkedinProfile.actorId,
-      actors: Object.values(apifyActors),
-    },
+    ...(isAdmin
+      ? {
+          admin: {
+            gemini: toPublicCredentialStatus(gemini),
+            apify: toPublicCredentialStatus(apify),
+          },
+        }
+      : {}),
   });
 }

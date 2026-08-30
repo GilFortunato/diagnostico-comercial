@@ -1,6 +1,6 @@
 import { createAuthorityAssessment, type AuthorityAssessment, type AuthorityInput, type ResearchSource } from "@/lib/diagnostics/authority";
 import { createStructuredAuthorityThirtyDayPlan, normalizeAuthorityThirtyDayPlan, type AuthorityPlanContext, type AuthorityThirtyDayPlan } from "@/lib/diagnostics/authorityPlan";
-import { resolveProviderForCapability } from "@/lib/ai/providers";
+import { generateGeminiJson } from "@/lib/ai/geminiClient";
 import { ptBrEditorialInstruction, reviewPortugueseCopy, reviewPortugueseList, silentEditorialReviewInstruction } from "@/lib/copy/editorial";
 
 type GeminiAuthorityPayload = {
@@ -15,109 +15,43 @@ type GeminiAuthorityPayload = {
 
 type GeminiAuthorityPlanPayload = Partial<AuthorityThirtyDayPlan>;
 
-const geminiModel = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
-
 export async function createAuthorityAssessmentWithProvider(input: AuthorityInput, extraSources: ResearchSource[] = []): Promise<AuthorityAssessment> {
-  const baseline = createAuthorityAssessment(input, extraSources);
-  const provider = resolveProviderForCapability("ai.generateStructuredAssessment", process.env.DEFAULT_AI_PROVIDER);
-  const geminiApiKey = process.env.GEMINI_API_KEY;
-
-  if (provider?.key !== "gemini" || !geminiApiKey) {
-    throw new Error("A inteligência da Share AI está indisponível. O diagnóstico especialista não foi executado.");
-  }
-
-  const geminiResult = await generateWithGemini(input, geminiApiKey);
-  const authoritySellingScore = normalizeScore(geminiResult.overallScore, baseline.authoritySellingScore);
+  const methodology = createAuthorityAssessment(input, extraSources);
+  const geminiResult = await generateGeminiJson<GeminiAuthorityPayload>({
+    capability: "ai.generateStructuredAssessment",
+    prompt: buildPrompt(input),
+  });
+  const authoritySellingScore = normalizeScore(geminiResult.overallScore, methodology.authoritySellingScore);
 
   return {
-    ...baseline,
+    ...methodology,
     adapter: "gemini",
     overallScore: authoritySellingScore,
     authoritySellingScore,
-    summary: reviewPortugueseCopy(geminiResult.summary ?? baseline.summary),
-    strengths: reviewPortugueseList(selectList(geminiResult.strengths, baseline.strengths)),
-    gaps: reviewPortugueseList(selectList(geminiResult.gaps, baseline.gaps)),
-    risks: reviewPortugueseList(selectList(geminiResult.risks, baseline.risks)),
-    opportunities: reviewPortugueseList(selectList(geminiResult.opportunities, baseline.opportunities)),
-    recommendations: reviewPortugueseList(selectList(geminiResult.recommendations, baseline.recommendations)),
+    summary: reviewPortugueseCopy(geminiResult.summary ?? methodology.summary),
+    strengths: reviewPortugueseList(selectList(geminiResult.strengths, methodology.strengths)),
+    gaps: reviewPortugueseList(selectList(geminiResult.gaps, methodology.gaps)),
+    risks: reviewPortugueseList(selectList(geminiResult.risks, methodology.risks)),
+    opportunities: reviewPortugueseList(selectList(geminiResult.opportunities, methodology.opportunities)),
+    recommendations: reviewPortugueseList(selectList(geminiResult.recommendations, methodology.recommendations)),
     sources: [
-      ...baseline.sources.filter((source) => source.title !== "Avaliação local"),
+      ...methodology.sources.filter((source) => source.title !== "Avaliação local"),
       {
-        title: "Análise estruturada pela IA",
+        title: "Análise estruturada pela inteligência da Share AI",
         confidence: "inference",
-        notes: "A IA interpretou somente informações fornecidas, públicas ou autorizadas para esta análise.",
+        notes: "A análise considerou somente os dados informados ou recuperados pelas fontes autorizadas.",
       },
     ],
   };
 }
 
 export async function createAuthorityThirtyDayPlanWithProvider(context: AuthorityPlanContext): Promise<AuthorityThirtyDayPlan> {
-  const normalizationBaseline = createStructuredAuthorityThirtyDayPlan(context);
-  const provider = resolveProviderForCapability("ai.generateContentPlan", process.env.DEFAULT_AI_PROVIDER);
-  const geminiApiKey = process.env.GEMINI_API_KEY;
-
-  if (provider?.key !== "gemini" || !geminiApiKey) {
-    throw new Error("A inteligência da Share AI está indisponível. Nenhum plano especialista foi gerado.");
-  }
-
-  const generated = await generatePlanWithGemini(context, geminiApiKey);
-  return normalizeAuthorityThirtyDayPlan(generated, normalizationBaseline);
-}
-
-async function generateWithGemini(input: AuthorityInput, apiKey: string): Promise<GeminiAuthorityPayload> {
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      generationConfig: {
-        temperature: 0.35,
-        response_mime_type: "application/json",
-      },
-      contents: [{ role: "user", parts: [{ text: buildPrompt(input) }] }],
-    }),
+  const structure = createStructuredAuthorityThirtyDayPlan(context);
+  const generated = await generateGeminiJson<GeminiAuthorityPlanPayload>({
+    capability: "ai.generateContentPlan",
+    prompt: buildPlanPrompt(context),
   });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(`Gemini indisponível (${response.status}). ${body.slice(0, 240)}`.trim());
-  }
-
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (typeof text !== "string") {
-    throw new Error("O Gemini não retornou conteúdo para o diagnóstico.");
-  }
-
-  return JSON.parse(text) as GeminiAuthorityPayload;
-}
-
-async function generatePlanWithGemini(context: AuthorityPlanContext, apiKey: string): Promise<GeminiAuthorityPlanPayload> {
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`;
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      generationConfig: {
-        temperature: 0.35,
-        response_mime_type: "application/json",
-      },
-      contents: [{ role: "user", parts: [{ text: buildPlanPrompt(context) }] }],
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(`Gemini indisponível (${response.status}). ${body.slice(0, 240)}`.trim());
-  }
-
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (typeof text !== "string") {
-    throw new Error("O Gemini não retornou conteúdo para o plano.");
-  }
-
-  return JSON.parse(text) as GeminiAuthorityPlanPayload;
+  return normalizeAuthorityThirtyDayPlan(generated, structure);
 }
 
 function buildPrompt(input: AuthorityInput) {

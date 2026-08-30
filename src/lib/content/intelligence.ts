@@ -6,6 +6,16 @@ export const contentOpportunitySchema = z.object({
   businessUnitId: z.string().min(1),
   objective: z.string().min(8),
   personalVoice: z.string().optional().default(""),
+  authorityContext: z.object({
+    summary: z.string().optional().default(""),
+    strengths: z.array(z.string()).optional().default([]),
+    gaps: z.array(z.string()).optional().default([]),
+    opportunities: z.array(z.string()).optional().default([]),
+    recommendations: z.array(z.string()).optional().default([]),
+    authoritySellingScore: z.number().min(0).max(100).optional(),
+    buAffinityScore: z.number().min(0).max(100).optional(),
+    activationPotentialScore: z.number().min(0).max(100).optional(),
+  }).optional(),
 });
 
 export type ContentOpportunityInput = z.infer<typeof contentOpportunitySchema>;

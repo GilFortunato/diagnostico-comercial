@@ -37,7 +37,7 @@ export type AuthorityThirtyDayPlan = {
   assessmentId: string;
   title: string;
   summary: string;
-  generation: "gemini" | "structured-fallback";
+  generation: "gemini" | "structured-skeleton";
   generationNote: string;
   actions: AuthorityPlanAction[];
 };
@@ -84,8 +84,8 @@ export function createStructuredAuthorityThirtyDayPlan({ assessment, history = [
     assessmentId: assessment.id,
     title: `Plano estratégico de 30 dias para ${assessment.input.businessUnitName}`,
     summary: reviewPortugueseCopy(`Plano diário para fortalecer ${weakest?.label.toLocaleLowerCase("pt-BR") ?? "a autoridade comercial"} e ativar ${territory} com ${persona}.${historySignal}`),
-    generation: "structured-fallback",
-    generationNote: "Plano organizado a partir do diagnóstico estruturado. Conecte Gemini para receber também a priorização especializada da IA.",
+    generation: "structured-skeleton",
+    generationNote: "Estrutura interna usada para validar a resposta especializada antes da entrega.",
     actions,
   };
 }

@@ -3,6 +3,8 @@ import test from "node:test";
 import { compareAuthorityAssessments, createAuthorityAssessment } from "@/lib/diagnostics/authority";
 import { createStructuredAuthorityThirtyDayPlan } from "@/lib/diagnostics/authorityPlan";
 import { buildBusinessUnitGuidance, defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
+import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
+import { executeAuthorityPipeline, InsufficientPublicProfileDataError } from "@/lib/diagnostics/authorityPipeline";
 
 const defaultBu = getBusinessUnitDna(defaultBusinessUnitId);
 const baseInput = {
@@ -90,7 +92,7 @@ test("thirty-day plan creates a daily plan without reusing legacy weekly cards",
   assert.deepEqual(plan.actions.map((action) => action.day), Array.from({ length: 30 }, (_, index) => index + 1));
   assert.ok(plan.actions.some((action) => action.scope === "PERSONAL"));
   assert.ok(plan.actions.some((action) => action.scope === "BUSINESS_UNIT"));
-  assert.equal(plan.generation, "structured-fallback");
+  assert.equal(plan.generation, "structured-skeleton");
 });
 
 test("thirty-day plan changes its BU activation actions when the BU changes", () => {
@@ -106,4 +108,62 @@ test("thirty-day plan changes its BU activation actions when the BU changes", ()
   });
 
   assert.notEqual(prosperPlan.actions.find((action) => action.scope === "BUSINESS_UNIT")?.businessUnit, sharePlan.actions.find((action) => action.scope === "BUSINESS_UNIT")?.businessUnit);
+});
+
+test("authority pipeline collects public data before requesting specialist analysis", async () => {
+  const calls: string[] = [];
+  const result = await executeAuthorityPipeline(baseInput, {
+    extractProfile: async (profileUrl) => {
+      calls.push(`collect:${profileUrl}`);
+      return {
+        input: { headline: "Headline pública confirmada" },
+        source: { title: "Perfil público", confidence: "likely", notes: "Dados públicos recuperados pela fonte autorizada." },
+      };
+    },
+    createAssessment: async (input, sources) => {
+      calls.push(`analyze:${input.headline}:${sources.length}`);
+      return createAuthorityAssessment(input, sources);
+    },
+  });
+
+  assert.deepEqual(calls, [
+    `collect:${baseInput.profileUrl}`,
+    "analyze:Headline pública confirmada:1",
+  ]);
+  assert.equal(result.input.headline, "Headline pública confirmada");
+});
+
+test("authority pipeline does not analyze an empty public-profile result as evidence", async () => {
+  const inputWithoutManualEvidence = {
+    ...baseInput,
+    headline: "",
+    about: "",
+    themes: "",
+    proofPoints: "",
+    recentContent: "",
+    interactionSignals: "",
+  };
+  let analysisCalls = 0;
+
+  await assert.rejects(
+    executeAuthorityPipeline(inputWithoutManualEvidence, {
+      extractProfile: async () => null,
+      createAssessment: async (input, sources) => {
+        analysisCalls += 1;
+        return createAuthorityAssessment(input, sources);
+      },
+    }),
+    InsufficientPublicProfileDataError,
+  );
+  assert.equal(analysisCalls, 0);
+});
+
+test("authority pipeline can use manual evidence when public sources are unavailable", async () => {
+  const result = await executeAuthorityPipeline(baseInput, {
+    extractProfile: async () => { throw new PlatformResourceUnavailableError(); },
+    createAssessment: async (input, sources) => createAuthorityAssessment(input, sources),
+  });
+
+  assert.equal(result.input.headline, baseInput.headline);
+  assert.equal(result.sources.some((source) => source.title === "Perfil público"), false);
 });

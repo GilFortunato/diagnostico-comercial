@@ -1,5 +1,6 @@
+import "server-only";
 import type { AuthorityAssessment, ConfidenceLevel } from "@/lib/diagnostics/authority";
-import { resolveProviderForCapability } from "@/lib/ai/providers";
+import { generateGeminiJson } from "@/lib/ai/geminiClient";
 import { ptBrEditorialInstruction, reviewPortugueseCopy, reviewPortugueseList, silentEditorialReviewInstruction } from "@/lib/copy/editorial";
 
 export type AuthorityContentBrief = {
@@ -29,42 +30,16 @@ export type AuthorityContentDraft = {
   generationMode: "gemini";
 };
 
-const geminiModel = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
-
 export async function createAuthorityContentDraftWithProvider(
   assessment: AuthorityAssessment,
   brief: AuthorityContentBrief,
 ): Promise<AuthorityContentDraft> {
-  const provider = resolveProviderForCapability("ai.generateContentPlan", process.env.DEFAULT_AI_PROVIDER);
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (provider?.key !== "gemini" || !apiKey) {
-    throw new Error("A inteligência de conteúdo está indisponível. Conecte o Gemini da plataforma antes de gerar conteúdo.");
-  }
-
-  const generated = await callGemini(assessment, brief, apiKey);
-  return normalizeDraft(generated, assessment, brief);
-}
-
-async function callGemini(assessment: AuthorityAssessment, brief: AuthorityContentBrief, apiKey: string) {
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      generationConfig: { temperature: 0.7, response_mime_type: "application/json" },
-      contents: [{ role: "user", parts: [{ text: buildPrompt(assessment, brief) }] }],
-    }),
+  const generated = await generateGeminiJson<Partial<AuthorityContentDraft>>({
+    capability: "ai.generateContentPlan",
+    prompt: buildPrompt(assessment, brief),
+    temperature: 0.7,
   });
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(`Gemini indisponível (${response.status}). ${body.slice(0, 240)}`.trim());
-  }
-
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (typeof text !== "string") throw new Error("O Gemini não retornou uma análise editorial válida.");
-  return JSON.parse(text) as Partial<AuthorityContentDraft>;
+  return normalizeDraft(generated, assessment, brief);
 }
 
 function contextOf(assessment: AuthorityAssessment, brief: AuthorityContentBrief) {

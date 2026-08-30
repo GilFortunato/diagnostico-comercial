@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { authorityInputSchema } from "@/lib/diagnostics/authority";
 import { createAuthorityAssessmentWithProvider } from "@/lib/ai/authorityProvider";
 import { extractLinkedInProfileWithApify } from "@/lib/connectors/apifyLinkedIn";
-import { getUserApifyToken } from "@/lib/connectors/userApifyCredential";
+import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
+import { executeAuthorityPipeline, InsufficientPublicProfileDataError } from "@/lib/diagnostics/authorityPipeline";
 import { saveAuthorityAssessment } from "@/lib/repositories/authorityRepository";
 
 export async function POST(request: Request) {
@@ -14,25 +15,19 @@ export async function POST(request: Request) {
   }
 
   try {
-    const apifyToken = await getUserApifyToken();
-    const linkedinExtraction = parsed.data.profileUrl && apifyToken ? await extractLinkedInProfileWithApify(parsed.data.profileUrl, apifyToken) : null;
-    const enrichedInput = {
-      ...parsed.data,
-      headline: linkedinExtraction?.input.headline || parsed.data.headline,
-      about: linkedinExtraction?.input.about || parsed.data.about,
-      themes: linkedinExtraction?.input.themes || parsed.data.themes,
-      proofPoints: linkedinExtraction?.input.proofPoints || parsed.data.proofPoints,
-      recentContent: linkedinExtraction?.input.recentContent || parsed.data.recentContent,
-      interactionSignals: linkedinExtraction?.input.interactionSignals || parsed.data.interactionSignals,
-    };
-    const assessment = await createAuthorityAssessmentWithProvider(enrichedInput, linkedinExtraction ? [linkedinExtraction.source] : []);
+    const assessment = await executeAuthorityPipeline(parsed.data, {
+      extractProfile: extractLinkedInProfileWithApify,
+      createAssessment: createAuthorityAssessmentWithProvider,
+    });
     await saveAuthorityAssessment(assessment);
     return NextResponse.json(assessment);
   } catch (error) {
-    console.error("authority-diagnostic-provider-error", error);
-    return NextResponse.json(
-      { error: "A inteligência da Share AI está indisponível no momento. Para preservar a qualidade, nenhum diagnóstico especialista foi gerado. Tente novamente em alguns minutos." },
-      { status: 503 },
-    );
+    if (error instanceof PlatformResourceUnavailableError) {
+      return NextResponse.json({ error: error.publicMessage }, { status: 503 });
+    }
+    if (error instanceof InsufficientPublicProfileDataError) {
+      return NextResponse.json({ error: "Não foi possível recuperar dados públicos suficientes deste perfil. Revise a URL ou tente novamente mais tarde." }, { status: 422 });
+    }
+    return NextResponse.json({ error: "Não foi possível concluir o diagnóstico. Tente novamente mais tarde." }, { status: 500 });
   }
 }

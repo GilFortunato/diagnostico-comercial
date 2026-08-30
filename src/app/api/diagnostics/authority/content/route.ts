@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { AuthorityAssessment } from "@/lib/diagnostics/authority";
 import { createAuthorityContentDraftWithProvider, type AuthorityContentBrief } from "@/lib/ai/authorityContentProvider";
+import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
 
 const requestSchema = z.object({
   assessment: z.object({
@@ -36,10 +37,12 @@ export async function POST(request: Request) {
     const draft = await createAuthorityContentDraftWithProvider(assessment, brief);
     return NextResponse.json(draft);
   } catch (error) {
-    console.error("authority-content-provider-error", error);
+    if (error instanceof PlatformResourceUnavailableError) {
+      return NextResponse.json({ error: error.publicMessage }, { status: 503 });
+    }
     return NextResponse.json(
-      { error: "A inteligência de conteúdo está indisponível no momento. Para preservar a qualidade, nenhum rascunho foi gerado. Tente novamente em alguns minutos." },
-      { status: 503 },
+      { error: "Não foi possível gerar um rascunho com qualidade suficiente. Tente novamente." },
+      { status: 500 },
     );
   }
 }

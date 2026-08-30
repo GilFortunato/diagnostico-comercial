@@ -9,3 +9,7 @@ export function isAdminEmail(email?: string | null, value?: string) {
   if (!email) return false;
   return parseAdminEmails(value).includes(email.toLocaleLowerCase("pt-BR"));
 }
+
+export function adminAccessStatus(email?: string | null, value?: string) {
+  return isAdminEmail(email, value) ? 200 : 403;
+}

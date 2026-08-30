@@ -13,9 +13,8 @@ import { confidenceLabel } from "@/lib/copy/editorial";
 
 type ConnectorStatus = {
   google: { connected: boolean; label: string };
-  gemini: { connected: boolean; label: string; mode: string };
-  linkedin: { connected: boolean; label: string; mode: string };
-  apify: { connected: boolean; label: string };
+  intelligence: { available: boolean; label: string };
+  publicSources: { available: boolean; label: string };
 };
 
 export function DecisionMakerMapExperience() {
@@ -38,8 +37,8 @@ export function DecisionMakerMapExperience() {
   const selectedBu = useMemo(() => demoBusinessUnits.find((unit) => unit.id === businessUnitId) ?? demoBusinessUnits[0], [businessUnitId]);
   const roleSignals = selectedBu.icps[0]?.buyingAreas ?? selectedBu.positioning.recommendedTerms.slice(0, 6);
   const titleSignals = selectedBu.icps[0]?.decisionMakers ?? selectedBu.personas.map((persona) => persona.name);
-  const readyCount = status ? [status.google.connected, status.gemini.connected, status.apify.connected].filter(Boolean).length : 0;
-  const isReady = Boolean(status?.google.connected && status.gemini.connected && status.apify.connected);
+  const readyCount = status ? [status.google.connected, status.intelligence.available, status.publicSources.available].filter(Boolean).length : 0;
+  const isReady = Boolean(status?.google.connected && status.intelligence.available && status.publicSources.available);
   const canSearch = company.trim().length >= 2 && objective.trim().length >= 10;
 
   async function runSearch() {
@@ -103,9 +102,9 @@ export function DecisionMakerMapExperience() {
               <div>
                 <p className="text-sm font-semibold text-white/74">Conexão para pesquisa</p>
                 <div className="mt-4 grid gap-2">
-                  <ConnectorMini label="Google" connected={Boolean(status?.google.connected)} />
-                  <ConnectorMini label="Gemini" connected={Boolean(status?.gemini.connected)} />
-                  <ConnectorMini label="Apify" connected={Boolean(status?.apify.connected)} />
+                  <ConnectorMini label="Acesso" connected={Boolean(status?.google.connected)} />
+                  <ConnectorMini label="Análise especialista" connected={Boolean(status?.intelligence.available)} />
+                  <ConnectorMini label="Fontes públicas" connected={Boolean(status?.publicSources.available)} />
                 </div>
               </div>
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
@@ -124,7 +123,7 @@ export function DecisionMakerMapExperience() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className="inline-flex items-center gap-2 text-sm font-semibold">
                 <ShieldAlert className="h-4 w-4" />
-                Pesquisa real ainda depende de Gemini e Apify conectados.
+                A pesquisa real depende da disponibilidade da análise especialista e das fontes públicas.
               </span>
               <Link href="/conectores" className="rounded-md border border-amber-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-amber-100">
                 Ativar conectores
@@ -183,7 +182,7 @@ export function DecisionMakerMapExperience() {
             </button>
             {error ? <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{error}</p> : null}
             <p className="mt-3 text-xs leading-5 text-zinc-500">
-              Sem Apify/Gemini conectados, a busca gera um mapa inicial pelo DNA da BU. A pesquisa externa real entra quando os conectores estiverem ligados.
+              O mapa inicial usa o DNA da BU e identifica claramente inferências. Dados externos só aparecem quando as fontes públicas estão disponíveis.
             </p>
           </aside>
 

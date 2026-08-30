@@ -1,5 +1,5 @@
-import { ConnectorsPageExperience } from "@/components/connectors/ConnectorsPageExperience";
+import { redirect } from "next/navigation";
 
 export default function ConnectorSetupPage() {
-  return <ConnectorsPageExperience mode="setup" />;
+  redirect("/conectores");
 }
