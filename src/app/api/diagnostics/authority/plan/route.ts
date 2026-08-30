@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { AuthorityAssessment } from "@/lib/diagnostics/authority";
 import { createAuthorityThirtyDayPlanWithProvider } from "@/lib/ai/authorityProvider";
 import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
+import { getSessionUser } from "@/lib/auth/sessionUser";
+import { saveAuthorityPlanSnapshot } from "@/lib/repositories/authorityRepository";
 
 const requestSchema = z.object({
   assessment: z.object({
@@ -23,6 +25,11 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "Entre com sua conta Google para gerar o plano." }, { status: 401 });
+  }
+
   const parsed = requestSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Não foi possível gerar o plano com os dados do diagnóstico." }, { status: 400 });
@@ -32,6 +39,10 @@ export async function POST(request: Request) {
   const history = parsed.data.history.filter(isAssessment) as AuthorityAssessment[];
   try {
     const plan = await createAuthorityThirtyDayPlanWithProvider({ assessment, history });
+    const saved = await saveAuthorityPlanSnapshot(assessment.id, user.id, plan);
+    if (!saved) {
+      return NextResponse.json({ error: "O diagnóstico não pertence a esta conta ou não está mais disponível." }, { status: 403 });
+    }
     return NextResponse.json(plan);
   } catch (error) {
     if (error instanceof PlatformResourceUnavailableError) {

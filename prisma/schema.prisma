@@ -317,6 +317,20 @@ model PlatformCredential {
   updatedAt       DateTime                   @updatedAt
 }
 
+model AuthorityAssessmentSnapshot {
+  id             String   @id
+  ownerId        String
+  ownerEmail     String?
+  subjectName    String?
+  businessUnitId String
+  assessment     Json
+  plan30Days     Json?
+  createdAt      DateTime
+  updatedAt      DateTime @updatedAt
+
+  @@index([ownerId, businessUnitId, createdAt])
+}
+
 model Skill {
   id                   String       @id @default(cuid())
   organizationId       String

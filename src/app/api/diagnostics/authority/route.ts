@@ -5,8 +5,14 @@ import { extractLinkedInProfileWithApify } from "@/lib/connectors/apifyLinkedIn"
 import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
 import { executeAuthorityPipeline, InsufficientPublicProfileDataError } from "@/lib/diagnostics/authorityPipeline";
 import { saveAuthorityAssessment } from "@/lib/repositories/authorityRepository";
+import { getSessionUser } from "@/lib/auth/sessionUser";
 
 export async function POST(request: Request) {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "Entre com sua conta Google para gerar o diagnóstico." }, { status: 401 });
+  }
+
   const body = await request.json();
   const parsed = authorityInputSchema.safeParse(body);
 
@@ -19,7 +25,7 @@ export async function POST(request: Request) {
       extractProfile: extractLinkedInProfileWithApify,
       createAssessment: createAuthorityAssessmentWithProvider,
     });
-    await saveAuthorityAssessment(assessment);
+    await saveAuthorityAssessment(assessment, user);
     return NextResponse.json(assessment);
   } catch (error) {
     if (error instanceof PlatformResourceUnavailableError) {

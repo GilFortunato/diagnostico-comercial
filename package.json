@@ -2,6 +2,7 @@
   "name": "share-ai",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,13 +10,14 @@
     "start": "next start",
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/test/*.test.ts"
+    "test": "tsx --test src/test/*.test.ts src/test/*.test.mts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
     "@neondatabase/serverless": "^1.1.0",
     "@prisma/adapter-neon": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "@react-pdf/renderer": "4.9.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.34.0",
     "next": "16.3.3",

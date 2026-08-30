@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Activity, ArrowRight, BarChart3, CalendarDays, CheckCircle2, History, Link, RefreshCw, Sparkles, Target } from "lucide-react";
+import { Activity, ArrowRight, BarChart3, CheckCircle2, Download, History, Link, RefreshCw, Sparkles, Target } from "lucide-react";
 import type { AuthorityAssessment } from "@/lib/diagnostics/authority";
 import type { AuthorityThirtyDayPlan } from "@/lib/diagnostics/authorityPlan";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
@@ -74,6 +74,7 @@ export function AuthorityDiagnostic() {
   const [isPending, startTransition] = useTransition();
   const [isPlanPending, startPlanTransition] = useTransition();
   const [isContentPending, startContentTransition] = useTransition();
+  const [isReportPending, setIsReportPending] = useState(false);
   const [contentComposerOpen, setContentComposerOpen] = useState(false);
   const [contentDraft, setContentDraft] = useState<ContentDraft | null>(null);
   const [contentBrief, setContentBrief] = useState<ContentBrief>({ objective: "Autoridade", bridgeId: undefined, humanContext: "", strategy: "Recomendada" });
@@ -238,6 +239,34 @@ export function AuthorityDiagnostic() {
     });
   }
 
+  async function downloadReport() {
+    if (!assessment || isReportPending) return;
+    setFormError(null);
+    setIsReportPending(true);
+
+    try {
+      const response = await fetch(`/api/diagnostics/authority/${encodeURIComponent(assessment.id)}/report`, { cache: "no-store" });
+      if (!response.ok) {
+        const result = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(result?.error || "Não foi possível preparar o relatório.");
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = reportFilename(response.headers.get("Content-Disposition"));
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Não foi possível preparar o relatório.");
+    } finally {
+      setIsReportPending(false);
+    }
+  }
+
   return (
     <section className="grid gap-6 lg:grid-cols-[340px_1fr]">
       <aside className="share-card space-y-4 rounded-lg p-5">
@@ -256,7 +285,7 @@ export function AuthorityDiagnostic() {
         </div>
 
         {assessment ? <div className="grid gap-6">
-          <section className="share-green-panel rounded-lg p-5 text-white"><div className="grid gap-4 lg:grid-cols-[1fr_1.5fr]"><div><p className="text-sm font-medium text-white/72">Minha autoridade</p><div className="mt-3 flex items-end gap-2"><span className="text-7xl font-semibold text-[var(--share-lime)]">{authoritySellingScore}</span><span className="pb-2 text-white/70">/100</span></div><p className="mt-4 text-sm leading-6 text-white/78">{assessment.summary}</p>{assessment.input.profileUrl ? <a className="mt-4 inline-flex text-sm font-semibold text-[var(--share-lime)] underline-offset-4 hover:underline" href={assessment.input.profileUrl} target="_blank" rel="noreferrer">Perfil avaliado no LinkedIn</a> : null}</div><div className="grid gap-3 sm:grid-cols-3"><MetricCard label="Autoridade pessoal" value={authoritySellingScore} /><MetricCard label={`Aderência à ${selectedBu.shortName}`} value={buAffinityScore} /><MetricCard label="Potencial de ativação" value={activationPotentialScore} /></div></div></section>
+          <section className="share-green-panel rounded-lg p-5 text-white"><div className="mb-5 flex justify-end"><button type="button" onClick={downloadReport} disabled={isReportPending} className="inline-flex items-center gap-2 rounded-md border border-white/25 bg-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-wait disabled:opacity-60"><Download className="h-4 w-4" />{isReportPending ? "Preparando relatório..." : "Baixar relatório executivo"}</button></div><div className="grid gap-4 lg:grid-cols-[1fr_1.5fr]"><div><p className="text-sm font-medium text-white/72">Minha autoridade</p><div className="mt-3 flex items-end gap-2"><span className="text-7xl font-semibold text-[var(--share-lime)]">{authoritySellingScore}</span><span className="pb-2 text-white/70">/100</span></div><p className="mt-4 text-sm leading-6 text-white/78">{assessment.summary}</p>{assessment.input.profileUrl ? <a className="mt-4 inline-flex text-sm font-semibold text-[var(--share-lime)] underline-offset-4 hover:underline" href={assessment.input.profileUrl} target="_blank" rel="noreferrer">Perfil avaliado no LinkedIn</a> : null}</div><div className="grid gap-3 sm:grid-cols-3"><MetricCard label="Autoridade pessoal" value={authoritySellingScore} /><MetricCard label={`Aderência à ${selectedBu.shortName}`} value={buAffinityScore} /><MetricCard label="Potencial de ativação" value={activationPotentialScore} /></div></div></section>
 
           <section className="share-card rounded-lg p-5"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">O que encontramos no seu perfil</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Evidências que sustentam o diagnóstico</h3><p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Mostramos o dado encontrado, a leitura estratégica e uma sugestão de melhoria. A BU funciona como lente comercial, sem substituir sua marca pessoal.</p><div className="mt-4 grid gap-3 lg:grid-cols-2">{(assessment.profileReview ?? []).map((item) => { const insight = buildProfileReviewInsight(item, assessment, selectedBu.shortName); return <article key={item.field} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-zinc-950">{item.label}</p><p className="mt-1 text-xs text-zinc-500">Fonte: {item.sourceLabel} · {confidenceLabel(item.confidence)}</p></div><button type="button" onClick={() => openProfileImprovement(item)} className="text-sm font-semibold text-[var(--share-green-900)] underline-offset-4 hover:underline">Sugestão de melhoria</button></div><div className="mt-4"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Encontramos</p><p className="mt-1 line-clamp-4 text-sm leading-6 text-zinc-700">{item.value || insight.emptyState}</p></div><div className="mt-4 border-t border-[var(--share-line)] pt-4"><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Leitura do especialista</p><p className="mt-2 text-sm leading-6 text-zinc-700">{insight.analysis}</p><div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold"><span className="rounded-full bg-white px-2.5 py-1 text-[var(--share-green-900)]">Autoridade pessoal: {insight.authoritySignal}</span><span className="rounded-full bg-white px-2.5 py-1 text-[var(--share-green-900)]">Aderência à {selectedBu.shortName}: {insight.buSignal}</span></div></div></article>; })}</div>{actionPanel?.eyebrow === "Sugestão de melhoria" ? <ActionPanelCard panel={actionPanel} /> : null}</section>
 
@@ -328,3 +357,4 @@ function historyStorageKey(businessUnitId: string) { return `share-ai:authority-
 function loadLocalHistory(businessUnitId: string): AuthorityAssessment[] { if (typeof window === "undefined") return []; try { const raw = window.localStorage.getItem(historyStorageKey(businessUnitId)); if (!raw) return []; const parsed = JSON.parse(raw) as AuthorityAssessment[]; return Array.isArray(parsed) ? parsed : []; } catch { return []; } }
 function saveLocalHistory(assessment: AuthorityAssessment) { if (typeof window === "undefined") return; const current = loadLocalHistory(assessment.input.businessUnitId); const next = mergeHistory([assessment], current).slice(0, historyLimit); window.localStorage.setItem(historyStorageKey(assessment.input.businessUnitId), JSON.stringify(next)); }
 function mergeHistory(...groups: AuthorityAssessment[][]) { const byId = new Map<string, AuthorityAssessment>(); groups.flat().forEach((item) => byId.set(item.id, item)); return [...byId.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)); }
+function reportFilename(contentDisposition: string | null) { const match = contentDisposition?.match(/filename="([^"]+)"/i); return match?.[1] || "ShareAI_Diagnostico_LinkedIn.pdf"; }
