@@ -302,10 +302,10 @@ export function createAuthorityAssessment(input: AuthorityInput, extraSources: R
       horizon: "Sprint semanal",
       actions: [
         { day: "Dia 1", focus: "Inteligência", action: `Pesquisar conversas e dores recentes de ${primaryIcp}.`, module: "Mapa de decisores" },
-        { day: "Dia 2", focus: "Conteúdo", action: `Escolher uma ponte e criar uma publicação consultiva sobre ${primaryTerritory}.`, module: "Inteligência de conteúdo" },
-        { day: "Dia 3", focus: "Networking", action: "Comentar em três conversas relevantes antes de abordar novos contatos.", module: "Social selling" },
+        { day: "Dia 2", focus: "Conversa", action: `Entrar em uma discussão de ${primaryIcp} sobre ${primaryTerritory} com uma contribuição específica, sem pitch.`, module: "Social selling" },
+        { day: "Dia 3", focus: "Decisão", action: "Avaliar se existe tese própria para publicar; se não existir, priorizar respostas, perfil ou nenhuma publicação.", module: "Inteligência de conteúdo" },
         { day: "Dia 4", focus: "Hunting", action: "Selecionar decisores com maior aderência ao contexto da BU.", module: "Mapa de decisores" },
-        { day: "Dia 5", focus: "Rapport", action: "Preparar abordagem individual com base na ponte mais natural.", module: "Rapport" },
+        { day: "Dia 5", focus: "Rapport", action: "Preparar uma ponte individual com evidência e só abordar quando já houver contexto suficiente.", module: "Rapport" },
       ],
     },
     sources: buildSources(parsed, extraSources),

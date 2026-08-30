@@ -54,7 +54,7 @@ export function ContentIntelligenceExperience() {
           <p className="mt-8 text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Inteligência editorial</p>
           <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight md:text-5xl">Sobre o que vale a pena falar agora?</h1>
           <p className="mt-5 max-w-3xl text-base leading-7 text-white/74">
-            A Share AI combina DNA editorial da BU, voz pessoal, objetivo, ICP e STEPPS para sugerir uma pauta com fonte e confiança.
+            A Share AI combina marca pessoal, DNA editorial da BU, objetivo, ICP, STEPPS e momento de Social Selling para decidir como entrar na conversa.
           </p>
         </section>
 
@@ -87,12 +87,18 @@ export function ContentIntelligenceExperience() {
                   <Badge label={`BU: ${result.businessUnitName}`} />
                   <Badge label={`Território: ${result.territory}`} />
                   <Badge label={`Aderência: ${result.adherenceScore}%`} />
+                  <Badge label={`Potencial de circulação: ${result.circulationPotential.level}`} />
                 </div>
               </div>
 
               <div className="grid gap-4 lg:grid-cols-2">
+                <ResultCard title="Leitura e tese" items={[result.expertReading, `Tese: ${result.thesis}`, `Gancho escolhido: ${result.hook.selected}`, `Entrega: ${result.hook.payoff}`]} />
+                <ResultCard title="Rascunho para revisão humana" items={result.draft} />
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
                 <ResultCard title="Por que escrevemos assim?" items={result.stepps.map((item) => `${item.key}: ${item.reason}`)} />
-                <ResultCard title="Rascunho aprovado por humano" items={result.draft} />
+                <ResultCard title="Circulação e território" items={[result.interestGraph.professionalSignal, result.interestGraph.outOfNetworkAction, result.circulationPotential.rationale, result.circulationPotential.disclaimer]} />
               </div>
 
               <div className="share-card rounded-lg p-5">

@@ -2,6 +2,8 @@ import { createAuthorityAssessment, type AuthorityAssessment, type AuthorityInpu
 import { createStructuredAuthorityThirtyDayPlan, normalizeAuthorityThirtyDayPlan, type AuthorityPlanContext, type AuthorityThirtyDayPlan } from "@/lib/diagnostics/authorityPlan";
 import { generateGeminiJson } from "@/lib/ai/geminiClient";
 import { ptBrEditorialInstruction, reviewPortugueseCopy, reviewPortugueseList, silentEditorialReviewInstruction } from "@/lib/copy/editorial";
+import { buildLinkedInAlgorithmPromptSection } from "@/lib/social-selling/linkedinAlgorithmStrategy";
+import { buildSocialSellingPromptSection } from "@/lib/social-selling/socialSellingStrategy";
 
 type GeminiAuthorityPayload = {
   overallScore?: number;
@@ -59,6 +61,8 @@ function buildPrompt(input: AuthorityInput) {
 Você é um avaliador sênior de autoridade comercial B2B. Avalie o perfil com foco em percepção de cliente, reputação e potencial de gerar conversa comercial.
 ${ptBrEditorialInstruction}
 ${silentEditorialReviewInstruction}
+${buildLinkedInAlgorithmPromptSection()}
+${buildSocialSellingPromptSection()}
 
 Regras:
 - Não invente dados externos.
@@ -108,8 +112,12 @@ Regras obrigatórias:
 - Separe ações PESSOAIS de ações de BUSINESS_UNIT. Marca pessoal não é a mesma coisa que ativação da BU.
 - Priorize lacunas reais: prova, posicionamento, conteúdo, networking, aderência à BU e pontes comerciais.
 - Se Authority Selling estiver alto e BU Affinity estiver baixo, priorize Bridge Opportunities e ativação da BU.
-- Inclua exatamente 30 ações, uma para cada dia de 1 a 30.
-- Nem todo dia deve ser publicação; use ações de perfil, autoridade, conteúdo, networking, engajamento, pesquisa, relacionamento, ativação da BU, medição e revisão.
+- Inclua exatamente 30 ações, uma para cada dia de 1 a 30, como um Social Selling Sprint personalizado.
+- O plano deve poder recomendar explicitamente não publicar, comentar, responder, melhorar o perfil, pesquisar, construir relacionamento, preparar rapport, abordar ou analisar.
+- Não exija publicação diária. Qualidade, contexto e relacionamento têm precedência sobre frequência artificial.
+- A abordagem só pode aparecer depois de ações de descoberta, relevância, interação, familiaridade e rapport. Se não houver contexto suficiente, recomende não abordar ainda.
+- Cada ação deve explicar por que agora, território, persona, objetivo estratégico e sinal real a observar.
+- Não invente métricas do LinkedIn. Quando não houver dado disponível, use recomendação qualitativa e diga o que a pessoa poderá observar.
 - A Share AI não publica nem envia mensagens. Quando sugerir conteúdo ou abordagem, trate como atividade que a pessoa executará fora da plataforma.
 - Responda somente JSON válido, sem markdown.
 
@@ -138,10 +146,14 @@ Formato exigido:
     {
       "day": 1,
       "type": "PROFILE | AUTHORITY | CONTENT | NETWORKING | ENGAGEMENT | RESEARCH | RELATIONSHIP | BU_ACTIVATION | MEASUREMENT | REVIEW",
+      "socialSellingAction": "POST | COMMENT | REPLY | PROFILE | INTELLIGENCE | RAPPORT | OUTREACH | RELATIONSHIP | ANALYSIS | NO_PUBLISH",
+      "strategicObjective": "AUTHORITY | EXPANSION | RELATIONSHIP | CONVERSION | BU_ACTIVATION",
       "scope": "PERSONAL | BUSINESS_UNIT",
       "title": "",
       "action": "",
       "reason": "",
+      "whyNow": "",
+      "signalToObserve": "",
       "expectedImpact": "Baixo | Médio | Alto",
       "effort": "Baixo | Médio | Alto",
       "estimatedTime": "",

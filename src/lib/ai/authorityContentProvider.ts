@@ -2,6 +2,16 @@ import "server-only";
 import type { AuthorityAssessment, ConfidenceLevel } from "@/lib/diagnostics/authority";
 import { generateGeminiJson } from "@/lib/ai/geminiClient";
 import { ptBrEditorialInstruction, reviewPortugueseCopy, reviewPortugueseList, silentEditorialReviewInstruction } from "@/lib/copy/editorial";
+import {
+  assertAuthorityContentQuality,
+  buildContentQualityPromptSection,
+  buildHookVariants,
+  type CirculationPotential,
+  type HookIntelligence,
+  type HookType,
+} from "@/lib/social-selling/contentQualityGate";
+import { buildInterestGraphStrategy, buildLinkedInAlgorithmPromptSection, type InterestGraphStrategy } from "@/lib/social-selling/linkedinAlgorithmStrategy";
+import { buildNextBestSocialSellingAction, buildSocialSellingPromptSection, buildStrategicComment, type SocialSellingAction } from "@/lib/social-selling/socialSellingStrategy";
 
 export type AuthorityContentBrief = {
   objective: "Autoridade" | "Conversa" | "Provocação" | "Valor prático" | "Storytelling" | "Relacionamento" | "Ativação da BU";
@@ -26,6 +36,18 @@ export type AuthorityContentDraft = {
   whyThisWorks: string[];
   naturality: "Alta" | "Média" | "Baixa";
   naturalityRationale: string;
+  strategicDecision: {
+    action: SocialSellingAction;
+    label: string;
+    rationale: string;
+  };
+  hook: HookIntelligence;
+  interestGraph: InterestGraphStrategy;
+  commentStrategy: {
+    where: string;
+    suggestion: string;
+  };
+  circulationPotential: CirculationPotential;
   trend?: { label: string; source?: string; confidence: ConfidenceLevel } | null;
   generationMode: "gemini";
 };
@@ -60,6 +82,9 @@ Você é um conselho editorial sênior composto por especialistas em Personal Br
 Sua tarefa NÃO é simplesmente reescrever o contexto do usuário. Primeiro interprete, encontre uma ideia intelectualmente relevante e só então escreva.
 ${ptBrEditorialInstruction}
 ${silentEditorialReviewInstruction}
+${buildLinkedInAlgorithmPromptSection()}
+${buildSocialSellingPromptSection()}
+${buildContentQualityPromptSection()}
 
 PIPELINE OBRIGATÓRIO — execute silenciosamente nesta ordem:
 1. LEITURA DO ESPECIALISTA: identifique o que há de realmente interessante, contraditório, útil ou revelador no contexto da pessoa.
@@ -67,7 +92,8 @@ PIPELINE OBRIGATÓRIO — execute silenciosamente nesta ordem:
 3. PONTE: valide se a tese cria conexão legítima entre a marca pessoal, a persona e a BU sem virar propaganda.
 4. ESTRATÉGIA: selecione os pilares STEPPS que realmente ajudam; não tente usar todos.
 5. ESCRITA: produza o post completo em voz natural, com repertório e especificidade.
-6. CRÍTICA: avalie o próprio texto com as perguntas abaixo e reescreva antes de responder se qualquer resposta importante for negativa.
+6. GANCHO: compare três caminhos, selecione um e confirme qual entrega do corpo paga a promessa criada.
+7. CRÍTICA: avalie o próprio texto com as perguntas abaixo e reescreva antes de responder se qualquer resposta importante for negativa.
 
 QUALITY GATE OBRIGATÓRIO:
 - O texto trouxe uma ideia nova ou apenas parafraseou o usuário?
@@ -132,6 +158,20 @@ FORMATO EXATO
   "territory":"",
   "bridge":"",
   "timing":"Evergreen ou Contextual",
+  "hook": {
+    "variants": [
+      { "type": "CONTRADICTION_TENSION", "text": "" },
+      { "type": "SPECIFIC_PERSONAL", "text": "" },
+      { "type": "INSIGHT_QUESTION", "text": "" }
+    ],
+    "selectedType": "CONTRADICTION_TENSION | SPECIFIC_PERSONAL | INSIGHT_QUESTION",
+    "selected": "primeira frase exata do post",
+    "payoff": "como o corpo entrega a expectativa do gancho"
+  },
+  "circulationPotential": {
+    "level": "Baixo ou Médio ou Alto",
+    "rationale": "leitura qualitativa baseada em especificidade, utilidade, identificação, tensão, história e conversa"
+  },
   "primaryStepps":[""],
   "secondaryStepps":[""],
   "whyThisWorks":["3 a 5 razões específicas"],
@@ -164,6 +204,19 @@ function normalizeDraft(value: Partial<AuthorityContentDraft>, assessment: Autho
   }
 
   const naturality = value.naturality === "Alta" || value.naturality === "Média" || value.naturality === "Baixa" ? value.naturality : "Média";
+  const reviewedPost = reviewPortugueseCopy(post);
+  const reviewedThesis = reviewPortugueseCopy(thesis);
+  const primaryStepps = filteredStepps(value.primaryStepps);
+  const hook = normalizeHook(value.hook, reviewedThesis, brief.humanContext, territory);
+  const decision = buildNextBestSocialSellingAction(assessment);
+  const interestGraph = buildInterestGraphStrategy({
+    personalThemes: assessment.input.themes.split(",").map((item) => item.trim()).filter(Boolean),
+    territory,
+    persona,
+    businessUnit: assessment.input.businessUnitName,
+  });
+  const comment = buildStrategicComment({ territory, persona, thesis: reviewedThesis });
+  const circulationPotential = normalizeCirculationPotential(value.circulationPotential);
   const visibleExpertReading = [
     `Leitura do especialista: ${expertReading}`,
     `Tese recomendada: ${thesis}`,
@@ -171,24 +224,78 @@ function normalizeDraft(value: Partial<AuthorityContentDraft>, assessment: Autho
     ...strategicReasons,
   ].slice(0, 10);
 
-  return {
+  const draft: AuthorityContentDraft = {
     title: reviewPortugueseCopy(optionalString(value.title) || `Ponte editorial: ${bridge?.title ?? territory}`),
-    post: reviewPortugueseCopy(post),
+    post: reviewedPost,
     expertReading: reviewPortugueseCopy(expertReading),
-    thesis: reviewPortugueseCopy(thesis),
+    thesis: reviewedThesis,
     expertTips: reviewPortugueseList(expertTips),
     objective: reviewPortugueseCopy(optionalString(value.objective) || brief.objective),
     persona: reviewPortugueseCopy(optionalString(value.persona) || persona),
     territory: reviewPortugueseCopy(optionalString(value.territory) || territory),
     bridge: reviewPortugueseCopy(optionalString(value.bridge) || bridge?.title || `${territory} + ${persona}`),
     timing: reviewPortugueseCopy(optionalString(value.timing) || "Contextual"),
-    primaryStepps: filteredStepps(value.primaryStepps),
+    primaryStepps,
     secondaryStepps: filteredStepps(value.secondaryStepps),
     whyThisWorks: reviewPortugueseList(visibleExpertReading),
     naturality,
     naturalityRationale: reviewPortugueseCopy(requiredString(value.naturalityRationale, "justificativa de naturalidade")),
+    strategicDecision: {
+      action: decision.action,
+      label: decision.title,
+      rationale: decision.reason,
+    },
+    hook,
+    interestGraph,
+    commentStrategy: {
+      where: comment.where,
+      suggestion: comment.comment,
+    },
+    circulationPotential,
     trend: null,
     generationMode: "gemini",
+  };
+
+  assertAuthorityContentQuality({
+    post: draft.post,
+    expertReading: draft.expertReading,
+    thesis: draft.thesis,
+    hook: draft.hook,
+    humanContext: brief.humanContext,
+    businessUnitName: assessment.input.businessUnitName,
+    primaryStepps: draft.primaryStepps,
+  });
+
+  return draft;
+}
+
+function normalizeHook(value: unknown, thesis: string, humanContext: string | undefined, territory: string): HookIntelligence {
+  const fallback = buildHookVariants({ humanContext, thesis, territory });
+  const candidate = value && typeof value === "object" ? value as Partial<HookIntelligence> : {};
+  const allowedTypes = new Set<HookType>(["CONTRADICTION_TENSION", "SPECIFIC_PERSONAL", "INSIGHT_QUESTION"]);
+  const variants = Array.isArray(candidate.variants)
+    ? candidate.variants
+      .filter((item) => item && allowedTypes.has(item.type) && typeof item.text === "string" && item.text.trim().length >= 12)
+      .map((item) => ({ type: item.type, text: reviewPortugueseCopy(item.text.trim()) }))
+      .slice(0, 3)
+    : [];
+  const completeVariants = variants.length === 3 ? variants : fallback;
+  const selectedType = allowedTypes.has(candidate.selectedType as HookType) ? candidate.selectedType as HookType : completeVariants[0].type;
+  return {
+    variants: completeVariants,
+    selectedType,
+    selected: reviewPortugueseCopy(requiredString(candidate.selected, "gancho selecionado")),
+    payoff: reviewPortugueseCopy(requiredString(candidate.payoff, "entrega do gancho")),
+  };
+}
+
+function normalizeCirculationPotential(value: unknown): CirculationPotential {
+  const candidate = value && typeof value === "object" ? value as Partial<CirculationPotential> : {};
+  const level = candidate.level === "Baixo" || candidate.level === "Médio" || candidate.level === "Alto" ? candidate.level : "Médio";
+  return {
+    level,
+    rationale: reviewPortugueseCopy(requiredString(candidate.rationale, "justificativa do potencial de circulação")),
+    disclaimer: "Avaliação editorial qualitativa; não é previsão de alcance ou viralidade.",
   };
 }
 
