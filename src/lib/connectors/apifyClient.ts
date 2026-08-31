@@ -48,8 +48,10 @@ function configuredActorId(actorKey: ApifyActorKey) {
   const variables: Partial<Record<ApifyActorKey, string | undefined>> = {
     linkedinProfile: process.env.APIFY_LINKEDIN_ACTOR_ID,
     linkedinProfilePosts: process.env.APIFY_LINKEDIN_POSTS_ACTOR_ID,
+    linkedinProfileSearch: process.env.APIFY_LINKEDIN_PROFILE_SEARCH_ACTOR_ID,
     linkedinCompanyEmployees: process.env.APIFY_LINKEDIN_EMPLOYEES_ACTOR_ID,
     linkedinCompanyDetails: process.env.APIFY_LINKEDIN_COMPANY_ACTOR_ID,
+    linkedinCompanySearch: process.env.APIFY_LINKEDIN_COMPANY_SEARCH_ACTOR_ID,
     leadDiscovery: process.env.APIFY_LEAD_DISCOVERY_ACTOR_ID,
   };
   return variables[actorKey]?.trim() || undefined;
