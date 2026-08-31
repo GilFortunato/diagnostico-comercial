@@ -34,5 +34,7 @@ function sanitize(value: unknown, seen: WeakSet<object>): unknown {
 }
 
 export function stripUnsupportedText(value: string) {
-  return value.replace(/\u0000/g, "").replace(/[\uD800-\uDFFF]/g, "");
+  return value
+    .replace(/\u0000/g, "")
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
 }
