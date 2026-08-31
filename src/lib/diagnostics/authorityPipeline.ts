@@ -1,7 +1,13 @@
 import type { AuthorityAssessment, AuthorityInput, ResearchSource } from "@/lib/diagnostics/authority";
+import type { NormalizedLinkedInSnapshot } from "@/lib/connectors/linkedinNormalization";
 import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
 
-type LinkedInExtraction = { input: Partial<AuthorityInput>; source: ResearchSource } | null;
+type LinkedInExtraction = {
+  input: Partial<AuthorityInput>;
+  sources?: ResearchSource[];
+  source?: ResearchSource;
+  snapshot?: NormalizedLinkedInSnapshot;
+} | null;
 
 export class InsufficientPublicProfileDataError extends Error {
   constructor() {
@@ -38,8 +44,10 @@ export async function executeAuthorityPipeline(
     proofPoints: extraction?.input.proofPoints || input.proofPoints,
     recentContent: extraction?.input.recentContent || input.recentContent,
     interactionSignals: extraction?.input.interactionSignals || input.interactionSignals,
+    linkedinSnapshot: extraction?.snapshot ?? input.linkedinSnapshot,
   };
-  return dependencies.createAssessment(enrichedInput, extraction ? [extraction.source] : []);
+  const sources = extraction?.sources ?? (extraction?.source ? [extraction.source] : []);
+  return dependencies.createAssessment(enrichedInput, sources);
 }
 
 function hasManualProfileEvidence(input: AuthorityInput) {

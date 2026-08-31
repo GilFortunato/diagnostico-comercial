@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { Document, Font, Link as PdfLink, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
-import type { BridgeOpportunity, ThemeAlignment } from "@/lib/diagnostics/authority";
+import { Document, Font, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import type { BridgeOpportunity } from "@/lib/diagnostics/authority";
 import type { AuthorityPlanAction } from "@/lib/diagnostics/authorityPlan";
+import { confidenceLabel } from "@/lib/copy/editorial";
 import { buildAuthorityReportViewModel, type AuthorityReportSnapshot } from "@/lib/reports/authorityReportModel";
 
 const colors = {
@@ -73,6 +74,11 @@ const styles = StyleSheet.create({
   signal: { width: "48%", marginTop: 14, paddingTop: 9, borderTopWidth: 2, borderTopColor: colors.lime },
   signalLabel: { fontSize: 7.5, fontFamily: "Helvetica-Bold", letterSpacing: 0.8, color: colors.green800 },
   signalValue: { marginTop: 5, fontSize: 9.5, lineHeight: 1.45 },
+  readingGrid: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start" },
+  readingCard: { width: "48%", marginTop: 10, padding: 10, backgroundColor: colors.paper, borderTopWidth: 2, borderTopColor: colors.lime },
+  readingLabel: { fontSize: 7, fontFamily: "Helvetica-Bold", letterSpacing: 0.7, color: colors.green800 },
+  readingTitle: { marginTop: 4, fontSize: 10, fontFamily: "Helvetica-Bold", color: colors.green950 },
+  readingText: { marginTop: 4, fontSize: 8, lineHeight: 1.4, color: colors.muted },
   profileRows: { marginTop: 5, flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start" },
   profileRow: { width: "48%", paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: colors.line },
   profileLabel: { fontSize: 6.5, fontFamily: "Helvetica-Bold", letterSpacing: 0.5, color: colors.muted },
@@ -99,7 +105,7 @@ const styles = StyleSheet.create({
   alignmentReading: { width: "43%", paddingLeft: 10, color: colors.muted },
   tableHeader: { fontSize: 7, fontFamily: "Helvetica-Bold", letterSpacing: 0.5, color: colors.muted },
   bridgeGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start" },
-  bridge: { width: "48%", marginTop: 13, paddingTop: 9, borderTopWidth: 2, borderTopColor: colors.lime },
+  bridge: { width: "100%", marginTop: 10, paddingTop: 8, borderTopWidth: 2, borderTopColor: colors.lime },
   bridgeNumber: { fontSize: 7, fontFamily: "Helvetica-Bold", color: colors.green800 },
   bridgeTitle: { marginTop: 3, fontSize: 10.5, lineHeight: 1.2, fontFamily: "Helvetica-Bold", color: colors.green950 },
   bridgeDescription: { marginTop: 4, fontSize: 7.8, lineHeight: 1.35, color: colors.muted },
@@ -107,6 +113,11 @@ const styles = StyleSheet.create({
   bridgeColumn: { width: "48%" },
   detailLabel: { marginTop: 4, fontSize: 6.2, fontFamily: "Helvetica-Bold", letterSpacing: 0.5, color: colors.green800 },
   detailValue: { marginTop: 1, fontSize: 7.2, lineHeight: 1.3 },
+  agendaItem: { marginTop: 12, paddingBottom: 9, borderBottomWidth: 1, borderBottomColor: colors.line },
+  agendaHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
+  agendaTitle: { width: "76%", fontSize: 10, fontFamily: "Helvetica-Bold", color: colors.green950 },
+  agendaPriority: { fontSize: 7, fontFamily: "Helvetica-Bold", color: colors.green800 },
+  agendaText: { marginTop: 4, fontSize: 8.2, lineHeight: 1.4, color: colors.muted },
   numberedItem: { marginTop: 8, flexDirection: "row" },
   itemNumber: { width: 27, fontSize: 13, fontFamily: "Helvetica-Bold", color: colors.green700 },
   itemBody: { flex: 1, paddingTop: 1, fontSize: 8.7, lineHeight: 1.4 },
@@ -141,15 +152,6 @@ const styles = StyleSheet.create({
 export function AuthorityReportDocument({ snapshot }: { snapshot: AuthorityReportSnapshot }) {
   const report = buildAuthorityReportViewModel(snapshot);
   const dateLabel = formatDate(report.createdAt);
-  const profileRows = [
-    report.subjectName ? { label: "Nome", value: report.subjectName } : null,
-    report.headline ? { label: "Headline", value: report.headline } : null,
-    report.profileUrl ? { label: "LinkedIn", value: report.profileUrl, link: true } : null,
-    { label: "Business Unit", value: report.businessUnitName },
-    report.objective ? { label: "Objetivo comercial", value: report.objective } : null,
-    { label: "Data da análise", value: dateLabel },
-  ].filter((row): row is { label: string; value: string; link?: boolean } => Boolean(row));
-
   return (
     <Document title={`Relatório executivo de autoridade - ${report.subjectName ?? report.businessUnitName}`} author="Share AI" subject="Diagnóstico de posicionamento e autoridade no LinkedIn">
       <Page size="A4" style={styles.cover}>
@@ -163,6 +165,7 @@ export function AuthorityReportDocument({ snapshot }: { snapshot: AuthorityRepor
         <View style={styles.coverMeta}>
           {report.subjectName ? <CoverMeta label="PERFIL ANALISADO" value={report.subjectName} /> : null}
           <CoverMeta label="BUSINESS UNIT" value={report.businessUnitName} />
+          {report.objective ? <CoverMeta label="OBJETIVO COMERCIAL" value={report.objective} /> : null}
           <CoverMeta label="DATA" value={dateLabel} />
         </View>
         <View style={styles.coverFooter}>
@@ -183,6 +186,7 @@ export function AuthorityReportDocument({ snapshot }: { snapshot: AuthorityRepor
             <SecondaryScore label="POTENCIAL DE ATIVAÇÃO" value={report.scores.activationPotential} />
           </View>
         </View>
+        {report.classification ? <View style={styles.actionBand}><Text style={styles.actionEyebrow}>CLASSIFICAÇÃO</Text><Text style={styles.actionTitle}>{report.classification}</Text>{report.scoreCoverage !== null ? <Text style={styles.actionText}>Cobertura de evidências: {report.scoreCoverage}%</Text> : null}</View> : null}
         {report.executiveOpinion ? (
           <Section title="Parecer executivo">
             <Text style={styles.paragraph}>{report.executiveOpinion}</Text>
@@ -200,16 +204,6 @@ export function AuthorityReportDocument({ snapshot }: { snapshot: AuthorityRepor
             </View>
           </Section>
         ) : null}
-        <Section title="Perfil analisado">
-          <View style={styles.profileRows}>
-            {profileRows.map((row) => (
-              <View key={row.label} style={styles.profileRow} wrap={false}>
-                <Text style={styles.profileLabel}>{row.label.toUpperCase()}</Text>
-                {row.link ? <PdfLink src={row.value} style={styles.profileValue}>{row.value}</PdfLink> : <Text style={styles.profileValue}>{row.value}</Text>}
-              </View>
-            ))}
-          </View>
-        </Section>
       </ReportPage>
 
       {report.dimensions.length ? (
@@ -219,9 +213,9 @@ export function AuthorityReportDocument({ snapshot }: { snapshot: AuthorityRepor
               <View key={dimension.label} style={styles.dimension} wrap={false}>
                 <View style={styles.dimensionTop}>
                   <Text style={styles.dimensionLabel}>{dimension.label}</Text>
-                  <Text style={styles.dimensionScore}>{dimension.score}/100</Text>
+                  <Text style={styles.dimensionScore}>{dimension.score === null ? "Não avaliado" : `${dimension.score}/100`}</Text>
                 </View>
-                <View style={styles.scoreTrack}><View style={[styles.scoreFill, { width: `${dimension.score}%` }]} /></View>
+                {dimension.score !== null ? <View style={styles.scoreTrack}><View style={[styles.scoreFill, { width: `${dimension.score}%` }]} /></View> : null}
                 <Text style={styles.dimensionRationale}>{dimension.rationale}</Text>
                 {dimension.evidence[0] ? <Text style={styles.dimensionEvidence}>Evidência principal: {dimension.evidence[0]}</Text> : null}
               </View>
@@ -234,7 +228,7 @@ export function AuthorityReportDocument({ snapshot }: { snapshot: AuthorityRepor
         <ReportPage title="O que encontramos no perfil" intro="Evidências disponíveis no momento da análise. Ausência de dados é apresentada como não avaliada, nunca como avaliação negativa.">
           <View style={styles.section}>
             {report.profileEvidence.map((item) => (
-              <View key={item.label} style={styles.evidenceItem} wrap={false}>
+              <View key={item.label} style={styles.evidenceItem} minPresenceAhead={55}>
                 <View style={styles.evidenceHeading}>
                   <Text style={styles.evidenceLabel}>{item.label}</Text>
                   <Text style={styles.evidenceStatus}>{item.status.toUpperCase()}</Text>
@@ -248,9 +242,15 @@ export function AuthorityReportDocument({ snapshot }: { snapshot: AuthorityRepor
         </ReportPage>
       ) : null}
 
-      {report.themeAlignment.length || report.bridges.length ? (
+      {report.authorityPerception || report.authorityMap.length ? (
+        <ReportPage title="Mapa de autoridade" intro="Uma leitura dos territórios sustentados pela trajetória e da distância entre autoridade construída e percebida.">
+          {report.authorityPerception ? <Section title="Autoridade construída × percebida"><View style={styles.readingGrid}><ReadingCard compact label="Autoridade construída" title={report.authorityPerception.builtLevel} text={report.authorityPerception.builtAuthority} /><ReadingCard compact label="Autoridade percebida" title={report.authorityPerception.perceivedLevel} text={report.authorityPerception.perceivedAuthority} /><ReadingCard compact label="Gap de expressão" title="Prioridade" text={report.authorityPerception.expressionGap} /></View></Section> : null}
+          {report.authorityMap.length ? <Section title="Territórios de autoridade">{report.authorityMap.slice(0, 4).map((item) => <View key={item.territory} style={styles.agendaItem}><View style={styles.agendaHeading}><Text style={styles.agendaTitle}>{item.territory}</Text><Text style={styles.agendaPriority}>FORÇA {item.currentStrength.toUpperCase()}</Text></View><Text style={styles.agendaText}>{item.evidence[0] ?? "Dados insuficientes para confirmar este território."}</Text><Text style={styles.sourceMeta}>Confiança: {confidenceLabel(item.credibility)} · Visibilidade: {item.publicVisibility} · Potencial: {item.potential}</Text></View>)}</Section> : null}
+        </ReportPage>
+      ) : null}
+
+      {report.bridges.length ? (
         <ReportPage title={`Você × ${report.businessUnitName}`} intro="A conexão com a Business Unit é tratada como contexto comercial, sem substituir a autoridade pessoal.">
-          {report.themeAlignment.length ? <ThemeAlignmentTable items={report.themeAlignment} /> : null}
           {report.bridges.length ? (
             <Section title="Pontes de autoridade">
               <View style={styles.bridgeGrid}>
@@ -261,35 +261,26 @@ export function AuthorityReportDocument({ snapshot }: { snapshot: AuthorityRepor
         </ReportPage>
       ) : null}
 
-      {report.strengths.length || report.gaps.length || report.nextBestAction ? (
-        <ReportPage title="Prioridades de evolução" intro="Forças, lacunas e ações já registradas no diagnóstico, organizadas para decisão executiva.">
-          {report.strengths.length ? <NumberedSection title="Principais forças" items={report.strengths} /> : null}
-          {report.gaps.length ? <NumberedSection title="Oportunidades de evolução" items={report.gaps} /> : null}
+      {report.strategicGaps.length || report.authorityAgenda || report.nextBestAction ? (
+        <ReportPage title="Agenda estratégica de autoridade" intro="Prioridades organizadas por impacto em percepção, conversa comercial e proteção da inteligência profissional.">
+          {report.strategicGaps.length ? <Section title="Onde a autoridade perde força">{report.strategicGaps.slice(0, 4).map((gap) => <View key={gap.title} style={styles.agendaItem} minPresenceAhead={65}><View style={styles.agendaHeading}><Text style={styles.agendaTitle}>{gap.title}</Text><Text style={styles.agendaPriority}>{gap.priority.toUpperCase()}</Text></View><Text style={styles.agendaText}>{gap.expertReading}</Text><Text style={styles.agendaText}>Impacto comercial: {gap.commercialImpact}</Text><Text style={styles.agendaText}>Ação: {gap.recommendation}</Text></View>)}</Section> : null}
+          {report.commercialExposure.length ? <Section title="Exposição comercial">{report.commercialExposure.slice(0, 3).map((item) => <View key={`${item.classification}-${item.evidence}`} style={styles.agendaItem} minPresenceAhead={55}><View style={styles.agendaHeading}><Text style={styles.agendaTitle}>{item.evidence}</Text><Text style={styles.agendaPriority}>{item.recommendation}</Text></View><Text style={styles.agendaText}>{item.rationale}</Text></View>)}</Section> : null}
           {report.nextBestAction ? (
-            <View style={styles.actionBand} wrap={false}>
+            <View style={styles.actionBand} minPresenceAhead={80}>
               <Text style={styles.actionEyebrow}>PRÓXIMA MELHOR AÇÃO</Text>
               <Text style={styles.actionTitle}>{report.nextBestAction.priority}</Text>
               {report.nextBestAction.why ? <Text style={styles.actionText}>Por quê: {report.nextBestAction.why}</Text> : null}
               {report.nextBestAction.actions.map((action) => <Text key={action} style={styles.actionText}>• {action}</Text>)}
             </View>
           ) : null}
-          {report.recommendations.length ? <NumberedSection title="Recomendações registradas" items={report.recommendations} /> : null}
         </ReportPage>
       ) : null}
 
       {report.plan?.actions?.length ? (
-        <ReportPage title="Plano de evolução - 30 dias" intro={report.plan.summary}>
-          <View style={styles.planGrid}>
-            {groupPlanActions(report.plan.actions).map((week, index) => (
-              <View key={week.label} style={styles.week}>
-                <View style={styles.weekHeading} wrap={false}>
-                  <Text style={styles.weekTitle}>SEMANA {index + 1} · {week.label}</Text>
-                  <Text style={styles.weekRange}>{week.range}</Text>
-                </View>
-                {week.actions.map((action) => <PlanAction key={action.day} action={action} />)}
-              </View>
-            ))}
-          </View>
+        <ReportPage title="Plano estratégico - 30 dias" intro={report.plan.summary}>
+          <View style={styles.readingGrid}><ReadingCard label="Objetivo do ciclo" title="Direção" text={report.plan.objective ?? report.plan.summary} /><ReadingCard label="Estado atual" title="Ponto de partida" text={report.plan.currentState ?? "Estado registrado no diagnóstico."} /><ReadingCard label="Estado desejado" title="Evolução" text={report.plan.desiredState ?? "Autoridade mais clara e conversas comerciais com contexto."} /><ReadingCard label="Por que agora" title="Momento" text={report.plan.whyNow ?? report.plan.summary} /></View>
+          <Section title="Ciclos semanais"><View style={styles.planGrid}>{report.plan.weeks?.length ? report.plan.weeks.map((week) => <View key={week.week} style={styles.week} minPresenceAhead={65}><View style={styles.weekHeading}><Text style={styles.weekTitle}>SEMANA {week.week} · {week.title}</Text><Text style={styles.weekRange}>DIAS {week.dayRange[0]}–{week.dayRange[1]}</Text></View><Text style={styles.agendaText}>{week.objective}</Text><Text style={styles.agendaText}>{week.outcomes.join(" · ")}</Text></View>) : groupPlanActions(report.plan.actions).map((week, index) => <View key={week.label} style={styles.week}><View style={styles.weekHeading}><Text style={styles.weekTitle}>SEMANA {index + 1} · {week.label}</Text><Text style={styles.weekRange}>{week.range}</Text></View>{week.actions.slice(0, 2).map((action) => <PlanAction key={action.day} action={action} />)}</View>)}</View></Section>
+          {report.plan.indicators?.length ? <Section title="Indicadores a observar"><Text style={styles.paragraph}>{report.plan.indicators.slice(0, 4).join(" · ")}</Text></Section> : null}
         </ReportPage>
       ) : null}
 
@@ -371,6 +362,10 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   return <View style={styles.section} minPresenceAhead={60}><Text style={styles.sectionTitle}>{title.toUpperCase()}</Text>{children}</View>;
 }
 
+function ReadingCard({ label, title, text, compact = false }: { label: string; title: string; text: string; compact?: boolean }) {
+  return <View style={[styles.readingCard, compact ? { width: "31%" } : {}]} minPresenceAhead={65}><Text style={styles.readingLabel}>{label.toUpperCase()}</Text><Text style={styles.readingTitle}>{title}</Text><Text style={styles.readingText}>{text}</Text></View>;
+}
+
 function SecondaryScore({ label, value }: { label: string; value: number }) {
   return (
     <View style={styles.secondaryScore} wrap={false}>
@@ -380,46 +375,14 @@ function SecondaryScore({ label, value }: { label: string; value: number }) {
   );
 }
 
-function ThemeAlignmentTable({ items }: { items: ThemeAlignment[] }) {
-  return (
-    <Section title="Leitura de aderência">
-      <View style={styles.alignmentHeader} fixed>
-        <Text style={[styles.alignmentTheme, styles.tableHeader]}>TEMA</Text>
-        <Text style={[styles.alignmentSignal, styles.tableHeader]}>VOCÊ</Text>
-        <Text style={[styles.alignmentSignal, styles.tableHeader]}>BU</Text>
-        <Text style={[styles.alignmentScore, styles.tableHeader]}>SCORE</Text>
-        <Text style={[styles.alignmentReading, styles.tableHeader]}>LEITURA</Text>
-      </View>
-      {items.map((item) => (
-        <View key={item.theme} style={styles.alignmentRow} wrap={false}>
-          <Text style={styles.alignmentTheme}>{item.theme}</Text>
-          <Text style={styles.alignmentSignal}>{item.personSignal}</Text>
-          <Text style={styles.alignmentSignal}>{item.businessUnitSignal}</Text>
-          <Text style={styles.alignmentScore}>{item.affinity}</Text>
-          <Text style={styles.alignmentReading}>{item.gap}</Text>
-        </View>
-      ))}
-    </Section>
-  );
-}
-
 function Bridge({ bridge, index }: { bridge: BridgeOpportunity; index: number }) {
   return (
-    <View style={styles.bridge} wrap={false}>
+    <View style={styles.bridge} minPresenceAhead={95}>
       <Text style={styles.bridgeNumber}>{String(index + 1).padStart(2, "0")}</Text>
       <Text style={styles.bridgeTitle}>{bridge.title}</Text>
-      <Text style={styles.bridgeDescription}>{bridge.description}</Text>
       <View style={styles.bridgeColumns}>
-        <View style={styles.bridgeColumn}>
-          <Detail label="Sua autoridade" value={bridge.whyItWorks.personalAuthority} />
-          <Detail label="Conexão com a BU" value={bridge.whyItWorks.businessUnitConnection} />
-          <Detail label="Persona" value={bridge.whyItWorks.personaInterest} />
-        </View>
-        <View style={styles.bridgeColumn}>
-          <Detail label="Potencial" value={`${bridge.conversationPotential} · aderência pessoal ${bridge.personAffinity}/100`} />
-          <Detail label="Risco de parecer publicidade" value={`${bridge.advertisingRisk} · ${bridge.whyItWorks.risk}`} />
-          {bridge.nextActions[0] ? <Detail label="Próxima ação" value={bridge.nextActions[0]} /> : null}
-        </View>
+        <View style={styles.bridgeColumn}><Detail label="Origem da autoridade" value={bridge.whyItWorks.personalAuthority} /><Detail label="Persona" value={bridge.persona} /></View>
+        <View style={styles.bridgeColumn}><Detail label="Por que faz sentido" value={bridge.legitimacy} /><Detail label="Melhor ativação" value={bridge.bestActivation} /></View>
       </View>
     </View>
   );
@@ -427,19 +390,6 @@ function Bridge({ bridge, index }: { bridge: BridgeOpportunity; index: number })
 
 function Detail({ label, value }: { label: string; value: string }) {
   return <View><Text style={styles.detailLabel}>{label.toUpperCase()}</Text><Text style={styles.detailValue}>{value}</Text></View>;
-}
-
-function NumberedSection({ title, items }: { title: string; items: string[] }) {
-  return (
-    <Section title={title}>
-      {items.map((item, index) => (
-        <View key={`${item}-${index}`} style={styles.numberedItem} wrap={false}>
-          <Text style={styles.itemNumber}>{String(index + 1).padStart(2, "0")}</Text>
-          <Text style={styles.itemBody}>{item}</Text>
-        </View>
-      ))}
-    </Section>
-  );
 }
 
 function PlanAction({ action }: { action: AuthorityPlanAction }) {

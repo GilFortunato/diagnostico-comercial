@@ -1,9 +1,8 @@
 import "server-only";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth/options";
-import { adminAccessStatus } from "@/lib/auth/admin";
+import { isAdminEmail } from "@/lib/auth/admin";
+import { getSessionUser } from "@/lib/auth/sessionUser";
 
 export async function hasAdminSession() {
-  const session = await getServerSession(authOptions);
-  return adminAccessStatus(session?.user?.email) === 200;
+  const user = await getSessionUser();
+  return Boolean(user?.active && isAdminEmail(user.email));
 }

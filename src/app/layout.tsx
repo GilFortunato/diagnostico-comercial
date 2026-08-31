@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Share AI",
-  description: "Plataforma corporativa de inteligencia comercial e Social Selling.",
+  description: "Plataforma corporativa de inteligência comercial e Social Selling.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

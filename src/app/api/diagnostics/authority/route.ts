@@ -1,20 +1,25 @@
 import { NextResponse } from "next/server";
 import { authorityInputSchema } from "@/lib/diagnostics/authority";
 import { createAuthorityAssessmentWithProvider } from "@/lib/ai/authorityProvider";
-import { extractLinkedInProfileWithApify } from "@/lib/connectors/apifyLinkedIn";
+import { extractLinkedInAuthorityWithApify } from "@/lib/connectors/apifyLinkedIn";
 import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
 import { executeAuthorityPipeline, InsufficientPublicProfileDataError } from "@/lib/diagnostics/authorityPipeline";
 import { saveAuthorityAssessment } from "@/lib/repositories/authorityRepository";
-import { getSessionUser } from "@/lib/auth/sessionUser";
+import { authorizeModule } from "@/lib/auth/moduleRequest";
+import { getProfessionalProfile, recordAuthorityProfileSnapshot, saveProfessionalLinkedInUrl } from "@/lib/profiles/professionalProfileRepository";
 
 export async function POST(request: Request) {
-  const user = await getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: "Entre com sua conta Google para gerar o diagnóstico." }, { status: 401 });
-  }
+  const access = await authorizeModule("authority.personal");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
   const body = await request.json();
-  const parsed = authorityInputSchema.safeParse(body);
+  const savedProfile = await getProfessionalProfile(access.user.id);
+  const parsed = authorityInputSchema.safeParse({
+    ...body,
+    profileUrl: typeof body?.profileUrl === "string" && body.profileUrl.trim()
+      ? body.profileUrl.trim()
+      : savedProfile?.linkedinUrl ?? "",
+  });
 
   if (!parsed.success) {
     return NextResponse.json({ error: "Não foi possível gerar o diagnóstico com os dados informados.", issues: parsed.error.flatten() }, { status: 400 });
@@ -22,10 +27,18 @@ export async function POST(request: Request) {
 
   try {
     const assessment = await executeAuthorityPipeline(parsed.data, {
-      extractProfile: extractLinkedInProfileWithApify,
+      extractProfile: extractLinkedInAuthorityWithApify,
       createAssessment: createAuthorityAssessmentWithProvider,
     });
-    await saveAuthorityAssessment(assessment, user);
+    await saveAuthorityAssessment(assessment, access.user);
+    if (assessment.input.profileUrl) {
+      await saveProfessionalLinkedInUrl(access.user.id, assessment.input.profileUrl);
+    }
+    await recordAuthorityProfileSnapshot(
+      access.user.id,
+      assessment.input.profileUrl || null,
+      assessment.input.linkedinSnapshot ?? null,
+    );
     return NextResponse.json(assessment);
   } catch (error) {
     if (error instanceof PlatformResourceUnavailableError) {

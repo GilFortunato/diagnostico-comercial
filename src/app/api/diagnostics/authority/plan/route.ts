@@ -1,57 +1,53 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type { AuthorityAssessment } from "@/lib/diagnostics/authority";
 import { createAuthorityThirtyDayPlanWithProvider } from "@/lib/ai/authorityProvider";
+import { authorizeModule } from "@/lib/auth/moduleRequest";
 import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
-import { getSessionUser } from "@/lib/auth/sessionUser";
-import { saveAuthorityPlanSnapshot } from "@/lib/repositories/authorityRepository";
+import { createStructuredAuthorityThirtyDayPlan } from "@/lib/diagnostics/authorityPlan";
+import {
+  findOwnedAuthorityAssessmentSnapshot,
+  listAuthorityAssessments,
+  saveAuthorityPlanSnapshot,
+} from "@/lib/repositories/authorityRepository";
 
 const requestSchema = z.object({
-  assessment: z.object({
-    id: z.string().min(1),
-    input: z.object({ businessUnitId: z.string().min(1), businessUnitName: z.string().min(1) }).passthrough(),
-    overallScore: z.number(),
-    authoritySellingScore: z.number().optional(),
-    buAffinityScore: z.number().optional(),
-    activationPotentialScore: z.number().optional(),
-    dimensions: z.array(z.unknown()),
-    gaps: z.array(z.string()),
-    strengths: z.array(z.string()),
-    bridgeOpportunities: z.array(z.unknown()),
-    personalAuthorityPlan: z.unknown(),
-    businessUnitActivationPlan: z.unknown(),
-  }).passthrough(),
-  history: z.array(z.unknown()).max(20).optional().default([]),
-});
+  assessmentId: z.string().min(1).optional(),
+  assessment: z.object({ id: z.string().min(1) }).passthrough().optional(),
+}).refine((value) => Boolean(value.assessmentId || value.assessment?.id));
 
-export async function POST(request: Request) {
-  const user = await getSessionUser();
-  if (!user) {
-    return NextResponse.json({ error: "Entre com sua conta Google para gerar o plano." }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const access = await authorizeModule("authority.personal");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
-  const parsed = requestSchema.safeParse(await request.json());
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Não foi possível gerar o plano com os dados do diagnóstico." }, { status: 400 });
-  }
-
-  const assessment = parsed.data.assessment as AuthorityAssessment;
-  const history = parsed.data.history.filter(isAssessment) as AuthorityAssessment[];
-  try {
-    const plan = await createAuthorityThirtyDayPlanWithProvider({ assessment, history });
-    const saved = await saveAuthorityPlanSnapshot(assessment.id, user.id, plan);
-    if (!saved) {
-      return NextResponse.json({ error: "O diagnóstico não pertence a esta conta ou não está mais disponível." }, { status: 403 });
-    }
-    return NextResponse.json(plan);
-  } catch (error) {
-    if (error instanceof PlatformResourceUnavailableError) {
-      return NextResponse.json({ error: error.publicMessage }, { status: 503 });
-    }
-    return NextResponse.json({ error: "Não foi possível gerar o plano neste momento." }, { status: 500 });
-  }
+  const assessmentId = new URL(request.url).searchParams.get("assessmentId");
+  if (!assessmentId) return NextResponse.json({ error: "Informe o diagnóstico." }, { status: 400 });
+  const snapshot = await findOwnedAuthorityAssessmentSnapshot(assessmentId, access.user.id);
+  if (!snapshot) return NextResponse.json({ error: "Diagnóstico não encontrado." }, { status: 404 });
+  return NextResponse.json({ plan: snapshot.plan30Days });
 }
 
-function isAssessment(value: unknown): value is AuthorityAssessment {
-  return value !== null && typeof value === "object" && "id" in value && "input" in value;
+export async function POST(request: Request) {
+  const access = await authorizeModule("authority.personal");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+
+  const parsed = requestSchema.safeParse(await request.json());
+  if (!parsed.success) return NextResponse.json({ error: "Não foi possível identificar o diagnóstico." }, { status: 400 });
+
+  const assessmentId = parsed.data.assessmentId ?? parsed.data.assessment?.id;
+  const snapshot = await findOwnedAuthorityAssessmentSnapshot(assessmentId!, access.user.id);
+  if (!snapshot) return NextResponse.json({ error: "O diagnóstico não pertence a esta conta ou não está mais disponível." }, { status: 403 });
+
+  const history = await listAuthorityAssessments(snapshot.businessUnitId, access.user.id);
+  let plan;
+  try {
+    plan = await createAuthorityThirtyDayPlanWithProvider({ assessment: snapshot.assessment, history });
+  } catch (error) {
+    if (!(error instanceof PlatformResourceUnavailableError)) {
+      return NextResponse.json({ error: "Não foi possível gerar o plano neste momento." }, { status: 500 });
+    }
+    plan = createStructuredAuthorityThirtyDayPlan({ assessment: snapshot.assessment, history });
+  }
+
+  await saveAuthorityPlanSnapshot(snapshot.id, access.user.id, plan);
+  return NextResponse.json(plan);
 }

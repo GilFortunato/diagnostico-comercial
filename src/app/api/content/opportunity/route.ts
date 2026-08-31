@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { contentOpportunitySchema } from "@/lib/content/intelligence";
 import { createContentOpportunityWithProvider } from "@/lib/ai/contentOpportunityProvider";
 import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
+import { authorizeModule } from "@/lib/auth/moduleRequest";
 
 export async function POST(request: Request) {
+  const access = await authorizeModule("content.intelligence");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+
   const payload = await request.json();
   const parsed = contentOpportunitySchema.safeParse(payload);
 

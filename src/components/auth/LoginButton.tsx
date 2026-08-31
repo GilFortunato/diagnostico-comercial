@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { LogIn, LogOut, UserCircle } from "lucide-react";
 import { getProviders, signIn, signOut, useSession } from "next-auth/react";
 
-export function LoginButton({ variant = "dark" }: { variant?: "dark" | "light" }) {
+export function LoginButton({ variant = "dark", label = "Entrar com Google" }: { variant?: "dark" | "light"; label?: string }) {
   const { data: session, status } = useSession();
   const [hasGoogleProvider, setHasGoogleProvider] = useState(true);
   const isLight = variant === "light";
@@ -51,7 +51,7 @@ export function LoginButton({ variant = "dark" }: { variant?: "dark" | "light" }
       }`}
     >
       <LogIn className="h-4 w-4" />
-      {hasGoogleProvider ? "Entrar com Google" : "Login com Google indisponível"}
+      {hasGoogleProvider ? label : "Login com Google indisponível"}
     </button>
   );
 }

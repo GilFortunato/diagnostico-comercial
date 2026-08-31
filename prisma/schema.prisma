@@ -61,17 +61,46 @@ enum PublicationStatus {
 }
 
 model User {
-  id            String                    @id @default(cuid())
-  name          String?
-  email         String                    @unique
-  emailVerified DateTime?
-  image         String?
-  memberships   Membership[]
-  credentials   UserConnectorCredential[]
-  skillRuns     SkillRun[]
-  assessments   AuthorityAssessment[]
-  createdAt     DateTime                  @default(now())
-  updatedAt     DateTime                  @updatedAt
+  id                  String                    @id @default(cuid())
+  name                String?
+  email               String                    @unique
+  emailVerified       DateTime?
+  image               String?
+  active              Boolean                   @default(true)
+  lastLoginAt         DateTime?
+  professionalProfile ProfessionalProfile?
+  modulePermissions   UserModulePermission[]
+  memberships         Membership[]
+  credentials         UserConnectorCredential[]
+  skillRuns           SkillRun[]
+  assessments         AuthorityAssessment[]
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+}
+
+model ProfessionalProfile {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  linkedinUrl             String?
+  linkedinUpdatedAt       DateTime?
+  lastAuthorityAnalysisAt DateTime?
+  latestLinkedinSnapshot  Json?
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model UserModulePermission {
+  id        String   @id @default(cuid())
+  userId    String
+  moduleKey String
+  enabled   Boolean  @default(true)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, moduleKey])
+  @@index([moduleKey, enabled])
 }
 
 model Organization {
@@ -323,6 +352,9 @@ model AuthorityAssessmentSnapshot {
   ownerEmail     String?
   subjectName    String?
   businessUnitId String
+  profileUrl     String?
+  schemaVersion  Int      @default(1)
+  sourceSnapshot Json?
   assessment     Json
   plan30Days     Json?
   createdAt      DateTime

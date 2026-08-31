@@ -45,6 +45,21 @@ export type AuthorityThirtyDayPlan = {
   summary: string;
   generation: "gemini" | "structured-skeleton";
   generationNote: string;
+  objective: string;
+  currentState: string;
+  desiredState: string;
+  strategicPriorities: string[];
+  whyNow: string;
+  evidence: string[];
+  risks: string[];
+  indicators: string[];
+  weeks: Array<{
+    week: number;
+    title: string;
+    objective: string;
+    outcomes: string[];
+    dayRange: [number, number];
+  }>;
   actions: AuthorityPlanAction[];
 };
 
@@ -116,7 +131,9 @@ const sprintBlueprint: SprintBlueprint[] = [
 
 export function createStructuredAuthorityThirtyDayPlan({ assessment, history = [] }: AuthorityPlanContext): AuthorityThirtyDayPlan {
   const guidance = assessment.input.businessUnitContext ?? buildBusinessUnitGuidance(assessment.input.businessUnitId);
-  const weakest = assessment.dimensions.slice().sort((left, right) => left.score - right.score)[0];
+  const weakest = assessment.dimensions
+    .filter((item): item is typeof item & { score: number } => item.status === "evaluated" && item.score !== null)
+    .sort((left, right) => left.score - right.score)[0];
   const bridge = assessment.bridgeOpportunities[0];
   const territory = bridge?.title.split(" + ")[0] ?? guidance.territories[0] ?? assessment.input.businessUnitName;
   const persona = guidance.personas[0] ?? guidance.icps[0] ?? "decisores da BU";
@@ -143,6 +160,37 @@ export function createStructuredAuthorityThirtyDayPlan({ assessment, history = [
     summary: reviewPortugueseCopy(`O sprint fortalece ${weakest?.label.toLocaleLowerCase("pt-BR") ?? "a autoridade comercial"}, expande presença em ${territory} e constrói relacionamento com ${persona} antes de qualquer abordagem.${historySignal}`),
     generation: "structured-skeleton",
     generationNote: "Estrutura estratégica validada pela Share AI; nenhuma publicação, comentário ou abordagem é executada automaticamente.",
+    objective: `Tornar a autoridade pessoal mais visível em ${territory} e criar conversas legítimas com ${persona}, preservando a independência da marca pessoal.`,
+    currentState: `${assessment.authorityClassification}. ${assessment.authorityPerception.expressionGap}`,
+    desiredState: `Perfil com posicionamento claro, provas visíveis e presença consistente em conversas relevantes para ${persona}.`,
+    strategicPriorities: assessment.authorityAgenda.strategicPriorities
+      .concat(assessment.authorityAgenda.expressionGaps)
+      .slice(0, 4)
+      .map((item) => `${item.title}: ${item.action}`),
+    whyNow: assessment.nextBestAction.reason,
+    evidence: uniquePlanStrings([
+      ...assessment.evidencePortfolio.measurableResults,
+      ...assessment.evidencePortfolio.authorityProofs,
+      ...assessment.bridgeOpportunities.flatMap((item) => item.evidence),
+    ]).slice(0, 6),
+    risks: uniquePlanStrings([
+      ...assessment.risks,
+      ...assessment.commercialExposure
+        .filter((item) => item.recommendation === "REFORMULAR" || item.recommendation === "REDUZIR")
+        .map((item) => item.rationale),
+    ]).slice(0, 5),
+    indicators: [
+      "Clareza do posicionamento percebida nas conversas iniciadas pelo perfil",
+      "Qualidade das respostas e dos comentários recebidos",
+      "Visitas e convites relevantes observados pela própria pessoa",
+      "Conversas com as personas priorizadas que avançaram com contexto",
+    ],
+    weeks: [
+      { week: 1, title: "Fundação e clareza", objective: "Corrigir a expressão da autoridade antes de ampliar exposição.", outcomes: ["Posicionamento revisado", "Provas organizadas", "Territórios priorizados"], dayRange: [1, 7] },
+      { week: 2, title: "Autoridade pública", objective: "Entrar em conversas relevantes e publicar somente quando houver tese e evidência.", outcomes: ["Comentários substantivos", "Conteúdo com utilidade", "Sinais observáveis"], dayRange: [8, 14] },
+      { week: 3, title: "Expansão e relacionamento", objective: `Criar familiaridade com ${persona} antes de qualquer abordagem.`, outcomes: ["Rede qualificada", "Rapport contextual", "Pontes validadas"], dayRange: [15, 21] },
+      { week: 4, title: "Conversão e aprendizagem", objective: "Avançar apenas nas conversas com legitimidade e aprender com as respostas reais.", outcomes: ["Abordagens contextualizadas", "Aprendizados registrados", "Próximo ciclo definido"], dayRange: [22, 30] },
+    ],
     actions,
   };
 }
@@ -155,10 +203,31 @@ export function normalizeAuthorityThirtyDayPlan(candidate: Partial<AuthorityThir
     ...fallback,
     title: cleanText(candidate.title, fallback.title),
     summary: cleanText(candidate.summary, fallback.summary),
+    objective: cleanText(candidate.objective, fallback.objective),
+    currentState: cleanText(candidate.currentState, fallback.currentState),
+    desiredState: cleanText(candidate.desiredState, fallback.desiredState),
+    strategicPriorities: cleanStringList(candidate.strategicPriorities, fallback.strategicPriorities, 6),
+    whyNow: cleanText(candidate.whyNow, fallback.whyNow),
+    evidence: cleanStringList(candidate.evidence, fallback.evidence, 8),
+    risks: cleanStringList(candidate.risks, fallback.risks, 6),
+    indicators: cleanStringList(candidate.indicators, fallback.indicators, 8),
+    weeks: fallback.weeks,
     generation: "gemini",
     generationNote: "Sprint priorizado pela IA com base no diagnóstico, na BU, nas pontes e nas informações autorizadas.",
     actions,
   };
+}
+
+function cleanStringList(value: unknown, fallback: string[], limit: number) {
+  if (!Array.isArray(value)) return fallback;
+  const items = value
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .map((item) => reviewPortugueseCopy(item));
+  return items.length ? items.slice(0, limit) : fallback;
+}
+
+function uniquePlanStrings(values: string[]) {
+  return [...new Set(values.map((item) => item.trim()).filter(Boolean))];
 }
 
 function normalizeAction(value: unknown, fallback: AuthorityPlanAction): AuthorityPlanAction {

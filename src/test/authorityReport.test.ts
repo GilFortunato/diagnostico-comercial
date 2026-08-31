@@ -157,7 +157,20 @@ test("missing optional report fields are omitted without fabrication", () => {
   assert.equal(model.plan, null);
   assert.deepEqual(model.bridges, []);
   assert.deepEqual(model.sources, []);
-  assert.equal(model.nextBestAction, null);
+  assert.equal(model.nextBestAction?.priority, snapshot.assessment.nextBestAction.title);
+});
+
+test("technical-term filtering does not corrupt ordinary Portuguese words", () => {
+  const snapshot = reportFixture({ withPlan: false });
+  snapshot.assessment.sources = [{
+    title: "Capitais em transformação",
+    confidence: "confirmed",
+    notes: "Capitais estratégicas consideradas na análise.",
+  }];
+
+  const [source] = buildAuthorityReportViewModel(snapshot).sources;
+  assert.equal(source.title, "Capitais em transformação");
+  assert.equal(source.notes, "Capitais estratégicas consideradas na análise.");
 });
 
 test("report export modules have zero imports from AI and extraction providers", async () => {

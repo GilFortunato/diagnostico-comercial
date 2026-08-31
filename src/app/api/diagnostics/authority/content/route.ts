@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { AuthorityAssessment } from "@/lib/diagnostics/authority";
 import { createAuthorityContentDraftWithProvider, type AuthorityContentBrief } from "@/lib/ai/authorityContentProvider";
+import { authorizeModule } from "@/lib/auth/moduleRequest";
 import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
 
 const requestSchema = z.object({
@@ -26,6 +27,9 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const access = await authorizeModule("content.intelligence");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+
   const parsed = requestSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Não foi possível criar o conteúdo com os dados informados." }, { status: 400 });

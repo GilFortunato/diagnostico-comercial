@@ -4,9 +4,9 @@ import { generateGeminiJson } from "@/lib/ai/geminiClient";
 import { ptBrEditorialInstruction, reviewPortugueseCopy, reviewPortugueseList, silentEditorialReviewInstruction } from "@/lib/copy/editorial";
 import { buildLinkedInAlgorithmPromptSection } from "@/lib/social-selling/linkedinAlgorithmStrategy";
 import { buildSocialSellingPromptSection } from "@/lib/social-selling/socialSellingStrategy";
+import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
 
 type GeminiAuthorityPayload = {
-  overallScore?: number;
   summary?: string;
   strengths?: string[];
   gaps?: string[];
@@ -19,17 +19,19 @@ type GeminiAuthorityPlanPayload = Partial<AuthorityThirtyDayPlan>;
 
 export async function createAuthorityAssessmentWithProvider(input: AuthorityInput, extraSources: ResearchSource[] = []): Promise<AuthorityAssessment> {
   const methodology = createAuthorityAssessment(input, extraSources);
-  const geminiResult = await generateGeminiJson<GeminiAuthorityPayload>({
-    capability: "ai.generateStructuredAssessment",
-    prompt: buildPrompt(input),
-  });
-  const authoritySellingScore = normalizeScore(geminiResult.overallScore, methodology.authoritySellingScore);
-
+  let geminiResult: GeminiAuthorityPayload;
+  try {
+    geminiResult = await generateGeminiJson<GeminiAuthorityPayload>({
+      capability: "ai.generateStructuredAssessment",
+      prompt: buildPrompt(input),
+    });
+  } catch (error) {
+    if (error instanceof PlatformResourceUnavailableError) return methodology;
+    throw error;
+  }
   return {
     ...methodology,
     adapter: "gemini",
-    overallScore: authoritySellingScore,
-    authoritySellingScore,
     summary: reviewPortugueseCopy(geminiResult.summary ?? methodology.summary),
     strengths: reviewPortugueseList(selectList(geminiResult.strengths, methodology.strengths)),
     gaps: reviewPortugueseList(selectList(geminiResult.gaps, methodology.gaps)),
@@ -87,7 +89,6 @@ DNA da BU: ${JSON.stringify(input.businessUnitContext ?? {}, null, 2)}
 
 Formato:
 {
-  "overallScore": 0,
   "summary": "",
   "strengths": [],
   "gaps": [],
@@ -142,6 +143,14 @@ Formato exigido:
 {
   "title": "",
   "summary": "",
+  "objective": "",
+  "currentState": "",
+  "desiredState": "",
+  "strategicPriorities": [],
+  "whyNow": "",
+  "evidence": [],
+  "risks": [],
+  "indicators": [],
   "actions": [
     {
       "day": 1,
@@ -165,11 +174,6 @@ Formato exigido:
   ]
 }
 `;
-}
-
-function normalizeScore(score: unknown, fallback: number) {
-  if (typeof score !== "number" || Number.isNaN(score)) return fallback;
-  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 function selectList(value: unknown, fallback: string[]) {

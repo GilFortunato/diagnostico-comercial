@@ -43,7 +43,9 @@ export type StrategicComment = {
 
 export function buildNextBestSocialSellingAction(assessment: AuthorityAssessment): SocialSellingDecision {
   const context = strategyContext(assessment);
-  const weakest = assessment.dimensions.slice().sort((left, right) => left.score - right.score)[0];
+  const weakest = assessment.dimensions
+    .filter((item): item is typeof item & { score: number } => item.status === "evaluated" && item.score !== null)
+    .sort((left, right) => left.score - right.score)[0];
   const headline = assessment.dimensions.find((item) => item.key === "headline_clarity")?.score ?? 0;
   const about = assessment.dimensions.find((item) => item.key === "about_clarity")?.score ?? 0;
   const conversations = assessment.dimensions.find((item) => item.key === "relevant_conversations")?.score ?? 0;

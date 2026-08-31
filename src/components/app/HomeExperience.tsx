@@ -1,17 +1,17 @@
 "use client";
 
-import { ArrowRight, Brain, CalendarDays, CheckCircle2, FileText, Target, TrendingUp } from "lucide-react";
+import { ArrowRight, Brain, CalendarDays, CheckCircle2, Target, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { LoginButton } from "@/components/auth/LoginButton";
 import { ConnectorStatusSummary } from "@/components/connectors/ConnectorStatusSummary";
 import { AuthorityDiagnostic } from "@/components/diagnostics/AuthorityDiagnostic";
+import { AppHeader } from "@/components/app/AppHeader";
 import { defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
 
-export function HomeExperience() {
+export function HomeExperience({ isAdmin = false }: { isAdmin?: boolean }) {
   const { data: session } = useSession();
   const isAuthenticated = Boolean(session?.user);
-  const isAdmin = isPublicAdminEmail(session?.user?.email);
   const defaultBu = getBusinessUnitDna(defaultBusinessUnitId);
 
   if (!isAuthenticated) {
@@ -66,10 +66,7 @@ export function HomeExperience() {
                   </div>
                 </div>
                 <div className="mt-8 grid gap-4">
-                  <LoginButton />
-                  <span className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--share-lime)]">
-                    Acessar cockpit <ArrowRight className="h-4 w-4" />
-                  </span>
+                  <LoginButton label="Acessar cockpit" />
                 </div>
               </aside>
             </div>
@@ -81,18 +78,7 @@ export function HomeExperience() {
 
   return (
     <main className="share-shell min-h-screen text-[var(--share-ink)]">
-      <header className="sticky top-0 z-20 border-b border-white/15 bg-[var(--share-green-950)]/95 text-white backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-3">
-          <div>
-            <div className="flex items-end gap-3">
-              <span className="share-wordmark text-4xl">share</span>
-              <span className="pb-1 text-xs font-semibold uppercase leading-3 text-[var(--share-lime)]">AI</span>
-            </div>
-            <p className="mt-1 text-sm text-white/72">Sistema operacional de produtividade comercial</p>
-          </div>
-          <LoginButton />
-        </div>
-      </header>
+      <AppHeader isAdmin={isAdmin} />
 
       <div className="mx-auto grid max-w-7xl gap-8 px-5 py-8">
         <section className="share-green-panel overflow-hidden rounded-lg text-white">
@@ -123,30 +109,6 @@ export function HomeExperience() {
         </section>
 
         <ConnectorStatusSummary />
-        <section className="grid gap-4 rounded-lg border border-[var(--share-line)] bg-white p-5 shadow-[0_18px_60px_rgb(0_63_46_/_0.08)] lg:grid-cols-[1fr_360px]">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Próxima melhor ação</p>
-            <h2 className="mt-1 text-3xl font-semibold text-[var(--share-green-950)]">Comece pelo diagnóstico de autoridade.</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600">
-              Antes de gerar conteúdo, abordar decisores ou preparar reunião, a Share AI precisa entender como seu perfil sustenta a conversa comercial da BU selecionada.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">Impacto alto</span>
-              <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">Esforço baixo</span>
-              <span className="rounded-md bg-[#edf7eb] px-2 py-1 text-xs font-semibold text-[var(--share-green-900)]">Base para conteúdo e rapport</span>
-            </div>
-          </div>
-          <div className="grid content-center gap-3 rounded-md bg-[#fbfdf8] p-4">
-            <a href="#diagnostico" className="share-button-primary inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold">
-              O que devo fazer agora?
-              <ArrowRight className="h-4 w-4" />
-            </a>
-            <Link href="/conteudo" className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-4 py-3 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]">
-              Criar oportunidade editorial
-              <FileText className="h-4 w-4" />
-            </Link>
-          </div>
-        </section>
         <section className="grid gap-4 rounded-lg border border-[var(--share-line)] bg-white p-5 shadow-[0_18px_60px_rgb(0_63_46_/_0.08)] md:grid-cols-[1fr_auto] md:items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Nova área</p>
@@ -187,14 +149,6 @@ export function HomeExperience() {
       </div>
     </main>
   );
-}
-
-function isPublicAdminEmail(email?: string | null) {
-  const adminEmails = (process.env.NEXT_PUBLIC_SHARE_ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((item) => item.trim().toLocaleLowerCase("pt-BR"))
-    .filter(Boolean);
-  return Boolean(email && adminEmails.includes(email.toLocaleLowerCase("pt-BR")));
 }
 
 function HeroMetric({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {

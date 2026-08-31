@@ -16,6 +16,9 @@ export type AuthorityAssessmentSnapshotRecord = {
   ownerEmail: string | null;
   subjectName: string | null;
   businessUnitId: string;
+  profileUrl: string | null;
+  schemaVersion: number;
+  sourceSnapshot: unknown | null;
   assessment: AuthorityAssessment;
   plan30Days: AuthorityThirtyDayPlan | null;
   createdAt: Date;
@@ -31,6 +34,9 @@ export async function saveAuthorityAssessment(assessment: AuthorityAssessment, o
       ownerEmail: owner.email,
       subjectName: owner.name,
       businessUnitId: assessment.input.businessUnitId,
+      profileUrl: assessment.input.profileUrl || null,
+      schemaVersion: assessment.schemaVersion,
+      sourceSnapshot: assessment.input.linkedinSnapshot as unknown as Prisma.InputJsonValue | undefined,
       assessment: assessment as unknown as Prisma.InputJsonValue,
       createdAt,
       updatedAt: createdAt,
@@ -38,6 +44,9 @@ export async function saveAuthorityAssessment(assessment: AuthorityAssessment, o
     update: {
       ownerEmail: owner.email,
       subjectName: owner.name,
+      profileUrl: assessment.input.profileUrl || null,
+      schemaVersion: assessment.schemaVersion,
+      sourceSnapshot: assessment.input.linkedinSnapshot as unknown as Prisma.InputJsonValue | undefined,
       assessment: assessment as unknown as Prisma.InputJsonValue,
     },
   });
@@ -65,10 +74,18 @@ export async function findAuthorityAssessmentSnapshot(id: string): Promise<Autho
     ownerEmail: row.ownerEmail,
     subjectName: row.subjectName,
     businessUnitId: row.businessUnitId,
+    profileUrl: row.profileUrl,
+    schemaVersion: row.schemaVersion,
+    sourceSnapshot: row.sourceSnapshot,
     assessment: row.assessment as unknown as AuthorityAssessment,
     plan30Days: row.plan30Days as unknown as AuthorityThirtyDayPlan | null,
     createdAt: row.createdAt,
   };
+}
+
+export async function findOwnedAuthorityAssessmentSnapshot(id: string, ownerId: string) {
+  const snapshot = await findAuthorityAssessmentSnapshot(id);
+  return snapshot?.ownerId === ownerId ? snapshot : null;
 }
 
 export async function saveAuthorityPlanSnapshot(assessmentId: string, ownerId: string, plan: AuthorityThirtyDayPlan) {

@@ -19,12 +19,14 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
   const { assessment } = snapshot;
   const authorityScore = assessment.authoritySellingScore ?? assessment.overallScore;
   const businessUnitName = assessment.currentFocus?.businessUnitName || assessment.input.businessUnitName;
+  const evidencePriority = ["headline", "about", "experiences", "proofPoints", "posts", "education"];
   const profileEvidence = (assessment.profileReview ?? []).map((item) => ({
+    field: item.field,
     label: item.label,
-    value: item.value.trim() || null,
-    status: confidenceLabel(item.confidence),
+    value: truncateExecutiveText(item.value.trim(), 520) || null,
+    status: item.evaluationStatus === "not_evaluated" ? "Não avaliado" : confidenceLabel(item.confidence),
     source: publicSourceLabel(item.sourceLabel),
-  }));
+  })).filter((item) => item.value).sort((left, right) => evidenceOrder(left.field, evidencePriority) - evidenceOrder(right.field, evidencePriority)).slice(0, 6);
   const territories = assessment.input.businessUnitContext?.territories ?? [];
   const primaryRecommendation = assessment.personalAuthorityPlan?.priority || assessment.recommendations?.[0] || assessment.nextActions?.[0] || null;
 
@@ -41,6 +43,9 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
       businessUnitAffinity: assessment.buAffinityScore,
       activationPotential: assessment.activationPotentialScore,
     },
+    classification: assessment.authorityClassification ?? null,
+    scoreCoverage: assessment.scoreCoverage ?? null,
+    scoreExplanations: assessment.scoreExplanations ?? null,
     executiveOpinion: assessment.summary || null,
     executiveSignals: compact([
       assessment.strengths?.[0] ? { label: "Principal força", value: assessment.strengths[0] } : null,
@@ -48,25 +53,33 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
       assessment.gaps?.[0] ? { label: "Lacuna prioritária", value: assessment.gaps[0] } : null,
       primaryRecommendation ? { label: "Recomendação prioritária", value: primaryRecommendation } : null,
     ]),
-    dimensions: (assessment.dimensions ?? []).map((dimension) => ({
+    dimensions: [
+      ...(assessment.dimensions ?? []).filter((dimension) => dimension.score !== null).slice(0, 11),
+      ...(assessment.dimensions ?? []).filter((dimension) => dimension.score === null).slice(0, 3),
+    ].map((dimension) => ({
       label: dimension.label,
       score: dimension.score,
+      status: dimension.status ?? (dimension.score === null ? "not_evaluated" : "evaluated"),
       rationale: dimension.rationale,
       evidence: dimension.evidence ?? [],
     })),
     profileEvidence,
     themeAlignment: assessment.themeAlignment ?? [],
-    bridges: (assessment.bridgeOpportunities ?? []).slice(0, 5),
+    authorityMap: assessment.authorityMap ?? [],
+    authorityPerception: assessment.authorityPerception ?? null,
+    evidencePortfolio: assessment.evidencePortfolio ?? null,
+    commercialExposure: (assessment.commercialExposure ?? []).slice(0, 6),
+    strategicGaps: (assessment.strategicGaps ?? []).slice(0, 5),
+    authorityAgenda: assessment.authorityAgenda ?? null,
+    bridges: (assessment.bridgeOpportunities ?? []).slice(0, 3),
     strengths: (assessment.strengths ?? []).slice(0, 6),
     gaps: (assessment.gaps ?? []).slice(0, 6),
     recommendations: (assessment.recommendations ?? []).slice(0, 6),
-    nextBestAction: primaryRecommendation
-      ? {
-          priority: primaryRecommendation,
-          why: assessment.gaps?.[0] || assessment.summary || null,
-          actions: (assessment.personalAuthorityPlan?.actions ?? assessment.nextActions ?? []).slice(0, 4),
-        }
-      : null,
+    nextBestAction: assessment.nextBestAction
+      ? { priority: assessment.nextBestAction.title, why: assessment.nextBestAction.reason, actions: assessment.nextBestAction.actions.slice(0, 4) }
+      : primaryRecommendation
+        ? { priority: primaryRecommendation, why: assessment.gaps?.[0] || assessment.summary || null, actions: (assessment.personalAuthorityPlan?.actions ?? assessment.nextActions ?? []).slice(0, 4) }
+        : null,
     plan: snapshot.plan30Days,
     territories,
     themes: assessment.themeAlignment?.map((item) => item.theme) ?? [],
@@ -76,6 +89,11 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
       status: confidenceLabel(source.confidence),
     })),
   };
+}
+
+function truncateExecutiveText(value: string, max: number) {
+  const clean = value.replace(/https?:\/\/\S+/gi, "").replace(/\s+/g, " ").trim();
+  return clean.length > max ? `${clean.slice(0, max - 1).trim()}…` : clean;
 }
 
 export function buildAuthorityReportFilename(subjectName: string | null, createdAt: string | Date) {
@@ -96,8 +114,8 @@ function sanitizeFilenamePart(value: string) {
 }
 
 function publicSourceLabel(value: string) {
-  if (/apify|actor|scrap|endpoint|api/i.test(value)) return "Perfil público do LinkedIn";
-  if (/gemini|provider|modelo/i.test(value)) return "Análise estruturada da Share AI";
+  if (/\b(?:apify|actor|scraper|endpoint|api)\b/i.test(value)) return "Perfil público do LinkedIn";
+  if (/\b(?:gemini|provider|modelo)\b/i.test(value)) return "Análise estruturada da Share AI";
   return value;
 }
 
@@ -105,8 +123,13 @@ function publicSourceNotes(value: string) {
   return value
     .replace(/Apify/gi, "fonte pública autorizada")
     .replace(/Gemini/gi, "inteligência da Share AI")
-    .replace(/Actors?/gi, "fontes")
-    .replace(/API/gi, "integração");
+    .replace(/\bActors?\b/gi, "fontes")
+    .replace(/\bAPI\b/gi, "integração");
+}
+
+function evidenceOrder(field: string, priority: string[]) {
+  const index = priority.indexOf(field);
+  return index === -1 ? priority.length : index;
 }
 
 function compact<T>(items: Array<T | null | undefined>): T[] {

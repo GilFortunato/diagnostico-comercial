@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
+import { writeFile } from "node:fs/promises";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { AuthorityReportDocument } from "@/lib/reports/authorityReportDocument";
 import type { AuthorityReportSnapshot } from "@/lib/reports/authorityReportModel";
@@ -50,6 +51,7 @@ test("real renderer creates selectable vector PDF bytes without provider credent
     const buffer = await renderToBuffer(document);
     assert.equal(buffer.subarray(0, 5).toString("ascii"), "%PDF-");
     assert.ok(buffer.byteLength > 20_000);
+    if (process.env.REPORT_QA_OUTPUT) await writeFile(process.env.REPORT_QA_OUTPUT, buffer);
   } finally {
     if (previousGemini === undefined) delete process.env.GEMINI_API_KEY;
     else process.env.GEMINI_API_KEY = previousGemini;
