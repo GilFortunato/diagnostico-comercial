@@ -1,5 +1,6 @@
 import "server-only";
 import type { CredentialValidation, PlatformProvider } from "@/lib/connectors/platformCredentialCore";
+import { supportsLegacyGeminiSamplingParameters } from "@/lib/connectors/geminiCompatibility";
 
 const validationTimeoutMs = 10_000;
 export const defaultGeminiModel = "gemini-3.6-flash";
@@ -45,10 +46,6 @@ async function validateApify(credential: string) {
     headers: { Authorization: `Bearer ${credential}` },
     signal: AbortSignal.timeout(validationTimeoutMs),
   });
-}
-
-export function supportsLegacyGeminiSamplingParameters(model: string) {
-  return !/^gemini-3(?:[.-]|$)/i.test(model.trim());
 }
 
 export function classifyValidationFailure(status: number): CredentialValidation {
