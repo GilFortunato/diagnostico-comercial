@@ -5,7 +5,7 @@ EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
 
-CREATE TABLE "HrHuntingSearch" (
+CREATE TABLE IF NOT EXISTS "HrHuntingSearch" (
     "id" TEXT NOT NULL,
     "ownerId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE "HrHuntingSearch" (
     CONSTRAINT "HrHuntingSearch_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "HrHuntingCandidate" (
+CREATE TABLE IF NOT EXISTS "HrHuntingCandidate" (
     "id" TEXT NOT NULL,
     "searchId" TEXT NOT NULL,
     "sourcePersonId" TEXT,
@@ -45,7 +45,7 @@ CREATE TABLE "HrHuntingCandidate" (
     CONSTRAINT "HrHuntingCandidate_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "HrHuntingCandidateEvidence" (
+CREATE TABLE IF NOT EXISTS "HrHuntingCandidateEvidence" (
     "id" TEXT NOT NULL,
     "candidateId" TEXT NOT NULL,
     "criterion" TEXT NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE "HrHuntingCandidateEvidence" (
     CONSTRAINT "HrHuntingCandidateEvidence_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "HrHuntingCandidateContact" (
+CREATE TABLE IF NOT EXISTS "HrHuntingCandidateContact" (
     "id" TEXT NOT NULL,
     "candidateId" TEXT NOT NULL,
     "value" TEXT NOT NULL,
@@ -70,7 +70,7 @@ CREATE TABLE "HrHuntingCandidateContact" (
     CONSTRAINT "HrHuntingCandidateContact_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "HrHuntingShortlist" (
+CREATE TABLE IF NOT EXISTS "HrHuntingShortlist" (
     "id" TEXT NOT NULL,
     "candidateId" TEXT NOT NULL,
     "nextStep" TEXT,
@@ -80,13 +80,26 @@ CREATE TABLE "HrHuntingShortlist" (
     CONSTRAINT "HrHuntingShortlist_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "HrHuntingCandidate_searchId_profileUrl_key" ON "HrHuntingCandidate"("searchId", "profileUrl");
-CREATE UNIQUE INDEX "HrHuntingShortlist_candidateId_key" ON "HrHuntingShortlist"("candidateId");
-CREATE INDEX "HrHuntingSearch_ownerId_updatedAt_idx" ON "HrHuntingSearch"("ownerId", "updatedAt");
-CREATE INDEX "HrHuntingCandidate_searchId_fitScore_idx" ON "HrHuntingCandidate"("searchId", "fitScore");
+CREATE UNIQUE INDEX IF NOT EXISTS "HrHuntingCandidate_searchId_profileUrl_key" ON "HrHuntingCandidate"("searchId", "profileUrl");
+CREATE UNIQUE INDEX IF NOT EXISTS "HrHuntingShortlist_candidateId_key" ON "HrHuntingShortlist"("candidateId");
+CREATE INDEX IF NOT EXISTS "HrHuntingSearch_ownerId_updatedAt_idx" ON "HrHuntingSearch"("ownerId", "updatedAt");
+CREATE INDEX IF NOT EXISTS "HrHuntingCandidate_searchId_fitScore_idx" ON "HrHuntingCandidate"("searchId", "fitScore");
 
-ALTER TABLE "HrHuntingSearch" ADD CONSTRAINT "HrHuntingSearch_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "HrHuntingCandidate" ADD CONSTRAINT "HrHuntingCandidate_searchId_fkey" FOREIGN KEY ("searchId") REFERENCES "HrHuntingSearch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "HrHuntingCandidateEvidence" ADD CONSTRAINT "HrHuntingCandidateEvidence_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "HrHuntingCandidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "HrHuntingCandidateContact" ADD CONSTRAINT "HrHuntingCandidateContact_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "HrHuntingCandidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "HrHuntingShortlist" ADD CONSTRAINT "HrHuntingShortlist_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "HrHuntingCandidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'HrHuntingSearch_ownerId_fkey') THEN
+        ALTER TABLE "HrHuntingSearch" ADD CONSTRAINT "HrHuntingSearch_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'HrHuntingCandidate_searchId_fkey') THEN
+        ALTER TABLE "HrHuntingCandidate" ADD CONSTRAINT "HrHuntingCandidate_searchId_fkey" FOREIGN KEY ("searchId") REFERENCES "HrHuntingSearch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'HrHuntingCandidateEvidence_candidateId_fkey') THEN
+        ALTER TABLE "HrHuntingCandidateEvidence" ADD CONSTRAINT "HrHuntingCandidateEvidence_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "HrHuntingCandidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'HrHuntingCandidateContact_candidateId_fkey') THEN
+        ALTER TABLE "HrHuntingCandidateContact" ADD CONSTRAINT "HrHuntingCandidateContact_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "HrHuntingCandidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'HrHuntingShortlist_candidateId_fkey') THEN
+        ALTER TABLE "HrHuntingShortlist" ADD CONSTRAINT "HrHuntingShortlist_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "HrHuntingCandidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END $$;
