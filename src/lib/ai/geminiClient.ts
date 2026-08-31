@@ -1,6 +1,10 @@
 import "server-only";
 import { resolveProviderForCapability, type AiCapability } from "@/lib/ai/providers";
-import { defaultGeminiModel, classifyValidationFailure } from "@/lib/connectors/credentialValidation";
+import {
+  defaultGeminiModel,
+  classifyValidationFailure,
+  supportsLegacyGeminiSamplingParameters,
+} from "@/lib/connectors/credentialValidation";
 import { recordPlatformCredentialFailure } from "@/lib/connectors/platformCredentialService";
 import { resolveGeminiCredential } from "@/lib/connectors/platformCredentials";
 import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
@@ -23,6 +27,11 @@ export async function generateGeminiJson<T>({
   }
 
   const model = process.env.GEMINI_MODEL ?? defaultGeminiModel;
+  const generationConfig: { responseMimeType: "application/json"; temperature?: number } = {
+    responseMimeType: "application/json",
+  };
+  if (supportsLegacyGeminiSamplingParameters(model)) generationConfig.temperature = temperature;
+
   let response: Response;
   try {
     response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
@@ -32,7 +41,7 @@ export async function generateGeminiJson<T>({
         "x-goog-api-key": resolution.credential,
       },
       body: JSON.stringify({
-        generationConfig: { temperature, responseMimeType: "application/json" },
+        generationConfig,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
       }),
       signal: AbortSignal.timeout(45_000),
