@@ -11,27 +11,25 @@ const harvestSeniorityIds: Record<PersonSearchInput["filters"]["seniority"][numb
   owner: ["320"],
 };
 
-const peakySeniority: Partial<Record<PersonSearchInput["filters"]["seniority"][number], string>> = {
-  manager: "manager_level",
-  director: "director_level",
-  vp: "vp_level",
-  c_level: "c_level",
-};
-
 export function buildCompanyDiscoveryInput(input: CompanySearchInput) {
+  const queryTerms = uniqueStrings([
+    ...input.filters.keywords,
+    ...input.filters.industries,
+    ...input.filters.technologies,
+    ...input.filters.domains,
+  ]).slice(0, 6);
+  const locations = uniqueStrings([
+    ...input.filters.cityPostalCodes,
+    ...input.filters.states,
+    input.filters.country,
+  ]).slice(0, 20);
+
   return compactInput({
-    ...apifyActors.leadDiscovery.defaultInput,
-    totalResults: 100,
-    companyMode: true,
-    industry: input.filters.industries,
-    companyCountry: input.filters.country ? [input.filters.country] : [],
-    companyState: input.filters.states,
-    companyCityPostalCode: input.filters.cityPostalCodes,
-    companyEmployeeSize: input.filters.employeeRanges,
-    webKeywords: input.filters.keywords,
-    technologyUsed: input.filters.technologies,
-    revenue: input.filters.revenueRanges,
-    companyDomain: input.filters.domains,
+    ...apifyActors.linkedinCompanySearch.defaultInput,
+    scraperMode: "short",
+    maxItems: input.filters.quantity,
+    searchQuery: queryTerms.length ? queryTerms.join(" OR ") : undefined,
+    locations,
   });
 }
 
@@ -40,26 +38,28 @@ export function buildHarvestPeopleInput(input: PersonSearchInput) {
     ...apifyActors.linkedinCompanyEmployees.defaultInput,
     companies: input.filters.companyLinkedinUrls,
     maxItems: input.filters.quantity,
-    maxItemsPerCompany: Math.max(5, Math.ceil(input.filters.quantity / input.filters.companyLinkedinUrls.length)),
     jobTitles: input.filters.roles,
     locations: input.filters.locations,
-    searchQuery: input.filters.profileKeywords.join(" ") || undefined,
+    searchQuery: input.filters.profileKeywords.join(" OR ") || undefined,
     seniorityLevelIds: [...new Set(input.filters.seniority.flatMap((level) => harvestSeniorityIds[level]))],
   });
 }
 
 export function buildBroadPeopleInput(input: PersonSearchInput) {
   return compactInput({
-    ...apifyActors.leadDiscovery.defaultInput,
-    totalResults: 100,
-    companyMode: false,
-    personTitle: input.filters.roles,
-    seniority: input.filters.seniority.map((level) => peakySeniority[level]).filter(Boolean),
+    ...apifyActors.linkedinProfileSearch.defaultInput,
+    profileScraperMode: "Short",
+    maxItems: input.filters.quantity,
+    currentCompanies: input.filters.companyLinkedinUrls,
+    currentJobTitles: input.filters.roles,
+    locations: input.filters.locations,
+    searchQuery: input.filters.profileKeywords.join(" OR ") || undefined,
+    seniorityLevelIds: [...new Set(input.filters.seniority.flatMap((level) => harvestSeniorityIds[level]))],
   });
 }
 
 export async function discoverCompanies(input: CompanySearchInput) {
-  return runApifyActor("leadDiscovery", buildCompanyDiscoveryInput(input));
+  return runApifyActor("linkedinCompanySearch", buildCompanyDiscoveryInput(input));
 }
 
 export async function discoverHarvestPeople(input: PersonSearchInput) {
@@ -74,7 +74,7 @@ export async function researchCompanies(companyLinkedinUrls: string[]) {
 }
 
 export async function discoverBroadPeople(input: PersonSearchInput) {
-  return runApifyActor("leadDiscovery", buildBroadPeopleInput(input));
+  return runApifyActor("linkedinProfileSearch", buildBroadPeopleInput(input));
 }
 
 export async function enrichPersonProfile(linkedinUrl: string) {
@@ -103,4 +103,14 @@ function compactInput(input: Record<string, unknown>) {
     if (Array.isArray(value) && value.length === 0) return false;
     return true;
   }));
+}
+
+function uniqueStrings(values: string[]) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const normalized = value.trim().toLocaleLowerCase("pt-BR");
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
 }
