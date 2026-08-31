@@ -56,14 +56,17 @@ export async function executeDecisionMakerSearch(input: DecisionMakerSearchInput
 
 async function executeCompanySearch(input: Extract<DecisionMakerSearchInput, { mode: "companies" }>, queryId: string, deps: HuntingDependencies): Promise<DecisionMakerResult> {
   const unit = getBusinessUnitDna(input.businessUnitId);
-  const warnings: string[] = ["A descoberta ampla executa o mínimo técnico de 100 resultados do Actor, mas exibe apenas o limite seguro selecionado."];
-  let items: unknown[] = [];
+  let items: unknown[];
   try {
     items = await deps.discoverCompanies(input);
   } catch {
-    warnings.push("A fonte de descoberta ampla está indisponível no momento. Nenhuma empresa fictícia foi criada como substituição.");
+    throw new Error("A fonte principal de descoberta de empresas está indisponível.");
   }
-  const companies = rankCompanies(normalizeCompanies(items, "Descoberta pública via Apify"), input).slice(0, input.filters.quantity);
+  const normalized = normalizeCompanies(items, "LinkedIn Company Search via Harvest");
+  if (items.length > 0 && normalized.length === 0) {
+    throw new Error("A fonte retornou empresas, mas o formato recebido não pôde ser normalizado com segurança.");
+  }
+  const companies = rankCompanies(normalized, input).slice(0, input.filters.quantity);
 
   return {
     mode: "companies",
@@ -76,11 +79,11 @@ async function executeCompanySearch(input: Extract<DecisionMakerSearchInput, { m
     people: [],
     targetRolesNotFound: [],
     nextBestAction: companies.some((company) => company.linkedinUrl)
-      ? { title: "Selecionar contas e buscar pessoas", reason: "As contas com página pública identificada podem seguir para uma busca econômica de até 25 profissionais básicos.", impact: "alto", effort: "baixo" }
-      : { title: "Validar as empresas encontradas", reason: "Confirme domínio e página corporativa antes de iniciar o enriquecimento de pessoas.", impact: "alto", effort: "médio" },
-    sources: [{ title: "Descoberta ampla de empresas", confidence: companies.length ? "provável" : "não verificado", notes: "Resultados públicos normalizados e deduplicados pela camada segura de conectores." }],
-    warnings,
-    cost: { strategy: "Descoberta ampla com limite visual de 25 empresas.", basicCandidates: companies.length, profileEnrichments: 0, postEnrichments: 0, broadDiscoveryUsed: true },
+      ? { title: "Selecionar contas e buscar pessoas", reason: "As contas com página pública identificada podem seguir para uma busca econômica de profissionais básicos.", impact: "alto", effort: "baixo" }
+      : { title: "Revisar os filtros de descoberta", reason: "A fonte respondeu normalmente, mas não retornou empresas verificáveis para este recorte.", impact: "alto", effort: "baixo" },
+    sources: [{ title: "LinkedIn Company Search via Harvest", confidence: companies.length ? "provável" : "não verificado", notes: "Resultados públicos normalizados e deduplicados; filtros não suportados pelo Actor são usados apenas na leitura posterior de aderência." }],
+    warnings: [],
+    cost: { strategy: "Busca de empresas limitada à quantidade selecionada pelo usuário.", basicCandidates: companies.length, profileEnrichments: 0, postEnrichments: 0, broadDiscoveryUsed: true },
   };
 }
 
@@ -92,6 +95,8 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   let harvestItems: unknown[] = [];
   let broadItems: unknown[] = [];
   let companyItems: unknown[] = [];
+  let harvestFailed = false;
+  let broadFailed = false;
 
   try {
     companyItems = await deps.researchCompanies(input.filters.companyLinkedinUrls);
@@ -102,23 +107,30 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   try {
     harvestItems = await deps.discoverHarvestPeople(expandedInput);
   } catch {
-    warnings.push("A busca de funcionários da conta falhou. A plataforma preservou os demais resultados e não criou pessoas fictícias.");
+    harvestFailed = true;
+    warnings.push("A busca principal de funcionários da conta falhou.");
   }
 
   if (input.filters.includeBroadDiscovery) {
-    warnings.push("A descoberta complementar executa o mínimo técnico de 100 resultados do Actor e pode elevar o custo da busca.");
+    warnings.push("A descoberta complementar usa uma segunda busca pública do Harvest e pode gerar custo adicional.");
     try {
       broadItems = await deps.discoverBroadPeople(expandedInput);
     } catch {
-      warnings.push("A descoberta complementar está indisponível; os resultados da conta conhecida continuam válidos.");
+      broadFailed = true;
+      warnings.push("A descoberta complementar também está indisponível.");
     }
   }
 
+  if (harvestFailed && (!input.filters.includeBroadDiscovery || broadFailed)) {
+    throw new Error("As fontes de descoberta de pessoas estão indisponíveis.");
+  }
+
   const harvestPeople = normalizePeople(harvestItems, "Funcionários públicos da empresa via Harvest", input.filters.desiredDecisionRole);
-  const broadPeople = filterBroadPeopleByCompanies(
-    normalizePeople(broadItems, "Descoberta complementar via Peaky", input.filters.desiredDecisionRole),
-    input.filters.companyNames,
-  );
+  const broadPeople = normalizePeople(broadItems, "Descoberta complementar via Harvest Profile Search", input.filters.desiredDecisionRole);
+  if ((harvestItems.length > 0 && harvestPeople.length === 0) || (broadItems.length > 0 && broadPeople.length === 0 && harvestPeople.length === 0)) {
+    throw new Error("A fonte retornou perfis, mas o formato recebido não pôde ser normalizado com segurança.");
+  }
+
   let people = mergePeople(harvestPeople, broadPeople).slice(0, input.filters.quantity);
   people = rankPeople(people, expandedInput);
 
@@ -210,14 +222,8 @@ function extractPostSignals(items: unknown[]) {
   return signals;
 }
 
-function filterBroadPeopleByCompanies(people: HuntingPerson[], companyNames: string[]) {
-  if (companyNames.length === 0) return people;
-  const normalized = companyNames.map((name) => name.toLocaleLowerCase("pt-BR"));
-  return people.filter((person) => normalized.some((name) => person.company.toLocaleLowerCase("pt-BR").includes(name)));
-}
-
 function companiesFromPeople(people: HuntingPerson[]) {
-  const names = [...new Set(people.map((person) => person.company))];
+  const names = [...new Set(people.map((person) => person.company).filter((name) => name !== "Empresa não informada"))];
   return names.map((name) => ({
     id: createHash("sha1").update(name).digest("hex").slice(0, 12),
     name,
@@ -231,7 +237,7 @@ function companiesFromPeople(people: HuntingPerson[]) {
 
 function nextActionForPeople(people: HuntingPerson[]): DecisionMakerResult["nextBestAction"] {
   const first = people[0];
-  if (!first) return { title: "Revisar filtros e tentar novamente", reason: "Nenhuma pessoa real foi confirmada. Amplie cargos ou valide a URL corporativa, sem substituir a ausência por perfis fictícios.", impact: "alto", effort: "baixo" };
+  if (!first) return { title: "Revisar filtros e tentar novamente", reason: "As fontes responderam sem erro, mas nenhuma pessoa real foi confirmada. Amplie cargos ou reduza filtros.", impact: "alto", effort: "baixo" };
   if (first.recentSignals.length) return { title: `Validar o contexto de ${first.name}`, reason: "Há sinal profissional recente. Leia a fonte e confirme sua relação com o objetivo antes de preparar rapport.", impact: "alto", effort: "baixo" };
   return { title: `Pesquisar sinais recentes de ${first.name}`, reason: "O perfil tem aderência ao papel, mas ainda faltam evidências de prioridade ou momento para uma conversa relevante.", impact: "alto", effort: "médio" };
 }
