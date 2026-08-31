@@ -11,6 +11,14 @@ type HrHuntingSearchWithCandidates = Prisma.HrHuntingSearchGetPayload<{
   include: { candidates: { include: { evidence: true; contacts: true; shortlist: true } } };
 }>;
 
+const hrHarvestSeniorityIds: Record<string, string[]> = {
+  manager: ["200", "210"],
+  director: ["220"],
+  vp: ["300"],
+  c_level: ["310"],
+  owner: ["320"],
+};
+
 export async function createHrHuntingSearch(ownerId: string, input: { title: string; description: string; jobUrl?: string; companyName?: string; recruiterName?: string }) {
   const jobDna = await createJobDna(input);
   const search = await getPrisma().hrHuntingSearch.create({
@@ -24,18 +32,38 @@ export async function updateHrHuntingJobDna(id: string, ownerId: string, jobDna:
   return findOwnedHrHuntingSearch(id, ownerId);
 }
 
+export function buildHrCandidateSearchInput(input: SearchInput, fallbackTitle: string) {
+  const selectedTitle = input.currentTitle?.trim();
+  const titles = unique([selectedTitle || fallbackTitle]).slice(0, 10);
+  const keywords = unique(input.keywords).slice(0, 8);
+  return compact({
+    profileScraperMode: "Short",
+    maxItems: input.quantity,
+    currentJobTitles: titles,
+    locations: input.location?.trim() ? [input.location.trim()] : [],
+    searchQuery: keywords.length ? keywords.join(" OR ") : undefined,
+    seniorityLevelIds: [...new Set(input.seniority.flatMap((level) => hrHarvestSeniorityIds[level] ?? []))],
+  });
+}
+
 export async function executeHrHuntingSearch(id: string, ownerId: string, input: SearchInput) {
   const search = await findOwnedHrHuntingSearch(id, ownerId);
   if (!search) return null;
-  const searchTerms = unique([input.currentTitle || "", ...search.searchTerms, ...input.keywords]).slice(0, 16);
-  const warnings: string[] = input.location ? ["A localização foi usada para leitura de aderência quando retornada pela fonte. O conector de descoberta atual não aceita esse filtro como parâmetro de busca."] : [];
+  const warnings: string[] = [];
   let rawItems: unknown[] = [];
+  let connectorFailed = false;
   try {
-    rawItems = await runApifyActor("leadDiscovery", compact({ totalResults: 100, companyMode: false, personTitle: searchTerms, seniority: input.seniority }));
+    rawItems = await runApifyActor("linkedinProfileSearch", buildHrCandidateSearchInput(input, search.jobDna.title || search.title));
   } catch {
-    warnings.push("Não foi possível concluir a fonte de descoberta de profissionais. Nenhum candidato foi criado como substituição.");
+    connectorFailed = true;
+    warnings.push("A fonte de descoberta de profissionais falhou nesta execução. Este estado não representa zero candidatos; tente novamente após validar a conexão Apify.");
   }
-  const candidates = rankCandidates(normalizeCandidates(rawItems), search.jobDna, input).slice(0, input.quantity);
+  const normalized = normalizeCandidates(rawItems);
+  if (!connectorFailed && rawItems.length > 0 && normalized.length === 0) {
+    connectorFailed = true;
+    warnings.push("A fonte retornou perfis, mas o formato recebido não pôde ser normalizado com segurança. Nenhum perfil foi descartado como se a busca tivesse retornado zero resultados.");
+  }
+  const candidates = connectorFailed ? [] : rankCandidates(normalized, search.jobDna, input).slice(0, input.quantity);
   await getPrisma().$transaction(async (tx) => {
     await tx.hrHuntingCandidate.deleteMany({ where: { searchId: id } });
     if (candidates.length) await tx.hrHuntingCandidate.createMany({ data: candidates.map((candidate) => ({
@@ -50,7 +78,14 @@ export async function executeHrHuntingSearch(id: string, ownerId: string, input:
       if (candidate.evidence.length) await tx.hrHuntingCandidateEvidence.createMany({ data: candidate.evidence.map((evidence) => ({ candidateId: row.id, criterion: evidence.criterion, criterionType: evidence.criterionType, result: evidence.result, evidence: evidence.evidence || null, source: evidence.source, confidence: toPrismaConfidence(evidence.confidence) })) });
       if (candidate.contacts.length) await tx.hrHuntingCandidateContact.createMany({ data: candidate.contacts.map((contact) => ({ candidateId: row.id, value: contact.value, type: contact.type, source: contact.source, confidence: toPrismaConfidence(contact.confidence), obtainedAt: contact.obtainedAt ? new Date(contact.obtainedAt) : null })) });
     }
-    await tx.hrHuntingSearch.update({ where: { id }, data: { status: rawItems.length ? "results_ready" : "no_results", sourceSnapshot: rawItems as Prisma.InputJsonValue, connectorWarnings: warnings } });
+    await tx.hrHuntingSearch.update({
+      where: { id },
+      data: {
+        status: connectorFailed ? "connector_error" : rawItems.length ? "results_ready" : "no_results",
+        sourceSnapshot: rawItems as Prisma.InputJsonValue,
+        connectorWarnings: warnings,
+      },
+    });
   });
   return findOwnedHrHuntingSearch(id, ownerId);
 }
@@ -99,17 +134,44 @@ export function normalizeCandidates(items: unknown[]): HrCandidate[] {
   const seen = new Set<string>();
   return items.flatMap((item, index) => {
     if (!isRecord(item)) return [];
-    const name = pick(item, ["fullName", "name", "profile.fullName", "person.name"]);
-    const title = pick(item, ["title", "jobTitle", "headline", "position", "currentPosition.title"]);
+    const explicitName = pick(item, ["fullName", "name", "profile.fullName", "person.name"]);
+    const name = explicitName || [pick(item, ["firstName"]), pick(item, ["lastName"])].filter(Boolean).join(" ");
+    const currentPosition = firstRecord(item.currentPosition);
+    const currentExperience = firstRecord(item.experience);
+    const title = pick(item, ["jobTitle", "title", "position"])
+      || pick(currentPosition, ["title", "position", "jobTitle"])
+      || pick(currentExperience, ["position", "title", "jobTitle"])
+      || pick(item, ["headline"]);
     const profileUrl = normalizeLinkedIn(pick(item, ["linkedinUrl", "linkedin_url", "profileUrl", "url", "profile.linkedinUrl"]));
     if (!name || !title || /pessoa a identificar/i.test(name)) return [];
-    const company = pick(item, ["companyName", "company", "organization.name", "currentPosition.companyName"]);
+    const company = pick(item, ["companyName", "company", "organization.name"])
+      || pick(currentPosition, ["companyName", "company.name"])
+      || pick(currentExperience, ["companyName", "company.name"]);
     const key = profileUrl || `${normal(name)}|${normal(company)}|${normal(title)}`;
     if (seen.has(key)) return [];
     seen.add(key);
     const email = pick(item, ["workEmail", "businessEmail", "professionalEmail"]);
     const phone = pick(item, ["workPhone", "businessPhone", "professionalPhone"]);
-    return [{ id: `hr_${stableId(key || String(index))}`, name, currentTitle: title, currentCompany: company || undefined, location: pick(item, ["location", "locationName", "geo"]) || undefined, profileUrl: profileUrl || undefined, professionalSummary: pick(item, ["about", "summary", "description", "profile.summary"]) || undefined, fitScore: 0, fitClassification: "Baixa aderência inicial" as const, pointsToValidate: [], sourceName: "Descoberta pública via Apify", confidence: profileUrl ? "confirmado" as const : "provável" as const, evidence: [], contacts: [...(email ? [{ value: email, type: "e-mail profissional" as const, source: "Descoberta pública via Apify", confidence: "confirmado" as const }] : []), ...(phone ? [{ value: phone, type: "telefone profissional" as const, source: "Descoberta pública via Apify", confidence: "confirmado" as const }] : [])], shortlisted: false }];
+    return [{
+      id: `hr_${stableId(key || String(index))}`,
+      name,
+      currentTitle: title,
+      currentCompany: company || undefined,
+      location: pick(item, ["location", "locationName", "geo"]) || pick(currentExperience, ["location"]) || undefined,
+      profileUrl: profileUrl || undefined,
+      professionalSummary: pick(item, ["about", "summary", "description", "profile.summary", "headline"]) || undefined,
+      fitScore: 0,
+      fitClassification: "Baixa aderência inicial" as const,
+      pointsToValidate: [],
+      sourceName: "LinkedIn Profile Search via Harvest",
+      confidence: profileUrl ? "confirmado" as const : "provável" as const,
+      evidence: [],
+      contacts: [
+        ...(email ? [{ value: email, type: "e-mail profissional" as const, source: "LinkedIn Profile Search via Harvest", confidence: "confirmado" as const }] : []),
+        ...(phone ? [{ value: phone, type: "telefone profissional" as const, source: "LinkedIn Profile Search via Harvest", confidence: "confirmado" as const }] : []),
+      ],
+      shortlisted: false,
+    }];
   });
 }
 
@@ -142,6 +204,7 @@ function deriveTerms(dna: JobDna) { return unique([dna.title, ...dna.criteria.fi
 function unique(items: string[]): string[] { return [...new Map<string, string>(items.map((item): [string, string] => [normal(item), item.trim()]).filter(([key]) => Boolean(key))).values()]; }
 function compact(value: Record<string, unknown>) { return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== "" && (!Array.isArray(item) || item.length))); }
 function pick(record: UnknownRecord, paths: string[]) { for (const path of paths) { const value = path.split(".").reduce<unknown>((current, key) => isRecord(current) ? current[key] : undefined, record); if (typeof value === "string" && value.trim()) return value.trim(); } return ""; }
+function firstRecord(value: unknown): UnknownRecord { if (Array.isArray(value)) return value.find(isRecord) ?? {}; return isRecord(value) ? value : {}; }
 function isRecord(value: unknown): value is UnknownRecord { return Boolean(value && typeof value === "object" && !Array.isArray(value)); }
 function normal(value: string) { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim(); }
 function normalizeLinkedIn(value: string) { return /linkedin\.com\/in\//i.test(value) ? value.split("?")[0].replace(/\/$/, "") : ""; }
