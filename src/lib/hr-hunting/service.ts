@@ -7,6 +7,9 @@ import type { CriterionKind, EvidenceState, HrCandidate, HrHuntingSearchSnapshot
 
 type SearchInput = { quantity: number; currentTitle?: string; seniority: string[]; location?: string; keywords: string[] };
 type UnknownRecord = Record<string, unknown>;
+type HrHuntingSearchWithCandidates = Prisma.HrHuntingSearchGetPayload<{
+  include: { candidates: { include: { evidence: true; contacts: true; shortlist: true } } };
+}>;
 
 export async function createHrHuntingSearch(ownerId: string, input: { title: string; description: string; jobUrl?: string; companyName?: string; recruiterName?: string }) {
   const jobDna = await createJobDna(input);
@@ -80,13 +83,13 @@ export function buildApproachMessage(search: HrHuntingSearchSnapshot, candidate:
   return `${opening}\n\nSou ${recruiter}. Estamos conduzindo uma oportunidade${company}: ${search.jobDna.shortSummary}\n\n${channel} Se fizer sentido para você, podemos conversar?${link}`;
 }
 
-function serializeSearch(row: Awaited<ReturnType<typeof getPrisma>> extends never ? never : any): HrHuntingSearchSnapshot {
-  const candidates: HrCandidate[] = row.candidates.map((candidate: any) => ({
+function serializeSearch(row: HrHuntingSearchWithCandidates): HrHuntingSearchSnapshot {
+  const candidates: HrCandidate[] = row.candidates.map((candidate) => ({
     id: candidate.id, name: candidate.name, currentTitle: candidate.currentTitle || undefined, currentCompany: candidate.currentCompany || undefined, location: candidate.location || undefined,
-    profileUrl: candidate.profileUrl || undefined, professionalSummary: candidate.professionalSummary || undefined, fitScore: candidate.fitScore, fitClassification: candidate.fitClassification,
+    profileUrl: candidate.profileUrl || undefined, professionalSummary: candidate.professionalSummary || undefined, fitScore: candidate.fitScore, fitClassification: candidate.fitClassification as HrCandidate["fitClassification"],
     mainSignal: candidate.mainSignal || undefined, pointsToValidate: candidate.pointsToValidate, sourceName: candidate.sourceName, confidence: fromPrismaConfidence(candidate.confidence),
-    evidence: candidate.evidence.map((item: any) => ({ criterion: item.criterion, criterionType: item.criterionType, result: item.result, evidence: item.evidence || undefined, source: item.source, confidence: fromPrismaConfidence(item.confidence) })),
-    contacts: candidate.contacts.map((item: any) => ({ value: item.value, type: item.type, source: item.source, confidence: fromPrismaConfidence(item.confidence), obtainedAt: item.obtainedAt?.toISOString() })),
+    evidence: candidate.evidence.map((item) => ({ criterion: item.criterion, criterionType: item.criterionType as HrCandidate["evidence"][number]["criterionType"], result: item.result as HrCandidate["evidence"][number]["result"], evidence: item.evidence || undefined, source: item.source, confidence: fromPrismaConfidence(item.confidence) })),
+    contacts: candidate.contacts.map((item) => ({ value: item.value, type: item.type as HrCandidate["contacts"][number]["type"], source: item.source, confidence: fromPrismaConfidence(item.confidence), obtainedAt: item.obtainedAt?.toISOString() })),
     shortlisted: Boolean(candidate.shortlist), shortlist: candidate.shortlist ? { nextStep: candidate.shortlist.nextStep || undefined, notes: candidate.shortlist.notes || undefined } : undefined,
   }));
   return { id: row.id, title: row.title, jobDescription: row.jobDescription, jobUrl: row.jobUrl || undefined, companyName: row.companyName || undefined, recruiterName: row.recruiterName || undefined, jobDna: row.jobDna as JobDna, searchTerms: row.searchTerms, status: row.status, connectorWarnings: row.connectorWarnings, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), candidates };

@@ -1,3 +1,10 @@
+DO $$
+BEGIN
+    CREATE TYPE "ConfidenceLevel" AS ENUM ('CONFIRMED', 'LIKELY', 'INFERENCE', 'UNVERIFIED');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
 CREATE TABLE "HrHuntingSearch" (
     "id" TEXT NOT NULL,
     "ownerId" TEXT NOT NULL,
