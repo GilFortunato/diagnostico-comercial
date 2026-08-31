@@ -11,7 +11,7 @@ import { buildBroadPeopleInput, buildCompanyDiscoveryInput, buildHarvestPeopleIn
 import { companySearchSchema, personSearchSchema, type DecisionMakerResult } from "@/lib/decision-makers/search";
 import { conservativeJobDna } from "@/lib/hr-hunting/jobDna";
 import { buildHrHuntingWorkbook } from "@/lib/hr-hunting/exportWorkbook";
-import { buildApproachMessage, normalizeCandidates, rankCandidates } from "@/lib/hr-hunting/service";
+import { buildApproachMessage, buildHrCandidateSearchInput, normalizeCandidates, rankCandidates } from "@/lib/hr-hunting/service";
 import type { HrHuntingSearchSnapshot, JobDna } from "@/lib/hr-hunting/types";
 
 const personInput = personSearchSchema.parse({
@@ -73,11 +73,12 @@ test("3. score não depende da posição do candidato no array", () => {
   assert.deepEqual(forward, reverse);
 });
 
-test("4. cargos são enviados nos campos reais do Harvest", () => {
+test("4. cargos são enviados nos campos reais do Harvest Company Employees", () => {
   const actorInput = buildHarvestPeopleInput(personInput);
   assert.deepEqual(actorInput.jobTitles, personInput.filters.roles);
-  assert.equal("maxProfiles" in actorInput, false);
   assert.equal(actorInput.maxItems, 20);
+  assert.equal(actorInput.profileScraperMode, "Short ($4 per 1k)");
+  assert.equal("maxItemsPerCompany" in actorInput, false);
 });
 
 test("5. múltiplos cargos e famílias equivalentes funcionam", () => {
@@ -86,11 +87,12 @@ test("5. múltiplos cargos e famílias equivalentes funcionam", () => {
   assert.ok(expanded.some((role) => /learning|t&d/i.test(role)));
 });
 
-test("6. senioridade usa os IDs reais quando o Harvest suporta", () => {
+test("6. senioridade usa IDs reais nos dois Actors Harvest", () => {
   const actorInput = buildHarvestPeopleInput(personInput);
   assert.deepEqual(actorInput.seniorityLevelIds, ["200", "210", "220", "310"]);
   const broadInput = buildBroadPeopleInput(personInput);
-  assert.deepEqual(broadInput.seniority, ["manager_level", "director_level", "c_level"]);
+  assert.deepEqual(broadInput.seniorityLevelIds, ["200", "210", "220", "310"]);
+  assert.deepEqual(broadInput.currentJobTitles, personInput.filters.roles);
 });
 
 test("7. empresa específica usa detalhes corporativos e employees antes do enriquecimento", async () => {
@@ -105,7 +107,7 @@ test("7. empresa específica usa detalhes corporativos e employees antes do enri
   assert.deepEqual(calls.slice(0, 2), ["company", "employees"]);
 });
 
-test("8. Peaky ausente não é necessário para o fluxo account-based", async () => {
+test("8. descoberta complementar não é necessária para o fluxo account-based", async () => {
   clearDecisionMakerCache();
   let broadCalls = 0;
   const result = await executeDecisionMakerSearch(personInput, dependencies({
@@ -115,16 +117,16 @@ test("8. Peaky ausente não é necessário para o fluxo account-based", async ()
   assert.equal(result.people.length, 1);
 });
 
-test("9. falha do Peaky preserva resultados do Harvest", async () => {
+test("9. falha complementar preserva resultados do Harvest Company Employees", async () => {
   clearDecisionMakerCache();
   const input = personSearchSchema.parse({ ...personInput, forceRefresh: true, filters: { ...personInput.filters, includeBroadDiscovery: true } });
-  const result = await executeDecisionMakerSearch(input, dependencies({ discoverBroadPeople: async () => { throw new Error("manutenção"); } }));
+  const result = await executeDecisionMakerSearch(input, dependencies({ discoverBroadPeople: async () => { throw new Error("indisponível"); } }));
   assert.equal(result.people.length, 1);
-  assert.match(result.warnings.join(" "), /descoberta complementar está indisponível/i);
+  assert.match(result.warnings.join(" "), /descoberta complementar também está indisponível/i);
 });
 
 test("10. deduplicação prioriza LinkedIn URL", () => {
-  const first = normalizePeople([rawPerson({ fullName: "Maria S.", workEmail: "maria@acme.com" })], "Peaky", "Decisor funcional");
+  const first = normalizePeople([rawPerson({ fullName: "Maria S.", workEmail: "maria@acme.com" })], "Fonte A", "Decisor funcional");
   const second = normalizePeople([rawPerson({ fullName: "Maria Silva", about: "Liderança" })], "Harvest", "Decisor funcional");
   const merged = mergePeople(second, first);
   assert.equal(merged.length, 1);
@@ -248,20 +250,75 @@ test("22. repetição imediata usa cache e atualizar resultados ignora cache", a
   assert.equal(employeeCalls, 2);
 });
 
-test("23. Peaky recebe somente filtros confirmados pelo schema real", () => {
+test("23. busca de empresas envia somente campos suportados pelo Harvest Company Search", () => {
   const input = buildCompanyDiscoveryInput(companyInput);
-  assert.deepEqual(input.companyState, ["SP"]);
-  assert.deepEqual(input.companyCityPostalCode, ["São Paulo"]);
-  assert.deepEqual(input.revenue, ["100M-500M"]);
-  assert.deepEqual(input.technologyUsed, ["Salesforce"]);
-  assert.equal(input.totalResults, 100);
-  assert.equal("minRevenue" in input, false);
+  assert.equal(input.scraperMode, "short");
+  assert.equal(input.maxItems, 15);
+  assert.ok(Array.isArray(input.locations));
+  assert.match(String(input.searchQuery), /artificial intelligence/i);
+  assert.equal("companyState" in input, false);
+  assert.equal("revenue" in input, false);
+  assert.equal("technologyUsed" in input, false);
+  assert.equal("totalResults" in input, false);
 });
 
 test("24. empresa normalizada preserva receita como dado provável, não confirmado", () => {
   const company = normalizeCompanies([rawCompany({ revenue: "100M-500M" })], "Enrichment público")[0];
   assert.equal(company.revenueRange, "100M-500M");
   assert.equal(company.confidence, "provável");
+});
+
+test("25. resposta atual do Harvest com currentPosition e experience em arrays não é descartada", () => {
+  const people = normalizePeople([{
+    firstName: "Maria",
+    lastName: "Silva",
+    linkedinUrl: "https://www.linkedin.com/in/maria-corpus",
+    headline: "Executiva comercial",
+    currentPosition: [{ companyName: "Corpus" }],
+    experience: [{ position: "Gerente Comercial", companyName: "Corpus", location: "São Paulo, Brasil" }],
+  }], "Harvest", "Decisor funcional");
+  assert.equal(people.length, 1);
+  assert.equal(people[0].name, "Maria Silva");
+  assert.equal(people[0].title, "Gerente Comercial");
+  assert.equal(people[0].company, "Corpus");
+});
+
+test("26. HR Hunting não transforma requisitos da vaga em cargos do Actor", () => {
+  const input = buildHrCandidateSearchInput({ quantity: 20, currentTitle: "Product Manager", seniority: ["manager"], location: "São Paulo", keywords: ["SaaS", "B2B"] }, "Senior Product Manager");
+  assert.deepEqual(input.currentJobTitles, ["Product Manager"]);
+  assert.equal(String(input.searchQuery), "SaaS OR B2B");
+  assert.doesNotMatch(JSON.stringify(input.currentJobTitles), /SaaS|B2B/);
+  assert.deepEqual(input.seniorityLevelIds, ["200", "210"]);
+});
+
+test("27. HR Hunting normaliza o formato atual do Harvest", () => {
+  const candidates = normalizeCandidates([{
+    firstName: "Ana",
+    lastName: "Souza",
+    linkedinUrl: "https://www.linkedin.com/in/ana-souza",
+    headline: "Produto digital",
+    currentPosition: [{ companyName: "Acme" }],
+    experience: [{ position: "Product Manager", companyName: "Acme", location: "São Paulo" }],
+  }]);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].name, "Ana Souza");
+  assert.equal(candidates[0].currentTitle, "Product Manager");
+  assert.equal(candidates[0].currentCompany, "Acme");
+});
+
+test("28. normalização de empresas entende companySize e headquarters do Harvest Company Search", () => {
+  const companies = normalizeCompanies([{
+    companyName: "Corpus",
+    linkedinUrl: "https://www.linkedin.com/company/corpus",
+    website: "https://corpus.example",
+    industry: "Technology",
+    companySize: "201-500 employees",
+    headquarters: "São Paulo, Brasil",
+  }], "Harvest Company Search");
+  assert.equal(companies.length, 1);
+  assert.equal(companies[0].name, "Corpus");
+  assert.equal(companies[0].employeeRange, "201-500 employees");
+  assert.equal(companies[0].location, "São Paulo, Brasil");
 });
 
 function dependencies(overrides: Record<string, unknown> = {}) {
