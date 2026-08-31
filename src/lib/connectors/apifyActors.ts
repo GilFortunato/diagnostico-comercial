@@ -1,4 +1,9 @@
-export type ApifyActorKey = "linkedinProfile" | "linkedinProfilePosts" | "linkedinCompanyEmployees" | "linkedinCompanyDetails";
+export type ApifyActorKey =
+  | "linkedinProfile"
+  | "linkedinProfilePosts"
+  | "linkedinCompanyEmployees"
+  | "linkedinCompanyDetails"
+  | "leadDiscovery";
 
 export type ApifyActorDefinition = {
   key: ApifyActorKey;
@@ -39,8 +44,9 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
     stage: "decision_maker",
     defaultInput: {
       companies: [],
-      maxProfiles: 25,
-      profileScraperMode: "Full",
+      maxItems: 25,
+      profileScraperMode: "Basic ($3 per 1k)",
+      companyBatchMode: "all_at_once",
     },
   },
   linkedinCompanyDetails: {
@@ -50,7 +56,18 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
     purpose: "Coletar dados públicos da página da empresa para contexto comercial e personalização.",
     stage: "rapport",
     defaultInput: {
-      companyLinkedinUrls: [],
+      companies: [],
+    },
+  },
+  leadDiscovery: {
+    key: "leadDiscovery",
+    actorId: "peakydev/leads-scraper-ppe",
+    label: "Descoberta ampla de empresas e pessoas",
+    purpose: "Descobrir empresas ou profissionais por filtros públicos de mercado, cargo e senioridade.",
+    stage: "decision_maker",
+    defaultInput: {
+      totalResults: 100,
+      employeePerCompany: ["4"],
     },
   },
 };

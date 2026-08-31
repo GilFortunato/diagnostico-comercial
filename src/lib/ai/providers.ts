@@ -2,7 +2,8 @@ export type AiCapability =
   | "ai.generateStructuredAssessment"
   | "ai.generateContentPlan"
   | "ai.summarizeSources"
-  | "ai.extractEvidence";
+  | "ai.extractEvidence"
+  | "ai.rankDecisionMakers";
 
 export type AiProvider = {
   key: string;
@@ -15,7 +16,7 @@ export const aiProviders: AiProvider[] = [
   {
     key: "gemini",
     label: "Google Gemini",
-    capabilities: ["ai.generateStructuredAssessment", "ai.generateContentPlan", "ai.summarizeSources", "ai.extractEvidence"],
+    capabilities: ["ai.generateStructuredAssessment", "ai.generateContentPlan", "ai.summarizeSources", "ai.extractEvidence", "ai.rankDecisionMakers"],
     requiresUserCredential: false,
   },
 ];
