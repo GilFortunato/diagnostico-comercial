@@ -65,7 +65,8 @@ test("pipeline Apify integra o Actor de perfil e o de publicações com limite c
 
 test("migração preserva snapshots históricos ao adicionar perfil profissional", async () => {
   const migration = await readFile("prisma/migrations/20260830203000_add_users_profiles_permissions/migration.sql", "utf8");
-  assert.match(migration, /CREATE TABLE "ProfessionalProfile"/);
-  assert.match(migration, /ALTER TABLE "AuthorityAssessmentSnapshot"\s+ADD COLUMN/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS "User"/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS "ProfessionalProfile"/);
+  assert.match(migration, /ALTER TABLE "AuthorityAssessmentSnapshot"\s+ADD COLUMN IF NOT EXISTS/);
   assert.doesNotMatch(migration, /DROP TABLE|TRUNCATE|DELETE FROM/i);
 });
