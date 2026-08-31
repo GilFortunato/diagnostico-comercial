@@ -11,10 +11,10 @@ export function normalizeCompanies(items: unknown[], source: string): HuntingCom
     const website = pickString(item, ["website", "websiteUrl", "companyWebsite", "organization.website", "company.website"]);
     const domain = pickString(item, ["domain", "companyDomain", "organization.primaryDomain", "company.domain"]) || domainFromUrl(website);
     const industry = pickString(item, ["industry", "industryName", "organization.industry", "company.industry"]);
-    const location = joinLocation(item);
-    const employeeRange = pickString(item, ["employeeRange", "employeeSize", "companyEmployeeSize", "organization.employeeRange", "company.employeeRange"]);
+    const location = joinCompanyLocation(item);
+    const employeeRange = pickString(item, ["employeeRange", "employeeSize", "companyEmployeeSize", "companySize", "employeeCount", "organization.employeeRange", "company.employeeRange"]);
     const revenueRange = pickString(item, ["revenue", "revenueRange", "organization.revenue", "company.revenue"]);
-    const description = pickString(item, ["description", "about", "organization.description", "company.description"]);
+    const description = pickString(item, ["description", "companyDescription", "about", "organization.description", "company.description"]);
 
     accumulator.push({
       id: stableId(linkedinUrl || domain || name),
@@ -41,25 +41,34 @@ export function normalizeCompanies(items: unknown[], source: string): HuntingCom
 
 export function normalizePeople(items: unknown[], source: string, desiredRole: DecisionRole): HuntingPerson[] {
   const normalized = items.filter(isRecord).reduce<HuntingPerson[]>((accumulator, item) => {
-    const name = pickString(item, ["fullName", "name", "profile.fullName", "person.name", "firstName"]);
+    const firstName = pickString(item, ["firstName"]);
     const lastName = pickString(item, ["lastName"]);
-    const fullName = lastName && name && !normalizeText(name).includes(normalizeText(lastName)) ? `${name} ${lastName}` : name;
-    const title = pickString(item, ["title", "jobTitle", "headline", "position", "currentPosition.title", "employment.title"]);
-    const company = pickString(item, ["companyName", "company", "organization.name", "currentPosition.companyName", "employment.companyName"]);
+    const explicitName = pickString(item, ["fullName", "name", "profile.fullName", "person.name"]);
+    const fullName = explicitName || [firstName, lastName].filter(Boolean).join(" ");
+    const currentPosition = firstRecord(item.currentPosition);
+    const currentExperience = firstRecord(item.experience);
+    const title = pickString(item, ["jobTitle", "title", "position", "employment.title"])
+      || pickString(currentPosition, ["title", "position", "jobTitle"])
+      || pickString(currentExperience, ["position", "title", "jobTitle"])
+      || pickString(item, ["headline"]);
+    const company = pickString(item, ["companyName", "company", "organization.name", "employment.companyName"])
+      || pickString(currentPosition, ["companyName", "company.name"])
+      || pickString(currentExperience, ["companyName", "company.name"]);
     const linkedinUrl = normalizeLinkedInUrl(pickString(item, ["linkedinUrl", "linkedin_url", "profileUrl", "url", "profile.linkedinUrl"]));
-    if (!fullName || !title || !company || !linkedinUrl || normalizeText(fullName).includes("pessoa a identificar")) return accumulator;
+    if (!fullName || !title || !linkedinUrl || normalizeText(fullName).includes("pessoa a identificar")) return accumulator;
 
-    const location = joinLocation(item);
+    const resolvedCompany = company || "Empresa não informada";
+    const location = joinLocation(item) || pickString(currentExperience, ["location"]);
     const department = pickString(item, ["department", "function", "jobFunction", "employment.department"]);
     const professionalEmail = pickProfessionalContact(item, ["workEmail", "businessEmail", "professionalEmail", "email"]);
     const professionalPhone = pickProfessionalContact(item, ["workPhone", "businessPhone", "professionalPhone", "phone"]);
-    const profileSummary = pickString(item, ["about", "summary", "description", "profile.summary"]);
+    const profileSummary = pickString(item, ["about", "summary", "description", "profile.summary", "headline"]);
 
     accumulator.push({
       id: stableId(linkedinUrl),
       name: fullName,
       title,
-      company,
+      company: resolvedCompany,
       linkedinUrl,
       location: location || undefined,
       department: department || undefined,
@@ -115,6 +124,7 @@ function mergePerson(base: HuntingPerson, update: HuntingPerson): HuntingPerson 
   return {
     ...base,
     ...update,
+    company: update.company !== "Empresa não informada" ? update.company : base.company,
     location: update.location || base.location,
     department: update.department || base.department,
     profileSummary: update.profileSummary || base.profileSummary,
@@ -145,8 +155,14 @@ function deduplicatePeople(people: HuntingPerson[]) {
   });
 }
 
+function joinCompanyLocation(record: UnknownRecord) {
+  const direct = pickString(record, ["headquarters", "headquartersLocation", "location", "locationName", "companyLocation", "organization.location"]);
+  if (direct) return direct;
+  return [pickString(record, ["city", "location.city"]), pickString(record, ["state", "location.state"]), pickString(record, ["country", "location.country"])].filter(Boolean).join(", ");
+}
+
 function joinLocation(record: UnknownRecord) {
-  const direct = pickString(record, ["location", "locationName", "geo", "companyLocation", "organization.location"]);
+  const direct = pickString(record, ["location", "locationName", "geo"]);
   if (direct) return direct;
   return [pickString(record, ["city", "location.city"]), pickString(record, ["state", "location.state"]), pickString(record, ["country", "location.country"])].filter(Boolean).join(", ");
 }
@@ -155,6 +171,14 @@ function pickProfessionalContact(record: UnknownRecord, paths: string[]) {
   const value = pickString(record, paths);
   if (!value || /personal|private/i.test(paths.find((path) => pickString(record, [path]) === value) ?? "")) return "";
   return value;
+}
+
+function firstRecord(value: unknown): UnknownRecord {
+  if (Array.isArray(value)) {
+    const first = value.find(isRecord);
+    return first ?? {};
+  }
+  return isRecord(value) ? value : {};
 }
 
 function normalizeLinkedInUrl(value: string) {
