@@ -1,8 +1,10 @@
 export type ApifyActorKey =
   | "linkedinProfile"
   | "linkedinProfilePosts"
+  | "linkedinProfileSearch"
   | "linkedinCompanyEmployees"
   | "linkedinCompanyDetails"
+  | "linkedinCompanySearch"
   | "leadDiscovery";
 
 export type ApifyActorDefinition = {
@@ -36,6 +38,17 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
       includeReposts: true,
     },
   },
+  linkedinProfileSearch: {
+    key: "linkedinProfileSearch",
+    actorId: "harvestapi/linkedin-profile-search",
+    label: "Busca pública de profissionais",
+    purpose: "Buscar profissionais públicos por cargo, localização, empresa e senioridade com filtros suportados pelo Harvest.",
+    stage: "decision_maker",
+    defaultInput: {
+      profileScraperMode: "Short",
+      maxItems: 25,
+    },
+  },
   linkedinCompanyEmployees: {
     key: "linkedinCompanyEmployees",
     actorId: "harvestapi/linkedin-company-employees",
@@ -45,7 +58,7 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
     defaultInput: {
       companies: [],
       maxItems: 25,
-      profileScraperMode: "Basic ($3 per 1k)",
+      profileScraperMode: "Short ($4 per 1k)",
       companyBatchMode: "all_at_once",
     },
   },
@@ -59,11 +72,22 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
       companies: [],
     },
   },
+  linkedinCompanySearch: {
+    key: "linkedinCompanySearch",
+    actorId: "harvestapi/linkedin-company-search",
+    label: "Busca pública de empresas",
+    purpose: "Buscar páginas públicas de empresas por termos e localização usando filtros suportados pelo Harvest.",
+    stage: "decision_maker",
+    defaultInput: {
+      scraperMode: "short",
+      maxItems: 25,
+    },
+  },
   leadDiscovery: {
     key: "leadDiscovery",
     actorId: "peakydev/leads-scraper-ppe",
-    label: "Descoberta ampla de empresas e pessoas",
-    purpose: "Descobrir empresas ou profissionais por filtros públicos de mercado, cargo e senioridade.",
+    label: "Descoberta ampla alternativa",
+    purpose: "Fonte alternativa de descoberta ampla; não deve ser o caminho crítico enquanto o Actor estiver instável.",
     stage: "decision_maker",
     defaultInput: {
       totalResults: 100,
