@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { AuthorityAssessment } from "@/lib/diagnostics/authority";
 import type { AuthorityThirtyDayPlan } from "@/lib/diagnostics/authorityPlan";
 import { getPrisma } from "@/lib/db/prisma";
+import { sanitizePrismaJson, stripUnsupportedText } from "@/lib/repositories/prismaJson";
 
 export type AuthorityAssessmentOwner = {
   id: string;
@@ -26,28 +27,37 @@ export type AuthorityAssessmentSnapshotRecord = {
 
 export async function saveAuthorityAssessment(assessment: AuthorityAssessment, owner: AuthorityAssessmentOwner) {
   const createdAt = new Date(assessment.createdAt);
+  const sanitizedAssessment = sanitizePrismaJson(assessment) as Prisma.InputJsonValue;
+  const sanitizedSourceSnapshot = assessment.input.linkedinSnapshot == null
+    ? Prisma.DbNull
+    : sanitizePrismaJson(assessment.input.linkedinSnapshot) as Prisma.InputJsonValue;
+  const ownerEmail = owner.email ? stripUnsupportedText(owner.email) : null;
+  const subjectName = assessment.analyzedProfileName ? stripUnsupportedText(assessment.analyzedProfileName) : null;
+  const profileUrl = assessment.input.profileUrl ? stripUnsupportedText(assessment.input.profileUrl) : null;
+  const businessUnitId = stripUnsupportedText(assessment.input.businessUnitId);
+
   await getPrisma().authorityAssessmentSnapshot.upsert({
     where: { id: assessment.id },
     create: {
-      id: assessment.id,
-      ownerId: owner.id,
-      ownerEmail: owner.email,
-      subjectName: assessment.analyzedProfileName,
-      businessUnitId: assessment.input.businessUnitId,
-      profileUrl: assessment.input.profileUrl || null,
+      id: stripUnsupportedText(assessment.id),
+      ownerId: stripUnsupportedText(owner.id),
+      ownerEmail,
+      subjectName,
+      businessUnitId,
+      profileUrl,
       schemaVersion: assessment.schemaVersion,
-      sourceSnapshot: assessment.input.linkedinSnapshot as unknown as Prisma.InputJsonValue | undefined,
-      assessment: assessment as unknown as Prisma.InputJsonValue,
+      sourceSnapshot: sanitizedSourceSnapshot,
+      assessment: sanitizedAssessment,
       createdAt,
       updatedAt: createdAt,
     },
     update: {
-      ownerEmail: owner.email,
-      subjectName: assessment.analyzedProfileName,
-      profileUrl: assessment.input.profileUrl || null,
+      ownerEmail,
+      subjectName,
+      profileUrl,
       schemaVersion: assessment.schemaVersion,
-      sourceSnapshot: assessment.input.linkedinSnapshot as unknown as Prisma.InputJsonValue | undefined,
-      assessment: assessment as unknown as Prisma.InputJsonValue,
+      sourceSnapshot: sanitizedSourceSnapshot,
+      assessment: sanitizedAssessment,
     },
   });
   return assessment;
@@ -91,7 +101,7 @@ export async function findOwnedAuthorityAssessmentSnapshot(id: string, ownerId: 
 export async function saveAuthorityPlanSnapshot(assessmentId: string, ownerId: string, plan: AuthorityThirtyDayPlan) {
   const result = await getPrisma().authorityAssessmentSnapshot.updateMany({
     where: { id: assessmentId, ownerId },
-    data: { plan30Days: plan as unknown as Prisma.InputJsonValue },
+    data: { plan30Days: sanitizePrismaJson(plan) as Prisma.InputJsonValue },
   });
   return result.count > 0;
 }
