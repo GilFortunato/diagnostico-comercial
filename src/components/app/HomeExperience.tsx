@@ -109,20 +109,18 @@ export function HomeExperience({ isAdmin = false }: { isAdmin?: boolean }) {
         </section>
 
         <ConnectorStatusSummary />
-        <section className="grid gap-4 rounded-lg border border-[var(--share-line)] bg-white p-5 shadow-[0_18px_60px_rgb(0_63_46_/_0.08)] md:grid-cols-[1fr_auto] md:items-center">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Nova área</p>
-            <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Mapa de decisores</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">
-              Estruture a pesquisa de conta, encontre pessoas estratégicas e prepare rapport com fontes e confiança.
-            </p>
-          </div>
-          <Link
-            href="/mapa-decisores"
-            className="inline-flex items-center justify-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]"
-          >
-            Abrir mapa
-            <ArrowRight className="h-4 w-4" />
+        <section className="grid gap-4 md:grid-cols-2">
+          <Link href="/hr-hunting" className="border border-[var(--share-line)] bg-white p-5 shadow-[0_18px_60px_rgb(0_63_46_/_0.08)] transition hover:border-[var(--share-green-800)]">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Hunting de talentos</p>
+            <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">HR Hunting</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-600">Encontre e priorize talentos aderentes às suas vagas.</p>
+            <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--share-green-900)]">Abrir HR Hunting <ArrowRight className="h-4 w-4" /></span>
+          </Link>
+          <Link href="/mapa-decisores" className="border border-[var(--share-line)] bg-white p-5 shadow-[0_18px_60px_rgb(0_63_46_/_0.08)] transition hover:border-[var(--share-green-800)]">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Hunting comercial</p>
+            <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">B2B Hunting</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-600">Encontre contas, decisores e oportunidades comerciais com inteligência.</p>
+            <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--share-green-900)]">Abrir B2B Hunting <ArrowRight className="h-4 w-4" /></span>
           </Link>
         </section>
         {isAdmin ? (

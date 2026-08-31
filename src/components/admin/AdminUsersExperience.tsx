@@ -20,6 +20,7 @@ const moduleLabels: Record<PlatformModule, string> = {
   "authority.leader": "Diagnóstico de líderes",
   "content.intelligence": "Inteligência de conteúdo",
   "decision.makers": "Mapa de decisores",
+  "hr.hunting": "HR Hunting",
   rapport: "Rapport",
   "meeting.intelligence": "Inteligência de reuniões",
 };
@@ -106,7 +107,7 @@ export function AdminUsersExperience() {
                 </div>
                 <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   {modules.map((moduleKey) => {
-                    const enabled = explicit.get(moduleKey) ?? ["authority.personal", "content.intelligence", "decision.makers"].includes(moduleKey);
+                    const enabled = explicit.get(moduleKey) ?? ["authority.personal", "content.intelligence", "decision.makers", "hr.hunting"].includes(moduleKey);
                     return <label key={moduleKey} className="flex items-center gap-2 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-3 text-sm text-zinc-700"><input type="checkbox" checked={enabled} disabled={isPending || !user.active} onChange={(event) => update({ action: "permission", userId: user.id, moduleKey, enabled: event.target.checked })} /><span>{moduleLabels[moduleKey]}</span>{enabled ? <CheckCircle2 className="ml-auto h-4 w-4 text-[var(--share-green-800)]" /> : null}</label>;
                   })}
                 </div>

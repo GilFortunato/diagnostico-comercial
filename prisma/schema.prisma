@@ -74,8 +74,93 @@ model User {
   credentials         UserConnectorCredential[]
   skillRuns           SkillRun[]
   assessments         AuthorityAssessment[]
+  hrHuntingSearches   HrHuntingSearch[]
   createdAt           DateTime                  @default(now())
   updatedAt           DateTime                  @updatedAt
+}
+
+model HrHuntingSearch {
+  id                    String               @id @default(cuid())
+  ownerId               String
+  title                 String
+  jobDescription        String
+  jobUrl                String?
+  companyName           String?
+  recruiterName         String?
+  jobDna                Json
+  searchTerms           String[]
+  status                String               @default("job_dna_ready")
+  sourceSnapshot        Json?
+  connectorWarnings     String[]
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  owner                 User                 @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  candidates            HrHuntingCandidate[]
+
+  @@index([ownerId, updatedAt])
+}
+
+model HrHuntingCandidate {
+  id                    String                       @id @default(cuid())
+  searchId              String
+  sourcePersonId        String?
+  name                  String
+  currentTitle          String?
+  currentCompany        String?
+  location              String?
+  profileUrl            String?
+  professionalSummary   String?
+  fitScore              Int
+  fitClassification     String
+  mainSignal            String?
+  pointsToValidate      String[]
+  sourceName            String
+  confidence            ConfidenceLevel              @default(UNVERIFIED)
+  rawSnapshot           Json
+  search                HrHuntingSearch              @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  evidence              HrHuntingCandidateEvidence[]
+  contacts              HrHuntingCandidateContact[]
+  shortlist             HrHuntingShortlist?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+
+  @@unique([searchId, profileUrl])
+  @@index([searchId, fitScore])
+}
+
+model HrHuntingCandidateEvidence {
+  id                    String               @id @default(cuid())
+  candidateId           String
+  criterion             String
+  criterionType         String
+  result                String
+  evidence              String?
+  source                String
+  confidence            ConfidenceLevel
+  candidate             HrHuntingCandidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  createdAt             DateTime             @default(now())
+}
+
+model HrHuntingCandidateContact {
+  id                    String               @id @default(cuid())
+  candidateId           String
+  value                 String
+  type                  String
+  source                String
+  confidence            ConfidenceLevel
+  obtainedAt            DateTime?
+  candidate             HrHuntingCandidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  createdAt             DateTime             @default(now())
+}
+
+model HrHuntingShortlist {
+  id                    String               @id @default(cuid())
+  candidateId           String               @unique
+  nextStep              String?
+  notes                 String?
+  candidate             HrHuntingCandidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
 }
 
 model ProfessionalProfile {

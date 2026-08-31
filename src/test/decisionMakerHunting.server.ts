@@ -9,6 +9,10 @@ import { rankPeople, targetRolesNotFound } from "@/lib/decision-makers/ranking";
 import { addRoleSelection, expandRoleFamilies, removeRoleSelection } from "@/lib/decision-makers/roleIntelligence";
 import { buildBroadPeopleInput, buildCompanyDiscoveryInput, buildHarvestPeopleInput } from "@/lib/connectors/apifyHunting";
 import { companySearchSchema, personSearchSchema, type DecisionMakerResult } from "@/lib/decision-makers/search";
+import { conservativeJobDna } from "@/lib/hr-hunting/jobDna";
+import { buildHrHuntingWorkbook } from "@/lib/hr-hunting/exportWorkbook";
+import { buildApproachMessage, normalizeCandidates, rankCandidates } from "@/lib/hr-hunting/service";
+import type { HrHuntingSearchSnapshot, JobDna } from "@/lib/hr-hunting/types";
 
 const personInput = personSearchSchema.parse({
   mode: "people",
@@ -317,3 +321,24 @@ function snapshot(): DecisionMakerResult {
     cost: { strategy: "Top 5 perfis e top 3 publicações.", basicCandidates: 1, profileEnrichments: 0, postEnrichments: 0, broadDiscoveryUsed: false },
   };
 }
+
+const hrDna: JobDna = { title: "Product Manager", shortSummary: "Posição para produto digital B2B.", responsibilities: [], interviewChecks: [], criteria: [{ id: "discovery", label: "Product Discovery", kind: "obrigatório", sourceExcerpt: "Experiência com Product Discovery." }, { id: "saas", label: "SaaS B2B", kind: "desejável", sourceExcerpt: "Vivência em SaaS B2B é desejável." }] };
+
+test("HR Hunting preserva evidências: DNA conservador, deduplicação e não verificado", () => {
+  const dna = conservativeJobDna({ title: "Analista", description: "Requisito: experiência com dados. Preferência de idade não deve ser considerada." });
+  assert.equal(dna.criteria.some((criterion) => /idade/i.test(criterion.label)), false);
+  const candidates = normalizeCandidates([{ fullName: "Ana Silva", title: "Product Manager", companyName: "Acme", linkedinUrl: "https://www.linkedin.com/in/ana-silva/" }, { fullName: "Ana Silva", title: "Product Manager", companyName: "Acme", linkedinUrl: "https://www.linkedin.com/in/ana-silva/" }, { fullName: "Bruno Lima", title: "Product Owner", companyName: "Beta" }]);
+  assert.equal(candidates.length, 2);
+  assert.equal(candidates[1].profileUrl, undefined);
+  const ranked = rankCandidates([candidates[0]], hrDna, { quantity: 10, seniority: [], keywords: [] });
+  assert.equal(ranked[0].evidence.find((item) => item.criterion === "SaaS B2B")?.result, "não verificado");
+});
+
+test("HR Hunting gera mensagem com link real e exporta snapshot sem conectores", async () => {
+  const search: HrHuntingSearchSnapshot = { id: "hr_1", title: "Product Manager", jobDescription: "Experiência com Product Discovery.", jobUrl: "https://vagas.exemplo.com/produto", companyName: "Acme", recruiterName: "Gil", jobDna: hrDna, searchTerms: ["Product Manager"], status: "results_ready", connectorWarnings: [], createdAt: "2026-08-31T00:00:00.000Z", updatedAt: "2026-08-31T00:00:00.000Z", candidates: [{ id: "hr_candidate", name: "Ana Silva", currentTitle: "Product Manager", currentCompany: "Acme", profileUrl: "https://www.linkedin.com/in/ana-silva", fitScore: 88, fitClassification: "Alta", pointsToValidate: ["SaaS B2B"], sourceName: "Fonte pública", confidence: "confirmado", shortlisted: true, evidence: [{ criterion: "Product Discovery", criterionType: "obrigatório", result: "atende", evidence: "Experiência informada no perfil.", source: "Fonte pública", confidence: "confirmado" }], contacts: [] }] };
+  assert.match(buildApproachMessage(search, search.candidates[0], "linkedin"), /vagas\.exemplo/);
+  assert.doesNotMatch(buildApproachMessage({ ...search, jobUrl: undefined }, search.candidates[0], "linkedin"), /Detalhes da vaga/);
+  const output = await buildHrHuntingWorkbook(search, "all");
+  const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(output as never);
+  assert.equal((workbook.getWorksheet("Ranking")?.getCell("H2").value as { hyperlink?: string }).hyperlink, "https://www.linkedin.com/in/ana-silva");
+});
