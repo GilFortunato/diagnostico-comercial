@@ -112,6 +112,7 @@ function logAuthorityFailure(stage: AuthorityStage, error: unknown, severity: "e
     stage,
     errorName: error instanceof Error ? error.name : "UnknownError",
     errorCode: readErrorCode(error),
+    databaseError: readDatabaseError(error),
   };
   if (severity === "warn") console.warn("[authority-diagnostic]", metadata);
   else console.error("[authority-diagnostic]", metadata);
@@ -120,6 +121,13 @@ function logAuthorityFailure(stage: AuthorityStage, error: unknown, severity: "e
 function readErrorCode(error: unknown) {
   if (!isRecord(error)) return undefined;
   return typeof error.code === "string" ? error.code : undefined;
+}
+
+function readDatabaseError(error: unknown) {
+  if (!isRecord(error) || !isRecord(error.meta)) return undefined;
+  const value = error.meta.database_error;
+  if (typeof value !== "string") return undefined;
+  return value.replace(/[\r\n\t]+/g, " ").slice(0, 240);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
