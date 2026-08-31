@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { adminAccessStatus } from "@/lib/auth/admin";
+import { supportsLegacyGeminiSamplingParameters } from "@/lib/connectors/geminiCompatibility";
 import {
   maskCredential,
   replaceCredentialCore,
@@ -91,6 +92,16 @@ for (const scenario of providers) {
     assert.equal("credential" in toPublicCredentialStatus(resolved), false);
   });
 }
+
+test("Gemini 3.x não recebe parâmetros legados de amostragem", () => {
+  assert.equal(supportsLegacyGeminiSamplingParameters("gemini-3.6-flash"), false);
+  assert.equal(supportsLegacyGeminiSamplingParameters("gemini-3.7-flash"), false);
+  assert.equal(supportsLegacyGeminiSamplingParameters("gemini-3-flash-preview"), false);
+});
+
+test("modelos Gemini anteriores preservam parâmetros legados quando configurados", () => {
+  assert.equal(supportsLegacyGeminiSamplingParameters("gemini-2.5-flash"), true);
+});
 
 test("endpoints administrativos devem responder 403 para e-mail não autorizado", () => {
   assert.equal(adminAccessStatus("vendedor@share.com.br", "admin@share.com.br"), 403);
