@@ -25,6 +25,9 @@ export async function saveProfessionalLinkedInUrl(userId: string, linkedinUrl: s
 }
 
 export async function recordAuthorityProfileSnapshot(userId: string, linkedinUrl: string | null, snapshot: unknown) {
+  const snapshotForCreate = snapshot == null ? Prisma.DbNull : snapshot as Prisma.InputJsonValue;
+  const snapshotForUpdate = snapshot == null ? undefined : snapshot as Prisma.InputJsonValue;
+
   return getPrisma().professionalProfile.upsert({
     where: { userId },
     create: {
@@ -32,12 +35,12 @@ export async function recordAuthorityProfileSnapshot(userId: string, linkedinUrl
       linkedinUrl,
       linkedinUpdatedAt: linkedinUrl ? new Date() : null,
       lastAuthorityAnalysisAt: new Date(),
-      latestLinkedinSnapshot: snapshot as Prisma.InputJsonValue,
+      latestLinkedinSnapshot: snapshotForCreate,
     },
     update: {
       linkedinUrl: linkedinUrl || undefined,
       lastAuthorityAnalysisAt: new Date(),
-      latestLinkedinSnapshot: snapshot as Prisma.InputJsonValue,
+      latestLinkedinSnapshot: snapshotForUpdate,
     },
   });
 }
