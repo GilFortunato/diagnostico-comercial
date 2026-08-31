@@ -23,6 +23,9 @@ export async function validatePlatformCredential(provider: PlatformProvider, cre
 
 async function validateGemini(credential: string) {
   const model = process.env.GEMINI_MODEL ?? defaultGeminiModel;
+  const generationConfig: { maxOutputTokens: number; temperature?: number } = { maxOutputTokens: 4 };
+  if (supportsLegacyGeminiSamplingParameters(model)) generationConfig.temperature = 0;
+
   return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: "POST",
     headers: {
@@ -31,7 +34,7 @@ async function validateGemini(credential: string) {
     },
     body: JSON.stringify({
       contents: [{ parts: [{ text: "Responda apenas: OK" }] }],
-      generationConfig: { maxOutputTokens: 4, temperature: 0 },
+      generationConfig,
     }),
     signal: AbortSignal.timeout(validationTimeoutMs),
   });
@@ -42,6 +45,10 @@ async function validateApify(credential: string) {
     headers: { Authorization: `Bearer ${credential}` },
     signal: AbortSignal.timeout(validationTimeoutMs),
   });
+}
+
+export function supportsLegacyGeminiSamplingParameters(model: string) {
+  return !/^gemini-3(?:[.-]|$)/i.test(model.trim());
 }
 
 export function classifyValidationFailure(status: number): CredentialValidation {
