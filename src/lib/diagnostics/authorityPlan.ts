@@ -135,8 +135,8 @@ export function createStructuredAuthorityThirtyDayPlan({ assessment, history = [
     .filter((item): item is typeof item & { score: number } => item.status === "evaluated" && item.score !== null)
     .sort((left, right) => left.score - right.score)[0];
   const bridge = assessment.bridgeOpportunities[0];
-  const territory = bridge?.title.split(" + ")[0] ?? guidance.territories[0] ?? assessment.input.businessUnitName;
-  const persona = guidance.personas[0] ?? guidance.icps[0] ?? "decisores da BU";
+  const territory = bridge?.territory ?? guidance.territories[0] ?? assessment.input.businessUnitName;
+  const persona = bridge?.persona ?? "";
   const interestGraph = buildInterestGraphStrategy({
     personalThemes: assessment.input.themes.split(",").map((item) => item.trim()).filter(Boolean),
     territory,
@@ -145,8 +145,9 @@ export function createStructuredAuthorityThirtyDayPlan({ assessment, history = [
   });
   const actions = sprintBlueprint.map((blueprint, offset) => {
     const adapted = adaptBlueprint(blueprint, assessment);
-    const template = createTemplate(adapted.action, { assessment, territory, persona, bridgeTitle: bridge?.title, interestGraph });
-    return createAction({ day: offset + 1, blueprint: adapted, template, territory, persona, assessment, weakest });
+    const actionPersona = personaForAction(adapted.action, persona);
+    const template = createTemplate(adapted.action, { assessment, territory, persona: actionPersona, bridgeTitle: bridge?.title, interestGraph });
+    return createAction({ day: offset + 1, blueprint: adapted, template, territory, persona: actionPersona, assessment, weakest });
   });
 
   const historySignal = history.length > 1
@@ -157,12 +158,12 @@ export function createStructuredAuthorityThirtyDayPlan({ assessment, history = [
     createdAt: new Date().toISOString(),
     assessmentId: assessment.id,
     title: `Sprint de Social Selling de 30 dias para ${assessment.input.businessUnitName}`,
-    summary: reviewPortugueseCopy(`O sprint fortalece ${weakest?.label.toLocaleLowerCase("pt-BR") ?? "a autoridade comercial"}, expande presença em ${territory} e constrói relacionamento com ${persona} antes de qualquer abordagem.${historySignal}`),
+    summary: reviewPortugueseCopy(`O sprint fortalece ${weakest?.label.toLocaleLowerCase("pt-BR") ?? "a autoridade comercial"}, expande presença em ${territory} e constrói relacionamento com contexto antes de qualquer abordagem.${historySignal}`),
     generation: "structured-skeleton",
     generationNote: "Estrutura estratégica validada pela Share AI; nenhuma publicação, comentário ou abordagem é executada automaticamente.",
-    objective: `Tornar a autoridade pessoal mais visível em ${territory} e criar conversas legítimas com ${persona}, preservando a independência da marca pessoal.`,
+    objective: `Tornar a autoridade pessoal mais visível em ${territory} e criar conversas legítimas, preservando a independência da marca pessoal.`,
     currentState: `${assessment.authorityClassification}. ${assessment.authorityPerception.expressionGap}`,
-    desiredState: `Perfil com posicionamento claro, provas visíveis e presença consistente em conversas relevantes para ${persona}.`,
+    desiredState: "Perfil com posicionamento claro, provas visíveis e presença consistente em conversas relevantes.",
     strategicPriorities: assessment.authorityAgenda.strategicPriorities
       .concat(assessment.authorityAgenda.expressionGaps)
       .slice(0, 4)
@@ -188,7 +189,7 @@ export function createStructuredAuthorityThirtyDayPlan({ assessment, history = [
     weeks: [
       { week: 1, title: "Fundação e clareza", objective: "Corrigir a expressão da autoridade antes de ampliar exposição.", outcomes: ["Posicionamento revisado", "Provas organizadas", "Territórios priorizados"], dayRange: [1, 7] },
       { week: 2, title: "Autoridade pública", objective: "Entrar em conversas relevantes e publicar somente quando houver tese e evidência.", outcomes: ["Comentários substantivos", "Conteúdo com utilidade", "Sinais observáveis"], dayRange: [8, 14] },
-      { week: 3, title: "Expansão e relacionamento", objective: `Criar familiaridade com ${persona} antes de qualquer abordagem.`, outcomes: ["Rede qualificada", "Rapport contextual", "Pontes validadas"], dayRange: [15, 21] },
+      { week: 3, title: "Expansão e relacionamento", objective: "Criar familiaridade em conversas relevantes antes de qualquer abordagem.", outcomes: ["Rede qualificada", "Rapport contextual", "Pontes validadas"], dayRange: [15, 21] },
       { week: 4, title: "Conversão e aprendizagem", objective: "Avançar apenas nas conversas com legitimidade e aprender com as respostas reais.", outcomes: ["Abordagens contextualizadas", "Aprendizados registrados", "Próximo ciclo definido"], dayRange: [22, 30] },
     ],
     actions,
@@ -266,10 +267,10 @@ function normalizeAction(value: unknown, fallback: AuthorityPlanAction): Authori
 }
 
 function adaptBlueprint(blueprint: SprintBlueprint, assessment: AuthorityAssessment): SprintBlueprint {
-  if (blueprint.action === "POST" && assessment.authoritySellingScore < 55) {
+  if (blueprint.action === "POST" && (assessment.authoritySellingScore ?? 0) < 55) {
     return { action: "NO_PUBLISH", objective: "AUTHORITY", scope: "PERSONAL" };
   }
-  if (blueprint.action === "OUTREACH" && (assessment.authoritySellingScore < 60 || assessment.buAffinityScore < 60)) {
+  if (blueprint.action === "OUTREACH" && ((assessment.authoritySellingScore ?? 0) < 60 || (assessment.buAffinityScore ?? 0) < 60)) {
     return { action: "RELATIONSHIP", objective: "RELATIONSHIP", scope: "BUSINESS_UNIT" };
   }
   return blueprint;
@@ -285,8 +286,8 @@ function createAction({ day, blueprint, template, territory, persona, assessment
   weakest?: AuthorityDimensionScore;
 }): AuthorityPlanAction {
   const personalReason = `${weakest?.label ?? "A autoridade pessoal"} é uma prioridade do diagnóstico e precisa sustentar a ação antes de ampliar exposição.`;
-  const buReason = assessment.buAffinityScore < 55
-    ? `A aderência à ${assessment.input.businessUnitName} ainda é ${assessment.buAffinityScore}/100; a ação cria uma ponte concreta sem forçar propaganda.`
+  const buReason = (assessment.buAffinityScore ?? 0) < 55
+    ? `A aderência à ${assessment.input.businessUnitName} ainda precisa de evidência ou de uma ponte mais concreta; a ação evita associação promocional.`
     : `A aderência à ${assessment.input.businessUnitName} permite aprofundar uma conversa com contexto comercial e identidade pessoal preservada.`;
   return {
     day,
@@ -328,7 +329,7 @@ function createTemplate(action: SocialSellingAction, context: {
     case "INTELLIGENCE":
       return template("Mapeie o cluster profissional", `${interestGraph.outOfNetworkAction} Registre autores, temas e perguntas recorrentes sem supor intenção comercial.`, "Mapa de decisores", "25 min", "Médio", "Baixo", "Novas conversas coerentes fora da rede atual");
     case "COMMENT":
-      return template("Entre em uma conversa relevante", `Comente em uma conversa de ${persona} sobre ${territory}. Acrescente ponto de vista, consequência ou pergunta específica em duas a seis linhas, sem pitch.`, "Social selling", "20 min", "Alto", "Baixo", "Resposta substantiva ou continuidade da conversa");
+      return template("Entre em uma conversa relevante", `Comente em uma conversa${audiencePhrase(persona)} sobre ${territory}. Acrescente ponto de vista, consequência ou pergunta específica em duas a seis linhas, sem pitch.`, "Social selling", "20 min", "Alto", "Baixo", "Resposta substantiva ou continuidade da conversa");
     case "NO_PUBLISH":
       return template("Hoje, não publique", `Use o período para revisar conversas em andamento, responder com substância e verificar se a próxima tese realmente fortalece ${territory}.`, "Inteligência de conteúdo", "20 min", "Médio", "Baixo", "Tese mais clara ou conversa aprofundada antes do próximo post");
     case "POST":
@@ -336,9 +337,9 @@ function createTemplate(action: SocialSellingAction, context: {
     case "REPLY":
       return template("Continue a conversa", `Responda aos comentários recebidos com uma consequência, nuance ou pergunta ligada a ${territory}; evite encerrar apenas com agradecimento.`, "Social selling", "15 min", "Médio", "Baixo", "Profundidade e continuidade das respostas");
     case "RELATIONSHIP":
-      return template("Construa familiaridade", `Aprofunde uma interação com alguém de ${persona} que já demonstrou interesse em ${territory}. Não apresente oferta antes de existir contexto de conversa.`, "Social selling", "20 min", "Alto", "Baixo", "Reconhecimento mútuo ou abertura para continuar a conversa");
+      return template("Construa familiaridade", `Aprofunde uma interação com uma pessoa que já demonstrou interesse em ${territory}${audiencePhrase(persona)}. Não apresente oferta antes de existir contexto de conversa.`, "Social selling", "20 min", "Alto", "Baixo", "Reconhecimento mútuo ou abertura para continuar a conversa");
     case "RAPPORT":
-      return template("Prepare rapport com evidência", `Estude uma pessoa ou conta de ${persona}, identifique uma ponte verificável com ${territory} e prepare uma abordagem individual para aprovação humana.`, "Rapport", "25 min", "Alto", "Médio", "Contexto específico suficiente para uma conversa individual");
+      return template("Prepare rapport com evidência", `Estude uma pessoa ou conta relevante${audiencePhrase(persona)}, identifique uma ponte verificável com ${territory} e prepare uma abordagem individual para aprovação humana.`, "Rapport", "25 min", "Alto", "Médio", "Contexto específico suficiente para uma conversa individual");
     case "OUTREACH":
       return template("Inicie uma conversa contextual", `Somente após as interações anteriores, envie uma mensagem individual a uma pessoa de ${persona}, usando a ponte real construída em ${territory} e sem pitch genérico.`, "Rapport", "15 min", "Alto", "Baixo", "Resposta e continuidade da conversa, não envio da mensagem por si só");
     case "ANALYSIS":
@@ -352,11 +353,20 @@ function template(title: string, action: string, module: string, time: string, i
 
 function whyNowFor(action: SocialSellingAction, assessment: AuthorityAssessment, territory: string, persona: string) {
   if (action === "NO_PUBLISH") return `Qualidade e coerência em ${territory} geram mais avanço do que manter uma frequência artificial.`;
-  if (action === "COMMENT" || action === "RELATIONSHIP" || action === "REPLY") return `O momento pede familiaridade com ${persona} antes de qualquer abordagem comercial.`;
+  if (action === "COMMENT" || action === "RELATIONSHIP" || action === "REPLY") return `O momento pede familiaridade${audiencePhrase(persona)} antes de qualquer abordagem comercial.`;
   if (action === "OUTREACH" || action === "RAPPORT") return "As etapas anteriores criam contexto suficiente para avaliar uma conversa individual sem antecipar o pitch.";
   if (action === "ANALYSIS") return "O sprint precisa aprender com sinais reais para não repetir ações por hábito.";
-  if (action === "PROFILE") return `O Authority Selling Score atual é ${assessment.authoritySellingScore}/100; a base do perfil orienta como todo o restante será percebido.`;
-  return `Esta ação fortalece a associação entre sua autoridade, ${territory} e as conversas relevantes para ${persona}.`;
+  if (action === "PROFILE") return assessment.authoritySellingScore === null ? "Ainda não há evidências compatíveis suficientes para pontuar a autoridade; a base do perfil orienta a próxima coleta." : `O Authority Selling Score atual é ${assessment.authoritySellingScore}/100; a base do perfil orienta como todo o restante será percebido.`;
+  return `Esta ação fortalece a associação entre sua autoridade, ${territory} e conversas relevantes${audiencePhrase(persona)}.`;
+}
+
+function audiencePhrase(persona: string) {
+  return persona ? ` com ${persona}` : "";
+}
+
+function personaForAction(action: SocialSellingAction, persona: string) {
+  if (!persona) return "";
+  return action === "COMMENT" || action === "RELATIONSHIP" || action === "RAPPORT" || action === "OUTREACH" ? persona : "";
 }
 
 function legacyActionType(action: SocialSellingAction): AuthorityPlanActionType {

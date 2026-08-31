@@ -32,7 +32,7 @@ export async function saveAuthorityAssessment(assessment: AuthorityAssessment, o
       id: assessment.id,
       ownerId: owner.id,
       ownerEmail: owner.email,
-      subjectName: owner.name,
+      subjectName: assessment.analyzedProfileName,
       businessUnitId: assessment.input.businessUnitId,
       profileUrl: assessment.input.profileUrl || null,
       schemaVersion: assessment.schemaVersion,
@@ -43,7 +43,7 @@ export async function saveAuthorityAssessment(assessment: AuthorityAssessment, o
     },
     update: {
       ownerEmail: owner.email,
-      subjectName: owner.name,
+      subjectName: assessment.analyzedProfileName,
       profileUrl: assessment.input.profileUrl || null,
       schemaVersion: assessment.schemaVersion,
       sourceSnapshot: assessment.input.linkedinSnapshot as unknown as Prisma.InputJsonValue | undefined,

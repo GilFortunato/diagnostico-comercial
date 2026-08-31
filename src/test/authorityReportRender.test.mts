@@ -27,12 +27,13 @@ function reportFixture(): AuthorityReportSnapshot {
 
   assessment.id = "assessment-report-render-fixture";
   assessment.createdAt = "2026-08-30T12:00:00.000Z";
+  assessment.analyzedProfileName = "Ana Estratégia";
 
   return {
     id: assessment.id,
     ownerId: "owner-1",
     ownerEmail: "owner@example.com",
-    subjectName: "Ana Estratégia",
+    subjectName: "Usuário logado",
     businessUnitId: businessUnit.id,
     assessment,
     plan30Days: createStructuredAuthorityThirtyDayPlan({ assessment }),

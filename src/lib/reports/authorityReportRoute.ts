@@ -30,7 +30,10 @@ export async function createAuthorityReportResponse({
   if (!canAccess) return jsonError("Você não tem permissão para exportar este diagnóstico.", 403);
 
   const pdf = await dependencies.renderReport(snapshot);
-  const filename = buildAuthorityReportFilename(snapshot.subjectName, snapshot.assessment.createdAt);
+  const filename = buildAuthorityReportFilename(
+    snapshot.assessment.analyzedProfileName || snapshot.assessment.input.linkedinSnapshot?.name || "Nome não identificado",
+    snapshot.assessment.createdAt,
+  );
 
   return new Response(new Uint8Array(pdf), {
     status: 200,

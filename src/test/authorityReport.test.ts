@@ -26,6 +26,7 @@ function reportFixture({ withPlan = true }: { withPlan?: boolean } = {}): Author
   });
   assessment.id = "assessment-report-fixture";
   assessment.createdAt = "2026-08-30T12:00:00.000Z";
+  assessment.analyzedProfileName = "Ana Estratégia";
   assessment.authoritySellingScore = 74;
   assessment.overallScore = 74;
   assessment.buAffinityScore = 61;
@@ -35,7 +36,7 @@ function reportFixture({ withPlan = true }: { withPlan?: boolean } = {}): Author
     id: assessment.id,
     ownerId: "owner-1",
     ownerEmail: "owner@example.com",
-    subjectName: "Ana Estratégia / Conselho",
+    subjectName: "Usuário logado",
     businessUnitId: fixtureBu.id,
     assessment,
     plan30Days: withPlan ? createStructuredAuthorityThirtyDayPlan({ assessment }) : null,
@@ -140,6 +141,7 @@ test("view model preserves every persisted score exactly", () => {
 test("missing optional report fields are omitted without fabrication", () => {
   const snapshot = reportFixture({ withPlan: false });
   snapshot.subjectName = null;
+  snapshot.assessment.analyzedProfileName = "";
   snapshot.assessment.input.headline = "";
   snapshot.assessment.profileReview = [];
   snapshot.assessment.bridgeOpportunities = [];
@@ -152,12 +154,19 @@ test("missing optional report fields are omitted without fabrication", () => {
   snapshot.assessment.nextActions = [];
 
   const model = buildAuthorityReportViewModel(snapshot);
-  assert.equal(model.subjectName, null);
+  assert.equal(model.subjectName, "Nome não identificado");
   assert.equal(model.headline, null);
   assert.equal(model.plan, null);
   assert.deepEqual(model.bridges, []);
   assert.deepEqual(model.sources, []);
   assert.equal(model.nextBestAction?.priority, snapshot.assessment.nextBestAction.title);
+});
+
+test("relatório usa o nome do perfil analisado, não o usuário logado nem o slug", () => {
+  const model = buildAuthorityReportViewModel(reportFixture());
+  assert.equal(model.subjectName, "Ana Estratégia");
+  assert.notEqual(model.subjectName, "Usuário logado");
+  assert.notEqual(model.subjectName, "perfil-executivo");
 });
 
 test("technical-term filtering does not corrupt ordinary Portuguese words", () => {

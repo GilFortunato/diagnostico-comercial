@@ -27,11 +27,11 @@ test("authority assessment returns a bounded commercial authority score", () => 
 
   assert.equal(assessment.input.businessUnitName, defaultBu.name);
   assert.equal(assessment.dimensions.length, 20);
-  assert.ok(assessment.overallScore >= 0);
-  assert.ok(assessment.overallScore <= 100);
+  assert.ok((assessment.overallScore ?? -1) >= 0);
+  assert.ok((assessment.overallScore ?? 101) <= 100);
   assert.equal(assessment.authoritySellingScore, assessment.overallScore);
-  assert.ok(assessment.buAffinityScore >= 0);
-  assert.ok(assessment.activationPotentialScore >= assessment.buAffinityScore);
+  assert.ok((assessment.buAffinityScore ?? -1) >= 0);
+  assert.ok((assessment.activationPotentialScore ?? -1) >= (assessment.buAffinityScore ?? 101));
   assert.ok(assessment.bridgeOpportunities.length > 0);
   assert.ok(assessment.sources.some((source) => source.confidence === "confirmed"));
   assert.ok(assessment.nextActions.includes("Comparar evolução"));
@@ -45,7 +45,7 @@ test("authority comparison calculates score movement", () => {
   const comparison = compareAuthorityAssessments([latest, first]);
 
   assert.equal(comparison.available, true);
-  assert.equal(comparison.delta, latest.overallScore - first.overallScore);
+  assert.equal(comparison.delta, (latest.overallScore ?? 0) - (first.overallScore ?? 0));
 });
 
 test("business unit changes affinity without rewriting personal authority", () => {
@@ -81,7 +81,7 @@ test("business unit starter input does not fabricate personal profile data", () 
   };
   const assessment = createAuthorityAssessment(emptyStarter);
   assert.ok(assessment.profileReview.every((item) => item.confidence === "unverified"));
-  assert.ok(assessment.buAffinityScore < 55);
+  assert.ok((assessment.buAffinityScore ?? 0) < 55);
 });
 
 test("thirty-day plan creates a daily plan without reusing legacy weekly cards", () => {

@@ -63,6 +63,24 @@ export function reviewPortugueseList(items: string[]) {
   return items.map((item) => reviewPortugueseCopy(item));
 }
 
+const protectedPresentationTerms: Record<string, string> = {
+  "ia": "IA",
+  "rh": "RH",
+  "t&d": "T&D",
+  "b2b": "B2B",
+  "c-level": "C-level",
+  "linkedin": "LinkedIn",
+};
+
+/** Applies presentation casing without mutating the source data or acronyms. */
+export function presentationTitle(value: string) {
+  const reviewed = reviewPortugueseCopy(value.trim().replace(/\s+/g, " "));
+  if (!reviewed) return "";
+
+  const withProtectedTerms = reviewed.replace(/\b(ia|rh|t&d|b2b|c-level|linkedin)\b/gi, (term) => protectedPresentationTerms[term.toLocaleLowerCase("pt-BR")] ?? term);
+  return withProtectedTerms.replace(/^([a-zà-öø-ÿ])/u, (letter) => letter.toLocaleUpperCase("pt-BR"));
+}
+
 export function confidenceLabel(confidence: "confirmed" | "likely" | "inference" | "unverified") {
   if (confidence === "confirmed") return "Confirmado";
   if (confidence === "likely") return "Provável";

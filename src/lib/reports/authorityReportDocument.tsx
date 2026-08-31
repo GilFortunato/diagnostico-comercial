@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
   pageIntro: { marginTop: 10, maxWidth: 440, fontSize: 10.5, lineHeight: 1.55, color: colors.muted },
   section: { marginTop: 18 },
   sectionTitle: { paddingBottom: 7, borderBottomWidth: 1.5, borderBottomColor: colors.green950, fontSize: 9, fontFamily: "Helvetica-Bold", letterSpacing: 1, color: colors.green950 },
-  paragraph: { marginTop: 10, fontSize: 10.5, lineHeight: 1.55, color: colors.ink },
+  paragraph: { marginTop: 10, fontSize: 10.5, lineHeight: 1.55, textAlign: "justify", color: colors.ink },
   scoreComposition: { marginTop: 25, flexDirection: "row", alignItems: "stretch" },
   mainScore: { width: "46%", paddingRight: 24, borderRightWidth: 1, borderRightColor: colors.line },
   mainScoreValue: { fontSize: 64, lineHeight: 0.9, fontFamily: "Helvetica-Bold", color: colors.green950 },
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   bridge: { width: "100%", marginTop: 10, paddingTop: 8, borderTopWidth: 2, borderTopColor: colors.lime },
   bridgeNumber: { fontSize: 7, fontFamily: "Helvetica-Bold", color: colors.green800 },
   bridgeTitle: { marginTop: 3, fontSize: 10.5, lineHeight: 1.2, fontFamily: "Helvetica-Bold", color: colors.green950 },
-  bridgeDescription: { marginTop: 4, fontSize: 7.8, lineHeight: 1.35, color: colors.muted },
+  bridgeDescription: { marginTop: 4, fontSize: 8.2, lineHeight: 1.42, textAlign: "justify", color: colors.muted },
   bridgeColumns: { marginTop: 6, flexDirection: "row", justifyContent: "space-between" },
   bridgeColumn: { width: "48%" },
   detailLabel: { marginTop: 4, fontSize: 6.2, fontFamily: "Helvetica-Bold", letterSpacing: 0.5, color: colors.green800 },
@@ -153,7 +153,7 @@ export function AuthorityReportDocument({ snapshot }: { snapshot: AuthorityRepor
   const report = buildAuthorityReportViewModel(snapshot);
   const dateLabel = formatDate(report.createdAt);
   return (
-    <Document title={`Relatório executivo de autoridade - ${report.subjectName ?? report.businessUnitName}`} author="Share AI" subject="Diagnóstico de posicionamento e autoridade no LinkedIn">
+    <Document title={`Relatório executivo de autoridade - ${report.subjectName}`} author="Share AI" subject="Diagnóstico de posicionamento e autoridade no LinkedIn">
       <Page size="A4" style={styles.cover}>
         <View style={{ flexDirection: "row", alignItems: "flex-end" }}>
           <Text style={styles.coverWordmark}>share</Text>
@@ -163,23 +163,23 @@ export function AuthorityReportDocument({ snapshot }: { snapshot: AuthorityRepor
         <Text style={styles.coverEyebrow}>RELATÓRIO EXECUTIVO</Text>
         <Text style={styles.coverTitle}>Diagnóstico de Posicionamento e Autoridade no LinkedIn</Text>
         <View style={styles.coverMeta}>
-          {report.subjectName ? <CoverMeta label="PERFIL ANALISADO" value={report.subjectName} /> : null}
+          <CoverMeta label="PERFIL ANALISADO" value={report.subjectName} />
           <CoverMeta label="BUSINESS UNIT" value={report.businessUnitName} />
           {report.objective ? <CoverMeta label="OBJETIVO COMERCIAL" value={report.objective} /> : null}
           <CoverMeta label="DATA" value={dateLabel} />
         </View>
         <View style={styles.coverFooter}>
           <Text>Share AI</Text>
-          <Text>Authority Selling Assessment</Text>
+          <Text>Avaliação de autoridade comercial</Text>
         </View>
       </Page>
 
       <ReportPage title="Resumo executivo" intro="Uma leitura direta dos indicadores e das prioridades registradas no diagnóstico.">
         <View style={styles.scoreComposition}>
           <View style={styles.mainScore}>
-            <Text style={styles.mainScoreValue}>{report.scores.authority}</Text>
-            <Text style={styles.mainScoreScale}>/100</Text>
-            <Text style={styles.mainScoreLabel}>AUTHORITY SELLING SCORE</Text>
+            <Text style={styles.mainScoreValue}>{scoreLabel(report.scores.authority)}</Text>
+            {report.scores.authority !== null ? <Text style={styles.mainScoreScale}>/100</Text> : <Text style={styles.mainScoreScale}>sem pontuação</Text>}
+            <Text style={styles.mainScoreLabel}>PONTUAÇÃO DE AUTORIDADE COMERCIAL</Text>
           </View>
           <View style={styles.secondaryScores}>
             <SecondaryScore label="ADERÊNCIA À BU" value={report.scores.businessUnitAffinity} />
@@ -324,7 +324,7 @@ function ReportPage({ title, intro, children }: { title: string; intro?: string 
   return (
     <Page size="A4" style={styles.page} wrap>
       <ReportHeader />
-      <Text style={styles.eyebrow}>SHARE AI · EXECUTIVE ASSESSMENT</Text>
+      <Text style={styles.eyebrow}>SHARE AI · AVALIAÇÃO EXECUTIVA</Text>
       <Text style={styles.pageTitle}>{title}</Text>
       {intro ? <Text style={styles.pageIntro}>{intro}</Text> : null}
       {children}
@@ -366,13 +366,17 @@ function ReadingCard({ label, title, text, compact = false }: { label: string; t
   return <View style={[styles.readingCard, compact ? { width: "31%" } : {}]} minPresenceAhead={65}><Text style={styles.readingLabel}>{label.toUpperCase()}</Text><Text style={styles.readingTitle}>{title}</Text><Text style={styles.readingText}>{text}</Text></View>;
 }
 
-function SecondaryScore({ label, value }: { label: string; value: number }) {
+function SecondaryScore({ label, value }: { label: string; value: number | null }) {
   return (
     <View style={styles.secondaryScore} wrap={false}>
-      <View style={styles.secondaryScoreRow}><Text style={styles.secondaryScoreLabel}>{label}</Text><Text style={styles.secondaryScoreValue}>{value}</Text></View>
-      <View style={styles.scoreTrack}><View style={[styles.scoreFill, { width: `${value}%` }]} /></View>
+      <View style={styles.secondaryScoreRow}><Text style={styles.secondaryScoreLabel}>{label}</Text><Text style={styles.secondaryScoreValue}>{scoreLabel(value)}</Text></View>
+      {value !== null ? <View style={styles.scoreTrack}><View style={[styles.scoreFill, { width: `${value}%` }]} /></View> : null}
     </View>
   );
+}
+
+function scoreLabel(value: number | null) {
+  return value === null ? "Não avaliado" : String(value);
 }
 
 function Bridge({ bridge, index }: { bridge: BridgeOpportunity; index: number }) {

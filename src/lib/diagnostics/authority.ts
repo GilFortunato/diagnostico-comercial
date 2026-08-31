@@ -5,7 +5,7 @@ import {
   normalizedLinkedInSnapshotSchema,
   type NormalizedLinkedInSnapshot,
 } from "@/lib/connectors/linkedinNormalization";
-import { reviewPortugueseCopy, reviewPortugueseList } from "@/lib/copy/editorial";
+import { presentationTitle, reviewPortugueseCopy, reviewPortugueseList } from "@/lib/copy/editorial";
 
 export const confidenceLevels = ["confirmed", "likely", "inference", "unverified"] as const;
 export type ConfidenceLevel = (typeof confidenceLevels)[number];
@@ -72,7 +72,8 @@ export type AuthorityAgendaItem = { title: string; evidence: string[]; reading: 
 
 export type AuthorityAssessment = {
   id: string; createdAt: string; schemaVersion: 2; adapter: "structured-engine" | "demo-local" | "gemini" | "database"; input: AuthorityInput;
-  overallScore: number; authoritySellingScore: number; buAffinityScore: number; activationPotentialScore: number; scoreCoverage: number;
+  analyzedProfileName: string;
+  overallScore: number | null; authoritySellingScore: number | null; buAffinityScore: number | null; activationPotentialScore: number | null; scoreCoverage: number;
   authorityClassification: string; scoreExplanations: { authority: string; businessUnitAffinity: string; activationPotential: string };
   currentFocus: { businessUnitName: string; objective: string; periodLabel: string };
   summary: string; dimensions: AuthorityDimensionScore[]; profileReview: ProfileReviewItem[]; themeAlignment: ThemeAlignment[];
@@ -117,7 +118,7 @@ export function createAuthorityAssessment(input: AuthorityInput, extraSources: R
   const dimensions = authorityDimensions.map((item) => evaluateDimension(item, parsed));
   const evaluated = dimensions.filter((item): item is AuthorityDimensionScore & { score: number } => item.status === "evaluated" && item.score !== null);
   const totalWeight = evaluated.reduce((sum, item) => sum + item.weight, 0);
-  const authoritySellingScore = totalWeight ? normalize(evaluated.reduce((sum, item) => sum + item.score * item.weight, 0) / totalWeight) : 0;
+  const authoritySellingScore = totalWeight ? normalize(evaluated.reduce((sum, item) => sum + item.score * item.weight, 0) / totalWeight) : null;
   const scoreCoverage = Math.round((evaluated.length / dimensions.length) * 100);
   const strong = evaluated.filter((item) => item.score >= 72).sort((a, b) => b.score - a.score).slice(0, 4);
   const guidance = parsed.businessUnitContext ?? buildBusinessUnitGuidance(parsed.businessUnitId);
@@ -133,20 +134,27 @@ export function createAuthorityAssessment(input: AuthorityInput, extraSources: R
   const strategicGaps = buildStrategicGaps(dimensions, parsed, commercialExposure);
   const authorityAgenda = buildAuthorityAgenda(strong, strategicGaps, bridgeOpportunities, authorityPerception);
   const primaryTerritory = guidance.territories[0] ?? parsed.businessUnitName;
-  const primaryIcp = guidance.icps[0] ?? guidance.personas[0] ?? "decisores do ICP";
+  const primaryIcp = guidance.icps[0] ?? "organizações com contexto compatível";
   const nextBestAction = buildAssessmentNextBestAction(strategicGaps, bridgeOpportunities, parsed);
   const authorityClassification = classifyAuthority(authoritySellingScore, scoreCoverage);
+  const analyzedProfileName = resolveAnalyzedProfileName(parsed);
 
   return {
-    id: crypto.randomUUID(), createdAt: new Date().toISOString(), schemaVersion: 2, adapter: "structured-engine", input: parsed,
+    id: crypto.randomUUID(), createdAt: new Date().toISOString(), schemaVersion: 2, adapter: "structured-engine", input: parsed, analyzedProfileName,
     overallScore: authoritySellingScore, authoritySellingScore, buAffinityScore, activationPotentialScore, scoreCoverage, authorityClassification,
     scoreExplanations: {
-      authority: `Mede a força da autoridade pessoal com base em ${evaluated.length} de ${dimensions.length} dimensões com evidência compatível; não depende da BU.`,
-      businessUnitAffinity: `Mede quanto o posicionamento atual conversa com territórios, personas e problemas da ${parsed.businessUnitName}.`,
-      activationPotential: "Estima quanto da autoridade já construída pode ser conectada à BU com naturalidade. Não representa ausência de espaço para melhoria.",
+      authority: authoritySellingScore === null
+        ? "Ainda não há evidências compatíveis suficientes para atribuir uma pontuação de autoridade pessoal."
+        : `Mede a força da autoridade pessoal com base em ${evaluated.length} de ${dimensions.length} dimensões com evidência compatível; não depende da BU.`,
+      businessUnitAffinity: buAffinityScore === null
+        ? "Ainda não há evidências pessoais suficientes para medir a aderência à Business Unit."
+        : `Mede quanto o posicionamento atual conversa com territórios, personas e problemas da ${parsed.businessUnitName}.`,
+      activationPotential: activationPotentialScore === null
+        ? "O potencial de ativação depende primeiro de evidências pessoais e de aderência à Business Unit."
+        : "Estima quanto da autoridade já construída pode ser conectada à BU com naturalidade. Não representa ausência de espaço para melhoria.",
     },
     currentFocus: { businessUnitName: parsed.businessUnitName, objective: parsed.objective, periodLabel: "Ciclo atual" },
-    summary: reviewPortugueseCopy(`${authorityClassification}. A autoridade pessoal foi avaliada em ${authoritySellingScore}/100, com cobertura de evidências de ${scoreCoverage}%. A aderência atual à ${parsed.businessUnitName} é ${buAffinityScore}/100 e o potencial de ativação é ${activationPotentialScore}/100.`),
+    summary: reviewPortugueseCopy(`${authorityClassification}. ${scoreSummary("A autoridade pessoal", authoritySellingScore)} A cobertura de evidências é de ${scoreCoverage}%. ${scoreSummary(`A aderência atual à ${parsed.businessUnitName}`, buAffinityScore)} ${scoreSummary("O potencial de ativação", activationPotentialScore)}`),
     dimensions, profileReview, themeAlignment, authorityMap, authorityPerception, evidencePortfolio, commercialExposure,
     bridgeOpportunities, strategicGaps, authorityAgenda,
     strengths: strong.length ? strong.map((item) => item.label) : ["A trajetória precisa de mais evidências visíveis antes de sustentar uma classificação forte."],
@@ -165,9 +173,9 @@ export function createAuthorityAssessment(input: AuthorityInput, extraSources: R
       actions: [nextBestAction.reason, ...nextBestAction.actions],
     },
     businessUnitActivationPlan: {
-      title: `Sprint ${parsed.businessUnitName}`, objective: `Movimentar ${primaryTerritory} com ${primaryIcp} sem transformar a marca pessoal em propaganda.`, horizon: "Sprint semanal",
+      title: `Sprint ${parsed.businessUnitName}`, objective: `Movimentar ${primaryTerritory} em contextos de ${primaryIcp} sem transformar a marca pessoal em propaganda.`, horizon: "Sprint semanal",
       actions: [
-        { day: "Dia 1", focus: "Inteligência", action: `Pesquisar conversas e dores recentes de ${primaryIcp}.`, module: "Mapa de decisores" },
+        { day: "Dia 1", focus: "Inteligência", action: `Pesquisar conversas e dores recentes em ${primaryIcp}.`, module: "Mapa de decisores" },
         { day: "Dia 2", focus: "Conversa", action: `Contribuir em uma conversa sobre ${primaryTerritory} sem pitch.`, module: "Social Selling" },
         { day: "Dia 3", focus: "Decisão", action: "Publicar somente se houver tese e evidência; caso contrário, priorizar perfil, resposta ou comentário.", module: "Inteligência de conteúdo" },
         { day: "Dia 4", focus: "Relacionamento", action: `Selecionar pessoas com aderência real a ${primaryTerritory}.`, module: "Mapa de decisores" },
@@ -234,14 +242,14 @@ function buildAuthorityMap(input: AuthorityInput, alignment: ThemeAlignment[], s
   });
 }
 
-function buildAuthorityPerception(input: AuthorityInput, portfolio: AuthorityAssessment["evidencePortfolio"], score: number): AuthorityAssessment["authorityPerception"] {
+function buildAuthorityPerception(input: AuthorityInput, portfolio: AuthorityAssessment["evidencePortfolio"], score: number | null): AuthorityAssessment["authorityPerception"] {
   const builtSignals = portfolio.relevantExperience.length + portfolio.authorityProofs.length + portfolio.measurableResults.length;
   const perceivedSignals = [input.headline, input.about, input.recentContent].filter((value) => value.trim().length >= 30).length;
   const builtLevel = levelFromCount(builtSignals, 5, 2); const perceivedLevel = levelFromCount(perceivedSignals, 3, 2);
   return {
     builtAuthority: builtSignals ? `A trajetória reúne ${builtSignals} sinais de experiência, prova ou resultado que sustentam autoridade profissional.` : "Ainda não há evidências suficientes para afirmar autoridade construída.",
     perceivedAuthority: perceivedSignals ? `O perfil torna visíveis ${perceivedSignals} frentes relevantes de posicionamento.` : "O perfil ainda comunica pouca evidência pública de autoridade.",
-    expressionGap: builtSignals > perceivedSignals * 2 ? "A trajetória sustenta mais autoridade do que o perfil consegue tornar visível hoje." : score >= 65 ? "A percepção pública está relativamente próxima da autoridade sustentada pela trajetória." : "O principal desafio é transformar repertório em sinais públicos mais claros e comprováveis.",
+    expressionGap: builtSignals > perceivedSignals * 2 ? "A trajetória sustenta mais autoridade do que o perfil consegue tornar visível hoje." : (score ?? 0) >= 65 ? "A percepção pública está relativamente próxima da autoridade sustentada pela trajetória." : "O principal desafio é transformar repertório em sinais públicos mais claros e comprováveis.",
     builtLevel, perceivedLevel,
   };
 }
@@ -302,19 +310,20 @@ function buildBridgeOpportunities(input: AuthorityInput, alignment: ThemeAlignme
   return candidates.map((territory, index) => {
     const alignmentItem = alignment.find((item) => canonicalTheme(item.theme) === canonicalTheme(territory));
     const mapItem = authorityMap.find((item) => canonicalTheme(item.territory) === canonicalTheme(territory));
-    const personAffinity = alignmentItem?.affinity ?? 28; const persona = personas[index % personas.length]; const naturality = personAffinity >= 75 ? "Alta" : personAffinity >= 45 ? "Média" : "Baixa";
+    const personAffinity = alignmentItem?.affinity ?? 28; const persona = contextualPersona(territory, personas, index); const naturality = personAffinity >= 75 ? "Alta" : personAffinity >= 45 ? "Média" : "Baixa";
     const nextAction = naturality === "Baixa" ? "Melhorar o perfil antes de ampliar exposição" : actions[index % actions.length];
+    const audience = persona ? ` para ${persona}` : "";
     return {
-      id: `bridge-${index + 1}`, title: `${territory} para ${persona}`,
-      description: `Território de conversa que aproxima a autoridade pessoal em ${territory} das prioridades de ${persona}, sem transformar o perfil em publicidade da BU.`,
+      id: `bridge-${index + 1}`, title: presentationTitle(territory),
+      description: `Território de conversa que aproxima a autoridade pessoal em ${territory} de prioridades comerciais reais${audience}, sem transformar o perfil em publicidade da BU.`,
       territory, evidence: mapItem?.evidence ?? [], persona,
-      personaProblem: `Decidir como avançar em ${territory} com critério, impacto e aderência ao negócio.`,
+      personaProblem: persona ? `Decidir como avançar em ${territory} com critério, impacto e aderência ao negócio.` : `Conectar ${territory} a um problema comercial verificável antes de abordar.`,
       legitimacy: mapItem?.evidence.length ? "A trajetória oferece sinais que tornam esta conversa legítima." : "A conexão é adjacente e precisa de prova antes de ganhar exposição.",
       thesis: `A conversa sobre ${territory} ganha valor quando começa pelo problema e pela decisão, não pela solução da BU.`, bestActivation: nextAction,
       publicityRisk: naturality === "Baixa" ? "Evitar associação promocional antes de construir evidência pessoal." : "Manter a BU como contexto e a marca pessoal como origem da conversa.", nextAction,
       personAffinity, businessUnitAffinity: 88, personaAffinity: naturality === "Alta" ? 82 : 64, marketRelevance: 72,
       naturality, advertisingRisk: naturality === "Baixa" ? "Alto" : naturality === "Média" ? "Médio" : "Baixo", conversationPotential: naturality === "Baixa" ? "Médio" : "Alto", confidence: mapItem?.evidence.length ? mapItem.credibility : "inference",
-      whyItWorks: { personalAuthority: mapItem?.evidence.length ? mapItem.evidence[0] : "Ainda faltam provas pessoais visíveis.", businessUnitConnection: `${territory} integra o contexto estratégico da ${input.businessUnitName}.`, personaInterest: `${persona} precisa conectar esse tema a decisões e impacto.`, marketMoment: "A ativação deve usar apenas sinais de mercado com fonte.", risk: naturality === "Baixa" ? "Não abordar ainda." : "Evitar pitch disfarçado." },
+      whyItWorks: { personalAuthority: mapItem?.evidence.length ? mapItem.evidence[0] : "Ainda faltam provas pessoais visíveis.", businessUnitConnection: `${territory} integra o contexto estratégico da ${input.businessUnitName}.`, personaInterest: persona ? `${persona} precisa conectar esse tema a decisões e impacto.` : "A conversa deve começar pelo problema específico, não por um cargo presumido.", marketMoment: "A ativação deve usar apenas sinais de mercado com fonte.", risk: naturality === "Baixa" ? "Não abordar ainda." : "Evitar pitch disfarçado." },
       nextActions: unique([nextAction, "Observar respostas e conversas", naturality === "Baixa" ? "Não abordar ainda" : "Preparar rapport"]),
     };
   });
@@ -342,17 +351,17 @@ function buildThemeAlignment(input: AuthorityInput): ThemeAlignment[] {
   });
 }
 
-function calculateBuAffinity(input: AuthorityInput) {
+function calculateBuAffinity(input: AuthorityInput): number | null {
   const guidance = input.businessUnitContext ?? buildBusinessUnitGuidance(input.businessUnitId); const text = personEvidenceText(input);
-  if (text.trim().length < 30) return 0;
+  if (text.trim().length < 30) return null;
   const terms = unique([...guidance.territories, ...guidance.products, ...guidance.icps, ...guidance.personas, ...guidance.recommendedTerms]).filter((item) => item.length > 2);
-  if (!terms.length) return 0;
+  if (!terms.length) return null;
   const matches = terms.filter((term) => includesTerm(text, term)); const avoided = guidance.avoidedTerms.filter((term) => includesTerm(text, term));
   return Math.min(92, normalize(15 + (matches.length / Math.min(10, terms.length)) * 72 - Math.min(18, avoided.length * 6)));
 }
 
-function calculateActivationPotential(input: AuthorityInput, authority: number, affinity: number) {
-  if (!personEvidenceText(input).trim()) return 0;
+function calculateActivationPotential(input: AuthorityInput, authority: number | null, affinity: number | null): number | null {
+  if (!personEvidenceText(input).trim() || authority === null || affinity === null) return null;
   const bridgeSignals = input.linkedinSnapshot?.experiences.length ?? (input.proofPoints ? 1 : 0);
   return Math.min(92, normalize(authority * 0.45 + Math.max(affinity, 25) * 0.35 + Math.min(20, bridgeSignals * 4)));
 }
@@ -374,6 +383,7 @@ function buildSources(input: AuthorityInput, extra: ResearchSource[]) {
 export function compareAuthorityAssessments(items: AuthorityAssessment[]) {
   const sorted = [...items].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)); const first = sorted.at(0); const latest = sorted.at(-1);
   if (!first || !latest) return { available: false, delta: 0, message: "Ainda não há diagnósticos suficientes para comparar evolução." };
+  if (first.overallScore === null || latest.overallScore === null) return { available: false, delta: 0, firstScore: first.overallScore, latestScore: latest.overallScore, message: "A comparação exige dois diagnósticos com evidências suficientes para pontuação." };
   const delta = latest.overallScore - first.overallScore;
   return { available: sorted.length > 1, delta, firstScore: first.overallScore, latestScore: latest.overallScore, message: sorted.length > 1 ? `Evolução de ${delta} pontos desde o primeiro diagnóstico.` : "Crie um segundo diagnóstico para comparar evolução." };
 }
@@ -395,6 +405,14 @@ function recurringThemeCount(posts: string[], themes: string) { const candidates
 function scorePostCadence(posts: NormalizedLinkedInSnapshot["posts"]) { const dated = posts.map((post) => post.publishedAt).filter(Boolean); if (!dated.length) return 50; return Math.min(82, 48 + dated.length * 5); }
 function scoreReceivedInteractions(posts: NormalizedLinkedInSnapshot["posts"]) { const active = posts.filter((post) => (post.reactions ?? 0) + (post.comments ?? 0) + (post.reposts ?? 0) > 0).length; return Math.min(86, 44 + active * 7); }
 function levelFromCount(count: number, high: number, medium: number): "Alta" | "Média" | "Baixa" { return count >= high ? "Alta" : count >= medium ? "Média" : "Baixa"; }
-function classifyAuthority(score: number, coverage: number) { if (coverage < 25) return "Dados insuficientes para classificar a autoridade"; if (score >= 80) return "Autoridade consolidada"; if (score >= 65) return "Autoridade em expansão"; if (score >= 48) return "Autoridade emergente"; return "Autoridade em construção"; }
+function classifyAuthority(score: number | null, coverage: number) { if (score === null || coverage < 25) return "Dados insuficientes para classificar a autoridade"; if (score >= 80) return "Autoridade consolidada"; if (score >= 65) return "Autoridade em expansão"; if (score >= 48) return "Autoridade emergente"; return "Autoridade em construção"; }
+function resolveAnalyzedProfileName(input: AuthorityInput) { return input.linkedinSnapshot?.name.trim() || "Nome não identificado"; }
+function scoreSummary(subject: string, score: number | null) { return score === null ? `${subject} não recebeu pontuação por falta de evidência compatível.` : `${subject} é ${score}/100.`; }
+function contextualPersona(territory: string, personas: string[], index: number) {
+  const normalizedTerritory = canonicalTheme(territory);
+  const match = personas.find((persona) => canonicalTheme(persona).split(" ").some((term) => term.length > 3 && normalizedTerritory.includes(term)));
+  if (match) return match;
+  return index % 3 === 0 ? personas[index % personas.length] : "";
+}
 function recommendationForDimension(key: string, input: AuthorityInput) { if (key === "headline_clarity" || key === "positioning") return "Reescrever a primeira leitura do perfil com especialidade, público e impacto sustentados por evidência."; if (["published_content", "theme_consistency", "frequency"].includes(key)) return "Analisar publicações reais antes de definir cadência e consolidar dois ou três territórios recorrentes."; if (["comments_quality", "strategic_network", "relevant_conversations"].includes(key)) return "Entrar em conversas relevantes com contribuições substantivas e observar respostas antes de abordar."; if (["cases_results", "measurable_results", "authority_proof"].includes(key)) return "Transformar experiências reais em provas com contexto, contribuição e impacto verificável."; return `Reforçar esta dimensão com evidências relacionadas ao objetivo: ${input.objective}`; }
 function actionForDimension(key: string) { if (key.includes("headline") || key === "positioning" || key === "about_clarity") return "Melhorar o perfil"; if (["comments_quality", "strategic_network", "relevant_conversations"].includes(key)) return "Comentar antes de abordar"; if (["published_content", "theme_consistency", "frequency"].includes(key)) return "Analisar conteúdo antes de publicar"; if (["cases_results", "measurable_results", "authority_proof"].includes(key)) return "Organizar provas de autoridade"; return "Pesquisar e validar evidências"; }

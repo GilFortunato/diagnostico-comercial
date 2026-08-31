@@ -50,7 +50,7 @@ export function buildNextBestSocialSellingAction(assessment: AuthorityAssessment
   const about = assessment.dimensions.find((item) => item.key === "about_clarity")?.score ?? 0;
   const conversations = assessment.dimensions.find((item) => item.key === "relevant_conversations")?.score ?? 0;
 
-  if (headline < 55 || about < 55 || assessment.authoritySellingScore < 50) {
+  if (headline < 55 || about < 55 || (assessment.authoritySellingScore ?? 0) < 50) {
     return {
       action: "PROFILE",
       objective: "AUTHORITY",
@@ -68,7 +68,7 @@ export function buildNextBestSocialSellingAction(assessment: AuthorityAssessment
     };
   }
 
-  if (assessment.buAffinityScore < 55 || conversations < 55) {
+  if ((assessment.buAffinityScore ?? 0) < 55 || conversations < 55) {
     return {
       action: "RELATIONSHIP",
       objective: "EXPANSION",

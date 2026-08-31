@@ -17,6 +17,7 @@ export type AuthorityReportViewModel = ReturnType<typeof buildAuthorityReportVie
 
 export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot) {
   const { assessment } = snapshot;
+  const subjectName = resolveAnalyzedProfileName(assessment);
   const authorityScore = assessment.authoritySellingScore ?? assessment.overallScore;
   const businessUnitName = assessment.currentFocus?.businessUnitName || assessment.input.businessUnitName;
   const evidencePriority = ["headline", "about", "experiences", "proofPoints", "posts", "education"];
@@ -32,7 +33,7 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
 
   return {
     id: assessment.id,
-    subjectName: snapshot.subjectName,
+    subjectName,
     businessUnitName,
     createdAt: assessment.createdAt,
     profileUrl: assessment.input.profileUrl || null,
@@ -111,6 +112,12 @@ function sanitizeFilenamePart(value: string) {
   const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const safe = normalized.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60);
   return safe || "Perfil";
+}
+
+function resolveAnalyzedProfileName(assessment: AuthorityAssessment) {
+  const explicit = typeof assessment.analyzedProfileName === "string" ? assessment.analyzedProfileName.trim() : "";
+  const fromSnapshot = assessment.input.linkedinSnapshot?.name?.trim() ?? "";
+  return explicit || fromSnapshot || "Nome não identificado";
 }
 
 function publicSourceLabel(value: string) {

@@ -3,6 +3,8 @@ import test from "node:test";
 import { buildBusinessUnitGuidance, getBusinessUnitDna } from "@/lib/business-units/dna";
 import { normalizeLinkedInPayload } from "@/lib/connectors/linkedinNormalization";
 import { createAuthorityAssessment } from "@/lib/diagnostics/authority";
+import { createStructuredAuthorityThirtyDayPlan } from "@/lib/diagnostics/authorityPlan";
+import { presentationTitle } from "@/lib/copy/editorial";
 
 const prosper = getBusinessUnitDna("bu_prosper");
 
@@ -28,6 +30,7 @@ function snapshot(withPosts = false) {
     profileUrl: "https://www.linkedin.com/in/perfil-teste",
     collectedAt: "2026-08-30T12:00:00.000Z",
     profile: {
+      fullName: "Marina Duarte",
       headline: "Liderança de IA aplicada a negócios",
       about: "Reduzi o lead time em 28% ao liderar uma transformação com times comerciais.",
       experiences: [{ title: "Head de Transformação", companyName: "Empresa Exemplo", description: "Reduzi tickets em 20% e economizei 300 horas. Arquitetura React, API, AWS e pipeline interno detalhado." }],
@@ -101,7 +104,7 @@ test("Authority Selling permanece igual quando apenas a BU muda", () => {
 
 test("potencial de ativação é limitado e explicado", () => {
   const assessment = createAuthorityAssessment(input({ linkedinSnapshot: snapshot(true) }));
-  assert.ok(assessment.activationPotentialScore <= 92);
+  assert.ok((assessment.activationPotentialScore ?? 100) <= 92);
   assert.match(assessment.scoreExplanations.activationPotential, /autoridade|aderência|ponte/i);
 });
 
@@ -123,6 +126,31 @@ test("pontes variam ações e personas quando há opções", () => {
   assert.ok(new Set(assessment.bridgeOpportunities.map((item) => item.persona)).size > 1);
 });
 
+test("perfil analisado usa o nome público e nunca o slug da URL", () => {
+  const assessment = createAuthorityAssessment(input({ linkedinSnapshot: snapshot(true) }));
+  assert.equal(assessment.analyzedProfileName, "Marina Duarte");
+  assert.notEqual(assessment.analyzedProfileName, "perfil-teste");
+});
+
+test("sem evidências compatíveis, os scores permanecem não avaliados", () => {
+  const assessment = createAuthorityAssessment(input({
+    headline: "",
+    about: "",
+    themes: "",
+    proofPoints: "",
+    recentContent: "",
+    interactionSignals: "",
+  }));
+  assert.equal(assessment.overallScore, null);
+  assert.equal(assessment.authoritySellingScore, null);
+  assert.equal(assessment.buAffinityScore, null);
+  assert.equal(assessment.activationPotentialScore, null);
+});
+
+test("títulos preservam a capitalização de IA, RH e T&D", () => {
+  assert.equal(presentationTitle("ia aplicada para t&d e rh"), "IA aplicada para T&D e RH");
+});
+
 test("exposição competitiva considera detalhe técnico sem apagar o resultado", () => {
   const assessment = createAuthorityAssessment(input({ linkedinSnapshot: snapshot(false) }));
   assert.ok(assessment.commercialExposure.some((item) => item.classification === "PROVA_COMERCIAL"));
@@ -141,11 +169,17 @@ test("lacuna sem evidência declara limite metodológico", () => {
   assert.match(gap!.expertReading, /Ausência de dado não é fraqueza/);
 });
 
-test("plano executivo mantém estratégia acima das ações diárias", async () => {
-  const { createStructuredAuthorityThirtyDayPlan } = await import("@/lib/diagnostics/authorityPlan");
+test("plano executivo mantém estratégia acima das ações diárias", () => {
   const plan = createStructuredAuthorityThirtyDayPlan({ assessment: createAuthorityAssessment(input({ linkedinSnapshot: snapshot(true) })) });
   assert.ok(plan.objective && plan.currentState && plan.desiredState && plan.whyNow);
   assert.equal(plan.weeks.length, 4);
   assert.equal(plan.actions.length, 30);
   assert.ok(new Set(plan.actions.map((item) => item.socialSellingAction)).size >= 6);
+});
+
+test("plano só associa a persona a ações de conversa", () => {
+  const plan = createStructuredAuthorityThirtyDayPlan({ assessment: createAuthorityAssessment(input({ linkedinSnapshot: snapshot(true) })) });
+  const personaActions = plan.actions.filter((item) => item.persona === "Head de Transformação");
+  assert.ok(personaActions.length < plan.actions.length / 2);
+  assert.ok(personaActions.every((item) => ["COMMENT", "RELATIONSHIP", "RAPPORT", "OUTREACH"].includes(item.socialSellingAction)));
 });
