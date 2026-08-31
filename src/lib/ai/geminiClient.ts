@@ -1,10 +1,7 @@
 import "server-only";
 import { resolveProviderForCapability, type AiCapability } from "@/lib/ai/providers";
-import {
-  defaultGeminiModel,
-  classifyValidationFailure,
-  supportsLegacyGeminiSamplingParameters,
-} from "@/lib/connectors/credentialValidation";
+import { defaultGeminiModel, classifyValidationFailure } from "@/lib/connectors/credentialValidation";
+import { supportsLegacyGeminiSamplingParameters } from "@/lib/connectors/geminiCompatibility";
 import { recordPlatformCredentialFailure } from "@/lib/connectors/platformCredentialService";
 import { resolveGeminiCredential } from "@/lib/connectors/platformCredentials";
 import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
