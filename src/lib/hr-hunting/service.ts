@@ -12,6 +12,14 @@ type HrHuntingSearchWithCandidates = Prisma.HrHuntingSearchGetPayload<{
   include: { candidates: { include: { evidence: true; contacts: true; shortlist: true } } };
 }>;
 
+const hrHarvestSeniorityIds: Record<string, string[]> = {
+  manager: ["200", "210"],
+  director: ["220"],
+  vp: ["300"],
+  c_level: ["310"],
+  owner: ["320"],
+};
+
 export async function createHrHuntingSearch(ownerId: string, input: { title?: string; description: string; jobUrl?: string; companyName?: string; recruiterName?: string }) {
   const jobDna = await createJobDna(input);
   const search = await getPrisma().hrHuntingSearch.create({
@@ -25,7 +33,23 @@ export async function updateHrHuntingJobDna(id: string, ownerId: string, jobDna:
   return findOwnedHrHuntingSearch(id, ownerId);
 }
 
+// Mantém o contrato estrito antigo para inspeção/testes de mapeamento do Actor.
+// O sourcing de produção usa buildHrCandidateRecallInput para evitar falso zero.
 export function buildHrCandidateSearchInput(input: SearchInput, fallbackTitle: string) {
+  const selectedTitle = input.currentTitle?.trim();
+  const titles = unique([selectedTitle || fallbackTitle]).slice(0, 10);
+  const keywords = unique(input.keywords).slice(0, 8);
+  return compact({
+    profileScraperMode: "Short",
+    maxItems: input.quantity,
+    currentJobTitles: titles,
+    locations: input.location?.trim() ? [input.location.trim()] : [],
+    searchQuery: keywords.length ? keywords.join(" OR ") : undefined,
+    seniorityLevelIds: [...new Set(input.seniority.flatMap((level) => hrHarvestSeniorityIds[level] ?? []))],
+  });
+}
+
+export function buildHrCandidateRecallInput(input: SearchInput, fallbackTitle: string) {
   const selectedTitle = input.currentTitle?.trim() || fallbackTitle.trim();
   const searchTerms = unique([selectedTitle, ...input.keywords]).slice(0, 8);
   return compact({
@@ -63,7 +87,7 @@ export async function executeHrHuntingSearch(id: string, ownerId: string, input:
 
   if (!manusUsed) {
     try {
-      rawItems = await runApifyActor("linkedinProfileSearch", buildHrCandidateSearchInput(input, search.jobDna.title || search.title));
+      rawItems = await runApifyActor("linkedinProfileSearch", buildHrCandidateRecallInput(input, search.jobDna.title || search.title));
     } catch {
       connectorFailed = true;
       warnings.push("Manus e a fonte direta de descoberta de profissionais falharam nesta execução. Este estado não representa zero candidatos; valide as conexões e tente novamente.");
