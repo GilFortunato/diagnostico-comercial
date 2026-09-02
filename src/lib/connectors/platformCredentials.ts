@@ -11,6 +11,10 @@ export async function resolveApifyCredential() {
   return resolvePlatformCredential("apify");
 }
 
+export async function resolveManusCredential() {
+  return resolvePlatformCredential("manus");
+}
+
 export async function resolvePlatformCredential(provider: PlatformProvider): Promise<PlatformCredentialResolution> {
   let stored = null;
   try {
@@ -28,5 +32,6 @@ export async function resolvePlatformCredential(provider: PlatformProvider): Pro
 
 function getEnvironmentCredential(provider: PlatformProvider) {
   if (provider === "gemini") return process.env.GEMINI_API_KEY;
+  if (provider === "manus") return process.env.MANUS_API_KEY;
   return process.env.APIFY_TOKEN ?? process.env.APIFY_API_TOKEN;
 }
