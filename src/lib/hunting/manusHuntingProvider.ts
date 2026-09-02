@@ -63,23 +63,34 @@ export async function researchB2bCompaniesWithManus(input: CompanySearchInput) {
 }
 
 export async function researchB2bPeopleWithManus(input: PersonSearchInput) {
+  const discoveryMax = Math.min(50, Math.max(25, input.filters.quantity * 2));
+  const fuzzyTerms = uniqueStrings([...input.filters.roles, ...input.filters.profileKeywords]).slice(0, 8);
+  const fuzzyQuery = fuzzyTerms.join(" OR ");
+  const companyUrls = input.filters.companyLinkedinUrls.join(", ");
+
   const prompt = [
     "Você é o agente de pesquisa de decisores B2B da Share AI. Encontre somente pessoas reais e atualmente ou recentemente associadas às empresas informadas.",
-    "Use o conector Apify quando disponível como fonte estruturada prioritária. Você pode complementar com pesquisa pública verificável.",
-    "Faça no máximo uma busca principal e uma expansão semântica controlada dos cargos. Preserve o cargo original e não transforme a pesquisa em outro perfil.",
+    "Use OBRIGATORIAMENTE o conector Apify desta tarefa como fonte estruturada principal. Não pule para busca web antes de consultar o Apify.",
+    "PASSO 1 — use o Actor `harvestapi/linkedin-company-employees` (LinkedIn Company Employees Scraper). Se precisar localizá-lo, use search-actors/fetch-actor-details; depois execute call-actor e leia get-actor-output.",
+    `No PASSO 1 use as empresas exatamente como recebidas: ${companyUrls || "nenhuma URL informada"}.`,
+    `Input esperado do PASSO 1: companies=[URLs acima], profileScraperMode="Short ($4 per 1k)", maxItems=${discoveryMax}${fuzzyQuery ? `, searchQuery="${fuzzyQuery}"` : ""}.`,
+    "No PASSO 1 NÃO empilhe filtros exatos de jobTitles, locations e seniorityLevelIds. Primeiro maximize recall dentro da empresa; depois avalie cargo, senioridade, localização e aderência sobre os perfis retornados.",
+    "PASSO 2 — somente se o primeiro Actor não trouxer cobertura suficiente, faça UMA expansão controlada com `harvestapi/linkedin-profile-search`, mantendo currentCompanies preso às mesmas URLs, profileScraperMode="Short", maxItems no mesmo limite e uma busca textual equivalente. Não faça uma terceira rodada.",
+    "Se o Apify retornar perfis reais da empresa que não correspondem perfeitamente ao título, mantenha-os apenas se forem profissionalmente próximos aos cargos-alvo; a Share AI fará o ranking final.",
     "REGRA ABSOLUTA: só inclua uma pessoa se nome, vínculo profissional e uma URL REAL de perfil LinkedIn /in/ forem sustentados por fonte. Nunca fabrique URL, slug, e-mail ou telefone.",
     "E-mail e telefone só podem ser retornados quando a própria fonte fornecer explicitamente um contato profissional. Caso contrário use string vazia.",
     "Não use nem infira atributos pessoais ou protegidos. Preserve evidências e URLs. Se não conseguir confirmar uma pessoa, não a inclua.",
     `Objetivo comercial: ${input.objective}`,
     `Empresas: ${input.filters.companyNames.join(", ") || "ver URLs"}`,
-    `LinkedIn das empresas: ${input.filters.companyLinkedinUrls.join(", ")}`,
+    `LinkedIn das empresas: ${companyUrls}`,
     `Cargos/famílias: ${input.filters.roles.join(", ")}`,
     `Departamentos: ${input.filters.departments.join(", ") || "não especificados"}`,
-    `Senioridade: ${input.filters.seniority.join(", ") || "não especificada"}`,
-    `Localizações: ${input.filters.locations.join(", ") || "não especificadas"}`,
+    `Senioridade desejada para RANKING, não para bloquear a coleta inicial: ${input.filters.seniority.join(", ") || "não especificada"}`,
+    `Localizações desejadas para RANKING, não para bloquear a coleta inicial: ${input.filters.locations.join(", ") || "não especificadas"}`,
     `Palavras-chave profissionais: ${input.filters.profileKeywords.join(", ") || "não especificadas"}`,
-    `Quantidade máxima: ${input.filters.quantity}`,
-    "Se nenhuma pessoa puder ser confirmada, retorne people vazio e explique a cobertura em limitations. Não transforme falha de ferramenta em zero resultados.",
+    `Quantidade final máxima: ${input.filters.quantity}`,
+    "Em queriesAttempted registre os Actors/consultas efetivamente usados. Em sourcesUsed registre Apify/Actor e outras fontes realmente consultadas.",
+    "Se nenhuma pessoa puder ser confirmada, retorne people vazio e explique em limitations se o Actor retornou zero, se houve timeout/erro ou se perfis foram descartados por falta de evidência. Não transforme falha de ferramenta em ausência de profissionais.",
   ].join("\n");
 
   return runManusStructuredTask<PeoplePayload>({
@@ -174,6 +185,16 @@ function formatCriteria(dna: JobDna) {
     .slice(0, 16)
     .map((criterion) => `${criterion.kind}: ${criterion.label}`)
     .join(" | ") || "não especificados";
+}
+
+function uniqueStrings(values: string[]) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const normalized = value.trim().toLocaleLowerCase("pt-BR");
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
 }
 
 function isPeoplePayload(value: unknown): value is PeoplePayload {
