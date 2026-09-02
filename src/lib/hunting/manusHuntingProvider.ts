@@ -1,0 +1,257 @@
+import "server-only";
+import { isRealLinkedInCompanyUrl, isRealLinkedInPersonUrl } from "@/lib/connectors/manusCore";
+import { runManusStructuredTask, type ManusTaskResult } from "@/lib/connectors/manusClient";
+import type { CompanySearchInput, PersonSearchInput } from "@/lib/decision-makers/search";
+import type { HrHuntingSearchSnapshot, JobDna } from "@/lib/hr-hunting/types";
+
+type Evidence = { source: string; url: string; claim: string };
+type ManusPerson = {
+  name: string;
+  currentTitle: string;
+  company: string;
+  location: string;
+  linkedinUrl: string;
+  professionalEmail: string;
+  professionalPhone: string;
+  professionalSummary: string;
+  confidence: "confirmed" | "probable" | "unverified";
+  evidence: Evidence[];
+};
+type ManusCompany = {
+  name: string;
+  website: string;
+  domain: string;
+  linkedinUrl: string;
+  industry: string;
+  location: string;
+  employeeRange: string;
+  revenueRange: string;
+  description: string;
+  confidence: "confirmed" | "probable" | "unverified";
+  evidence: Evidence[];
+};
+type PeoplePayload = { people: ManusPerson[]; queriesAttempted: string[]; sourcesUsed: string[]; limitations: string[] };
+type CompanyPayload = { companies: ManusCompany[]; queriesAttempted: string[]; sourcesUsed: string[]; limitations: string[] };
+type HrSearchInput = { quantity: number; currentTitle?: string; seniority: string[]; location?: string; keywords: string[] };
+
+export async function researchB2bCompaniesWithManus(input: CompanySearchInput) {
+  const prompt = [
+    "Você é o agente de pesquisa B2B da Share AI. Pesquise empresas reais e verificáveis para os filtros abaixo.",
+    "Use o conector Apify quando estiver disponível como fonte estruturada prioritária e complemente apenas com fontes públicas verificáveis.",
+    "Faça no máximo uma tentativa principal e uma expansão controlada de termos. Não execute exploração ilimitada.",
+    "Nunca invente empresa, URL, receita, porte, tecnologia ou evidência. Quando um dado não estiver sustentado, retorne string vazia.",
+    "Receita estimada só pode aparecer identificada como estimativa e sustentada por fonte. Preserve URLs reais das evidências.",
+    `Objetivo comercial: ${input.objective}`,
+    `Setores: ${input.filters.industries.join(", ") || "não especificados"}`,
+    `País: ${input.filters.country}`,
+    `Estados/regiões: ${input.filters.states.join(", ") || "não especificados"}`,
+    `Cidades/CEPs: ${input.filters.cityPostalCodes.join(", ") || "não especificados"}`,
+    `Porte: ${input.filters.employeeRanges.join(", ") || "não especificado"}`,
+    `Palavras-chave: ${input.filters.keywords.join(", ") || "não especificadas"}`,
+    `Tecnologias: ${input.filters.technologies.join(", ") || "não especificadas"}`,
+    `Domínios: ${input.filters.domains.join(", ") || "não especificados"}`,
+    `Quantidade máxima: ${input.filters.quantity}`,
+    "Se não houver empresas verificáveis, retorne companies vazio e explique a limitação. Falha de fonte não deve ser descrita como ausência de mercado.",
+  ].join("\n");
+
+  return runManusStructuredTask<CompanyPayload>({
+    prompt,
+    schema: companyPayloadSchema,
+    title: "Share AI · B2B Hunting · Empresas",
+    countResults: (value) => value.companies.length,
+  });
+}
+
+export async function researchB2bPeopleWithManus(input: PersonSearchInput) {
+  const prompt = [
+    "Você é o agente de pesquisa de decisores B2B da Share AI. Encontre somente pessoas reais e atualmente ou recentemente associadas às empresas informadas.",
+    "Use o conector Apify quando disponível como fonte estruturada prioritária. Você pode complementar com pesquisa pública verificável.",
+    "Faça no máximo uma busca principal e uma expansão semântica controlada dos cargos. Preserve o cargo original e não transforme a pesquisa em outro perfil.",
+    "REGRA ABSOLUTA: só inclua uma pessoa se nome, vínculo profissional e uma URL REAL de perfil LinkedIn /in/ forem sustentados por fonte. Nunca fabrique URL, slug, e-mail ou telefone.",
+    "E-mail e telefone só podem ser retornados quando a própria fonte fornecer explicitamente um contato profissional. Caso contrário use string vazia.",
+    "Não use nem infira atributos pessoais ou protegidos. Preserve evidências e URLs. Se não conseguir confirmar uma pessoa, não a inclua.",
+    `Objetivo comercial: ${input.objective}`,
+    `Empresas: ${input.filters.companyNames.join(", ") || "ver URLs"}`,
+    `LinkedIn das empresas: ${input.filters.companyLinkedinUrls.join(", ")}`,
+    `Cargos/famílias: ${input.filters.roles.join(", ")}`,
+    `Departamentos: ${input.filters.departments.join(", ") || "não especificados"}`,
+    `Senioridade: ${input.filters.seniority.join(", ") || "não especificada"}`,
+    `Localizações: ${input.filters.locations.join(", ") || "não especificadas"}`,
+    `Palavras-chave profissionais: ${input.filters.profileKeywords.join(", ") || "não especificadas"}`,
+    `Quantidade máxima: ${input.filters.quantity}`,
+    "Se nenhuma pessoa puder ser confirmada, retorne people vazio e explique a cobertura em limitations. Não transforme falha de ferramenta em zero resultados.",
+  ].join("\n");
+
+  return runManusStructuredTask<PeoplePayload>({
+    prompt,
+    schema: peoplePayloadSchema,
+    title: "Share AI · B2B Hunting · Pessoas",
+    countResults: (value) => value.people.length,
+  });
+}
+
+export async function researchHrCandidatesWithManus(search: Pick<HrHuntingSearchSnapshot, "title" | "companyName" | "jobDescription" | "jobDna">, input: HrSearchInput) {
+  const dna = search.jobDna;
+  const prompt = [
+    "Você é o agente de sourcing profissional do HR Hunting da Share AI. Localize profissionais reais para uma vaga; você NÃO decide contratação.",
+    "Use o conector Apify quando disponível como fonte estruturada prioritária e complemente apenas com fontes públicas profissionais verificáveis.",
+    "Faça no máximo uma busca principal e uma expansão semântica controlada de títulos. Título, skills, localização e senioridade são critérios separados.",
+    "REGRA ABSOLUTA: só inclua pessoa com nome real, evidência profissional e URL REAL de LinkedIn /in/. Nunca fabrique URL, cargo, empresa, experiência, formação, e-mail ou telefone.",
+    "E-mail/telefone só quando a fonte retornar explicitamente contato profissional; caso contrário string vazia. Ausência de evidência significa não verificado, nunca 'não possui'.",
+    "Não pesquisar, inferir, retornar ou usar em avaliação: idade, gênero, raça, etnia, religião, deficiência, orientação sexual, identidade de gênero, estado civil, gravidez, foto, opinião política ou outros atributos protegidos/pessoais.",
+    `Vaga: ${search.title}`,
+    `Empresa: ${search.companyName || "não informada"}`,
+    `Resumo profissional: ${dna.shortSummary}`,
+    `Título-alvo: ${input.currentTitle?.trim() || dna.title || search.title}`,
+    `Senioridade: ${input.seniority.join(", ") || dna.seniority || "não especificada"}`,
+    `Localização: ${input.location?.trim() || dna.location || "não especificada"}`,
+    `Palavras-chave profissionais: ${input.keywords.join(", ") || "não especificadas"}`,
+    `Critérios profissionais da vaga: ${formatCriteria(dna)}`,
+    `Quantidade máxima: ${input.quantity}`,
+    "Retorne somente fatos profissionais sustentados. Se não encontrar candidatos verificáveis, retorne people vazio e registre limitações.",
+  ].join("\n");
+
+  return runManusStructuredTask<PeoplePayload>({
+    prompt,
+    schema: peoplePayloadSchema,
+    title: "Share AI · HR Hunting · Candidatos",
+    countResults: (value) => value.people.length,
+  });
+}
+
+export function manusPeopleToRawItems(result: ManusTaskResult<PeoplePayload>) {
+  if (!result.value) return [];
+  return result.value.people.flatMap((person) => {
+    if (!person.name.trim() || !person.currentTitle.trim() || !isRealLinkedInPersonUrl(person.linkedinUrl)) return [];
+    return [{
+      fullName: person.name.trim(),
+      jobTitle: person.currentTitle.trim(),
+      companyName: person.company.trim(),
+      location: person.location.trim(),
+      linkedinUrl: person.linkedinUrl.trim(),
+      professionalEmail: person.professionalEmail.trim(),
+      professionalPhone: person.professionalPhone.trim(),
+      summary: person.professionalSummary.trim(),
+      sourceName: result.apifyConnectorUsed ? "Manus + Apify" : "Manus · pesquisa pública",
+      _manusEvidence: person.evidence,
+      _manusConfidence: person.confidence,
+    }];
+  });
+}
+
+export function manusCompaniesToRawItems(result: ManusTaskResult<CompanyPayload>) {
+  if (!result.value) return [];
+  return result.value.companies.flatMap((company) => {
+    const hasEvidence = company.evidence.some((item) => /^https?:\/\//i.test(item.url));
+    if (!company.name.trim() || (!hasEvidence && !company.website.trim() && !isRealLinkedInCompanyUrl(company.linkedinUrl))) return [];
+    return [{
+      name: company.name.trim(),
+      website: company.website.trim(),
+      domain: company.domain.trim(),
+      linkedinUrl: isRealLinkedInCompanyUrl(company.linkedinUrl) ? company.linkedinUrl.trim() : "",
+      industry: company.industry.trim(),
+      location: company.location.trim(),
+      employeeRange: company.employeeRange.trim(),
+      revenueRange: company.revenueRange.trim(),
+      description: company.description.trim(),
+      sourceName: result.apifyConnectorUsed ? "Manus + Apify" : "Manus · pesquisa pública",
+      _manusEvidence: company.evidence,
+      _manusConfidence: company.confidence,
+    }];
+  });
+}
+
+export function manusWarnings(result: ManusTaskResult<unknown>) {
+  const limitations = isPeoplePayload(result.value) || isCompanyPayload(result.value) ? result.value.limitations : [];
+  const provider = result.apifyConnectorUsed ? "Manus utilizou o conector Apify nesta pesquisa." : "Manus executou sem o conector Apify autorizado.";
+  const credits = result.creditUsage == null ? [] : [`Consumo Manus desta tarefa: ${result.creditUsage} créditos.`];
+  return [...result.warnings, provider, ...limitations, ...credits];
+}
+
+function formatCriteria(dna: JobDna) {
+  return dna.criteria
+    .filter((criterion) => criterion.kind !== "não relevante")
+    .slice(0, 16)
+    .map((criterion) => `${criterion.kind}: ${criterion.label}`)
+    .join(" | ") || "não especificados";
+}
+
+function isPeoplePayload(value: unknown): value is PeoplePayload {
+  return Boolean(value && typeof value === "object" && Array.isArray((value as PeoplePayload).people) && Array.isArray((value as PeoplePayload).limitations));
+}
+
+function isCompanyPayload(value: unknown): value is CompanyPayload {
+  return Boolean(value && typeof value === "object" && Array.isArray((value as CompanyPayload).companies) && Array.isArray((value as CompanyPayload).limitations));
+}
+
+const evidenceSchema = {
+  type: "object",
+  properties: {
+    source: { type: "string" },
+    url: { type: "string" },
+    claim: { type: "string" },
+  },
+  required: ["source", "url", "claim"],
+  additionalProperties: false,
+} as const;
+
+const personSchema = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    currentTitle: { type: "string" },
+    company: { type: "string" },
+    location: { type: "string" },
+    linkedinUrl: { type: "string" },
+    professionalEmail: { type: "string" },
+    professionalPhone: { type: "string" },
+    professionalSummary: { type: "string" },
+    confidence: { type: "string", enum: ["confirmed", "probable", "unverified"] },
+    evidence: { type: "array", items: evidenceSchema },
+  },
+  required: ["name", "currentTitle", "company", "location", "linkedinUrl", "professionalEmail", "professionalPhone", "professionalSummary", "confidence", "evidence"],
+  additionalProperties: false,
+} as const;
+
+const companySchema = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    website: { type: "string" },
+    domain: { type: "string" },
+    linkedinUrl: { type: "string" },
+    industry: { type: "string" },
+    location: { type: "string" },
+    employeeRange: { type: "string" },
+    revenueRange: { type: "string" },
+    description: { type: "string" },
+    confidence: { type: "string", enum: ["confirmed", "probable", "unverified"] },
+    evidence: { type: "array", items: evidenceSchema },
+  },
+  required: ["name", "website", "domain", "linkedinUrl", "industry", "location", "employeeRange", "revenueRange", "description", "confidence", "evidence"],
+  additionalProperties: false,
+} as const;
+
+const peoplePayloadSchema = {
+  type: "object",
+  properties: {
+    people: { type: "array", items: personSchema },
+    queriesAttempted: { type: "array", items: { type: "string" } },
+    sourcesUsed: { type: "array", items: { type: "string" } },
+    limitations: { type: "array", items: { type: "string" } },
+  },
+  required: ["people", "queriesAttempted", "sourcesUsed", "limitations"],
+  additionalProperties: false,
+} as const;
+
+const companyPayloadSchema = {
+  type: "object",
+  properties: {
+    companies: { type: "array", items: companySchema },
+    queriesAttempted: { type: "array", items: { type: "string" } },
+    sourcesUsed: { type: "array", items: { type: "string" } },
+    limitations: { type: "array", items: { type: "string" } },
+  },
+  required: ["companies", "queriesAttempted", "sourcesUsed", "limitations"],
+  additionalProperties: false,
+} as const;
