@@ -33,7 +33,7 @@ export type JobDna = z.infer<typeof jobDnaSchema>;
 export type JobCriterion = z.infer<typeof jobCriterionSchema>;
 
 export const createJobSchema = z.object({
-  title: z.string().trim().min(2).max(180),
+  title: z.string().trim().min(2).max(180).optional().or(z.literal("")),
   description: z.string().trim().min(30).max(20_000),
   jobUrl: z.string().trim().url().max(2_000).optional().or(z.literal("")),
   companyName: z.string().trim().max(180).optional().or(z.literal("")),
