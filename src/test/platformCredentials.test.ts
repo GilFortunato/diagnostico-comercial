@@ -14,6 +14,7 @@ import {
 const providers: Array<{ provider: PlatformProvider; managed: string; environment: string }> = [
   { provider: "gemini", managed: "AIza-managed-secret-1234", environment: "AIza-environment-secret-9876" },
   { provider: "apify", managed: "apify_api_managed_secret_1234", environment: "apify_api_environment_secret_9876" },
+  { provider: "manus", managed: "manus-managed-secret-1234", environment: "manus-environment-secret-9876" },
 ];
 
 for (const scenario of providers) {
