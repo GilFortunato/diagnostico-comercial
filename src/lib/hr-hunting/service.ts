@@ -4,6 +4,7 @@ import { runApifyActor } from "@/lib/connectors/apifyClient";
 import { getPrisma } from "@/lib/db/prisma";
 import { createJobDna } from "@/lib/hr-hunting/jobDna";
 import type { CriterionKind, EvidenceState, HrCandidate, HrHuntingSearchSnapshot, JobDna, MessageFormat } from "@/lib/hr-hunting/types";
+import { manusPeopleToRawItems, manusWarnings, researchHrCandidatesWithManus } from "@/lib/hunting/manusHuntingProvider";
 
 type SearchInput = { quantity: number; currentTitle?: string; seniority: string[]; location?: string; keywords: string[] };
 type UnknownRecord = Record<string, unknown>;
@@ -52,12 +53,33 @@ export async function executeHrHuntingSearch(id: string, ownerId: string, input:
   const warnings: string[] = [];
   let rawItems: unknown[] = [];
   let connectorFailed = false;
+  let manusUsed = false;
+
   try {
-    rawItems = await runApifyActor("linkedinProfileSearch", buildHrCandidateSearchInput(input, search.jobDna.title || search.title));
+    const manusResult = await researchHrCandidatesWithManus(search, input);
+    warnings.push(...manusWarnings(manusResult));
+    if (manusResult.status === "success_with_results") {
+      rawItems = manusPeopleToRawItems(manusResult);
+      manusUsed = rawItems.length > 0;
+      if (!manusUsed) warnings.push("Manus retornou perfis sem LinkedIn real verificável; o Apify direto foi acionado para confirmar a cobertura.");
+    } else if (manusResult.status === "success_empty") {
+      warnings.push("Manus concluiu sem candidatos verificáveis; o Apify direto foi consultado para confirmar a cobertura.");
+    } else {
+      warnings.push("Manus não concluiu o sourcing principal; o Apify direto foi acionado como fallback.");
+    }
   } catch {
-    connectorFailed = true;
-    warnings.push("A fonte de descoberta de profissionais falhou nesta execução. Este estado não representa zero candidatos; tente novamente após validar a conexão Apify.");
+    warnings.push("Manus ficou indisponível durante o sourcing; o Apify direto foi acionado como fallback.");
   }
+
+  if (!manusUsed) {
+    try {
+      rawItems = await runApifyActor("linkedinProfileSearch", buildHrCandidateSearchInput(input, search.jobDna.title || search.title));
+    } catch {
+      connectorFailed = true;
+      warnings.push("Manus e a fonte direta de descoberta de profissionais falharam nesta execução. Este estado não representa zero candidatos; valide as conexões e tente novamente.");
+    }
+  }
+
   const normalized = normalizeCandidates(rawItems);
   if (!connectorFailed && rawItems.length > 0 && normalized.length === 0) {
     connectorFailed = true;
@@ -83,7 +105,7 @@ export async function executeHrHuntingSearch(id: string, ownerId: string, input:
       data: {
         status: connectorFailed ? "connector_error" : rawItems.length ? "results_ready" : "no_results",
         sourceSnapshot: rawItems as Prisma.InputJsonValue,
-        connectorWarnings: warnings,
+        connectorWarnings: [...new Set(warnings)],
       },
     });
   });
@@ -152,6 +174,7 @@ export function normalizeCandidates(items: unknown[]): HrCandidate[] {
     seen.add(key);
     const email = pick(item, ["workEmail", "businessEmail", "professionalEmail"]);
     const phone = pick(item, ["workPhone", "businessPhone", "professionalPhone"]);
+    const sourceName = pick(item, ["sourceName", "_sourceName"]) || "LinkedIn Profile Search via Harvest";
     return [{
       id: `hr_${stableId(key || String(index))}`,
       name,
@@ -163,12 +186,12 @@ export function normalizeCandidates(items: unknown[]): HrCandidate[] {
       fitScore: 0,
       fitClassification: "Baixa aderência inicial" as const,
       pointsToValidate: [],
-      sourceName: "LinkedIn Profile Search via Harvest",
+      sourceName,
       confidence: profileUrl ? "confirmado" as const : "provável" as const,
       evidence: [],
       contacts: [
-        ...(email ? [{ value: email, type: "e-mail profissional" as const, source: "LinkedIn Profile Search via Harvest", confidence: "confirmado" as const }] : []),
-        ...(phone ? [{ value: phone, type: "telefone profissional" as const, source: "LinkedIn Profile Search via Harvest", confidence: "confirmado" as const }] : []),
+        ...(email ? [{ value: email, type: "e-mail profissional" as const, source: sourceName, confidence: "confirmado" as const }] : []),
+        ...(phone ? [{ value: phone, type: "telefone profissional" as const, source: sourceName, confidence: "confirmado" as const }] : []),
       ],
       shortlisted: false,
     }];
