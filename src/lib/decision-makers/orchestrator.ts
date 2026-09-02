@@ -172,7 +172,7 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
         broadItems = await deps.discoverBroadPeople(expandedInput);
       } catch {
         broadFailed = true;
-        warnings.push("A descoberta complementar direta também está indisponível.");
+        warnings.push("A descoberta complementar também está indisponível.");
       }
     }
 
