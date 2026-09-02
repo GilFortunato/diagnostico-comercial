@@ -10,35 +10,35 @@
     "start": "next start",
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/test/*.test.ts src/test/*.test.mts && node --conditions=react-server --import tsx --test src/test/decisionMakerHunting.server.ts"
+    "test": "tsx --test src/test/*.test.ts src/test/*.test.mts && node --conditions=react-server --import tsx --test src/test/decisionMakerHunting.server.ts src/test/hrHuntingRegression.server.ts"
   },
   "dependencies": {
-    "@auth/prisma-adapter": "^2.11.3",
-    "@neondatabase/serverless": "^1.1.0",
-    "@prisma/adapter-neon": "^7.10.0",
-    "@prisma/client": "^7.10.0",
+    "@auth/prisma-adapter": "2.11.3",
+    "@neondatabase/serverless": "1.1.0",
+    "@prisma/adapter-neon": "7.10.0",
+    "@prisma/client": "7.10.0",
     "@react-pdf/renderer": "4.9.0",
-    "clsx": "^2.1.1",
-    "exceljs": "^4.4.0",
-    "lucide-react": "^1.34.0",
+    "clsx": "2.1.1",
+    "exceljs": "4.4.0",
+    "lucide-react": "1.34.0",
     "next": "16.3.3",
-    "next-auth": "^4.24.15",
+    "next-auth": "4.24.15",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "server-only": "^0.0.1",
-    "zod": "^4.4.3"
+    "server-only": "0.0.1",
+    "zod": "4.4.3"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "20.19.43",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "eslint": "9.39.5",
     "eslint-config-next": "16.3.3",
     "prisma": "7.10.0",
-    "tailwindcss": "^4",
-    "tsx": "^4.23.12",
-    "typescript": "^5"
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3"
   },
   "packageManager": "pnpm@11.19.0"
 }
