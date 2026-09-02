@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ComponentType } from "react";
-import { BrainCircuit, CheckCircle2, DatabaseZap, ExternalLink, KeyRound, RefreshCw, ShieldCheck, Trash2, XCircle } from "lucide-react";
-import type { PlatformCredentialHealth, PlatformCredentialSource, PublicPlatformCredentialStatus } from "@/lib/connectors/platformCredentialCore";
+import { Bot, BrainCircuit, CheckCircle2, DatabaseZap, ExternalLink, KeyRound, RefreshCw, ShieldCheck, Trash2, XCircle } from "lucide-react";
+import type { PlatformCredentialHealth, PlatformCredentialSource, PlatformProvider, PublicPlatformCredentialStatus } from "@/lib/connectors/platformCredentialCore";
 
 type ConnectorStatus = {
   google: { connected: boolean; label: string };
@@ -12,6 +12,7 @@ type ConnectorStatus = {
   admin?: {
     gemini: PublicPlatformCredentialStatus;
     apify: PublicPlatformCredentialStatus;
+    manus: PublicPlatformCredentialStatus;
   };
 };
 
@@ -69,14 +70,15 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: "status" | "set
 
   return (
     <section className="grid gap-6">
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-3">
         <AdminConnectorCard provider="gemini" eyebrow="Inteligência da Share AI" name="Google Gemini" credentialLabel="Chave da API Gemini" status={status.admin.gemini} icon={BrainCircuit} onChanged={refreshStatus} />
-        <AdminConnectorCard provider="apify" eyebrow="Fontes públicas" name="Apify" credentialLabel="Token da Apify" status={status.admin.apify} icon={DatabaseZap} onChanged={refreshStatus} />
+        <AdminConnectorCard provider="apify" eyebrow="Fonte estruturada" name="Apify" credentialLabel="Token da Apify" status={status.admin.apify} icon={DatabaseZap} onChanged={refreshStatus} />
+        <AdminConnectorCard provider="manus" eyebrow="Agente de pesquisa" name="Manus" credentialLabel="Chave da API Manus" status={status.admin.manus} icon={Bot} onChanged={refreshStatus} />
       </div>
       <div className="flex items-start gap-3 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-4 py-3">
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--share-green-800)]" />
         <p className="text-sm leading-6 text-zinc-600">
-          As credenciais são globais, criptografadas e usadas somente no servidor. Nenhum usuário comercial recebe ou configura chaves individuais.
+          As credenciais são globais, criptografadas e usadas somente no servidor. No Hunting, Manus é a pesquisa principal e o Apify direto permanece como fallback quando necessário.
         </p>
       </div>
     </section>
@@ -84,7 +86,7 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: "status" | "set
 }
 
 function AdminConnectorCard({ provider, eyebrow, name, credentialLabel, status, icon: Icon, onChanged }: {
-  provider: "gemini" | "apify";
+  provider: PlatformProvider;
   eyebrow: string;
   name: string;
   credentialLabel: string;
@@ -144,14 +146,15 @@ function AdminConnectorCard({ provider, eyebrow, name, credentialLabel, status, 
         <div className="mt-4 grid gap-3">
           <label className="grid gap-1.5">
             <span className="text-sm font-semibold text-[var(--share-green-950)]">{credentialLabel}</span>
-            <input value={credential} onChange={(event) => setCredential(event.target.value)} type="password" autoComplete="off" spellCheck={false} placeholder={provider === "gemini" ? "AIza..." : "apify_api_..."} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2.5 text-sm outline-none focus:border-[var(--share-green-800)] focus:bg-white" />
+            <input value={credential} onChange={(event) => setCredential(event.target.value)} type="password" autoComplete="off" spellCheck={false} placeholder={credentialPlaceholder(provider)} className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-2.5 text-sm outline-none focus:border-[var(--share-green-800)] focus:bg-white" />
           </label>
           <p className="text-xs leading-5 text-zinc-500">Esta credencial será usada pela Share AI para todos os usuários e ficará armazenada de forma criptografada.</p>
-          {provider === "gemini" ? (
-            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-[var(--share-green-800)] hover:underline">Abrir o Google AI Studio<ExternalLink className="h-3.5 w-3.5" /></a>
-          ) : (
-            <a href="https://console.apify.com/account/integrations" target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-[var(--share-green-800)] hover:underline">Abrir a área de tokens<ExternalLink className="h-3.5 w-3.5" /></a>
-          )}
+          <ProviderLink provider={provider} />
+          {provider === "manus" ? (
+            <p className="rounded-md bg-[#f3f8f1] px-3 py-2 text-xs leading-5 text-zinc-600">
+              Para o fluxo Manus → Apify, mantenha também o conector Apify autorizado na sua conta Manus. Se ele não estiver disponível, a Share AI continua com o Apify direto como fallback.
+            </p>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => request("save")} disabled={isBusy || credential.trim().length < 8} className="share-button-primary inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold disabled:opacity-50">
               {busyAction === "save" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Validar e ativar
@@ -162,7 +165,7 @@ function AdminConnectorCard({ provider, eyebrow, name, credentialLabel, status, 
       ) : (
         <div className="mt-4 flex flex-wrap gap-2">
           <button type="button" onClick={() => request("test")} disabled={isBusy || !status.configured} className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] px-3 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb] disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${busyAction === "test" ? "animate-spin" : ""}`} />Testar conexão</button>
-          <button type="button" onClick={() => setEditing(true)} disabled={isBusy} className="inline-flex items-center gap-2 rounded-md border border-[var(--share-line)] px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"><KeyRound className="h-4 w-4" />{status.configured ? `Trocar ${provider === "gemini" ? "chave" : "token"}` : "Adicionar credencial"}</button>
+          <button type="button" onClick={() => setEditing(true)} disabled={isBusy} className="inline-flex items-center gap-2 rounded-md border border-[var(--share-line)] px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"><KeyRound className="h-4 w-4" />{status.configured ? `Trocar ${provider === "apify" ? "token" : "chave"}` : "Adicionar credencial"}</button>
           {status.source === "managed" ? <button type="button" onClick={() => request("remove")} disabled={isBusy} className="inline-flex items-center gap-2 rounded-md border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 className="h-4 w-4" />Remover</button> : null}
         </div>
       )}
@@ -171,6 +174,22 @@ function AdminConnectorCard({ provider, eyebrow, name, credentialLabel, status, 
       {status.lastError ? <p className="mt-3 text-sm leading-6 text-amber-800">{status.lastError}</p> : null}
     </article>
   );
+}
+
+function ProviderLink({ provider }: { provider: PlatformProvider }) {
+  if (provider === "gemini") {
+    return <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-[var(--share-green-800)] hover:underline">Abrir o Google AI Studio<ExternalLink className="h-3.5 w-3.5" /></a>;
+  }
+  if (provider === "apify") {
+    return <a href="https://console.apify.com/account/integrations" target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-[var(--share-green-800)] hover:underline">Abrir a área de tokens<ExternalLink className="h-3.5 w-3.5" /></a>;
+  }
+  return <a href="https://manus.im/app" target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-[var(--share-green-800)] hover:underline">Abrir o Manus<ExternalLink className="h-3.5 w-3.5" /></a>;
+}
+
+function credentialPlaceholder(provider: PlatformProvider) {
+  if (provider === "gemini") return "AIza...";
+  if (provider === "apify") return "apify_api_...";
+  return "Cole a chave criada no Manus";
 }
 
 function AvailabilityTile({ icon: Icon, title, description, available }: { icon: ComponentType<{ className?: string }>; title: string; description: string; available: boolean }) {
