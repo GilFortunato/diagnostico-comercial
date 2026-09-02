@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { conservativeJobDna } from "@/lib/hr-hunting/jobDna";
-import { buildHrCandidateSearchInput, normalizeCandidates } from "@/lib/hr-hunting/service";
+import { buildHrCandidateRecallInput, normalizeCandidates } from "@/lib/hr-hunting/service";
 import { createJobSchema } from "@/lib/hr-hunting/types";
 
 const vacancy = `Jundiaí, SP, BR
@@ -37,7 +37,7 @@ test("fallback do Job DNA não usa localização como título ou resumo", () => 
 });
 
 test("fallback direto do HR usa recall-first e limita páginas", () => {
-  const actorInput = buildHrCandidateSearchInput({
+  const actorInput = buildHrCandidateRecallInput({
     quantity: 20,
     currentTitle: "Analista de Pós-Vendas",
     seniority: ["manager"],
