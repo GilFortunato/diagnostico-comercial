@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { hasAdminSession } from "@/lib/auth/adminRequest";
 import { toPublicCredentialStatus } from "@/lib/connectors/platformCredentialCore";
-import { resolveApifyCredential, resolveGeminiCredential } from "@/lib/connectors/platformCredentials";
+import { resolveApifyCredential, resolveGeminiCredential, resolveManusCredential } from "@/lib/connectors/platformCredentials";
 
 export async function GET() {
-  const [gemini, apify, isAdmin] = await Promise.all([
+  const [gemini, apify, manus, isAdmin] = await Promise.all([
     resolveGeminiCredential(),
     resolveApifyCredential(),
+    resolveManusCredential(),
     hasAdminSession(),
   ]);
   const googleConnected = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  const huntingAvailable = manus.available || apify.available;
 
   return NextResponse.json({
     google: {
@@ -21,14 +23,15 @@ export async function GET() {
       label: gemini.available ? "Inteligência disponível" : "Inteligência temporariamente indisponível",
     },
     publicSources: {
-      available: apify.available,
-      label: apify.available ? "Fontes públicas disponíveis" : "Fontes públicas temporariamente indisponíveis",
+      available: huntingAvailable,
+      label: huntingAvailable ? "Pesquisa pública disponível" : "Pesquisa pública temporariamente indisponível",
     },
     ...(isAdmin
       ? {
           admin: {
             gemini: toPublicCredentialStatus(gemini),
             apify: toPublicCredentialStatus(apify),
+            manus: toPublicCredentialStatus(manus),
           },
         }
       : {}),
