@@ -1,3 +1,5 @@
+export const MANUS_NATIVE_APIFY_CONNECTOR_ID = "cf19c9d0-5f91-4e7a-af04-593febb5c80c";
+
 export type ManusConnector = {
   id: string;
   name: string;
@@ -18,6 +20,10 @@ export type ManusRunStatus =
 export function findApifyConnectorId(connectors: ManusConnector[], override?: string | null) {
   const explicit = override?.trim();
   if (explicit) return explicit;
+
+  const native = connectors.find((connector) => connector.id === MANUS_NATIVE_APIFY_CONNECTOR_ID);
+  if (native) return native.id;
+
   const match = connectors.find((connector) => {
     const searchable = `${connector.name} ${connector.description ?? ""} ${connector.category ?? ""}`.toLocaleLowerCase("pt-BR");
     return searchable.includes("apify") || searchable.includes("mcp.apify.com");
