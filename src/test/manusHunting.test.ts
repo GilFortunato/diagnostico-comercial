@@ -1,8 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyManusHttpStatus, findApifyConnectorId, isRealLinkedInCompanyUrl, isRealLinkedInPersonUrl } from "@/lib/connectors/manusCore";
+import {
+  classifyManusHttpStatus,
+  findApifyConnectorId,
+  isRealLinkedInCompanyUrl,
+  isRealLinkedInPersonUrl,
+  MANUS_NATIVE_APIFY_CONNECTOR_ID,
+} from "@/lib/connectors/manusCore";
 
-test("Manus encontra o conector Apify instalado", () => {
+test("Manus prioriza o UUID oficial do conector Apify nativo", () => {
+  const id = findApifyConnectorId([
+    { id: "apify-custom", name: "Apify MCP", type: "mcp", description: "Actors via https://mcp.apify.com" },
+    { id: MANUS_NATIVE_APIFY_CONNECTOR_ID, name: "Apify", type: "builtin" },
+  ]);
+  assert.equal(id, MANUS_NATIVE_APIFY_CONNECTOR_ID);
+});
+
+test("Manus mantém compatibilidade com um Apify MCP customizado instalado", () => {
   const id = findApifyConnectorId([
     { id: "calendar", name: "Calendar", type: "builtin" },
     { id: "apify-mcp", name: "Apify MCP", type: "mcp", description: "Actors via https://mcp.apify.com" },
@@ -10,7 +24,7 @@ test("Manus encontra o conector Apify instalado", () => {
   assert.equal(id, "apify-mcp");
 });
 
-test("MANUS_APIFY_CONNECTOR_ID explícito tem precedência", () => {
+test("MANUS_APIFY_CONNECTOR_ID explícito tem precedência quando validado pelo caller", () => {
   assert.equal(findApifyConnectorId([{ id: "detected", name: "Apify" }], "configured"), "configured");
 });
 
