@@ -31,6 +31,7 @@ enum ConnectorStatus {
 enum PlatformCredentialProvider {
   GEMINI
   APIFY
+  MANUS
 }
 
 enum PlatformCredentialStatus {
@@ -458,8 +459,8 @@ model Skill {
   definition           Json
   organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   runs                 SkillRun[]
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
   @@unique([organizationId, key])
 }
