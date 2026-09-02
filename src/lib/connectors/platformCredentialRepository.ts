@@ -65,7 +65,9 @@ export async function deletePlatformCredential(provider: PlatformProvider) {
 }
 
 function toDatabaseProvider(provider: PlatformProvider) {
-  return provider === "gemini" ? PlatformCredentialProvider.GEMINI : PlatformCredentialProvider.APIFY;
+  if (provider === "gemini") return PlatformCredentialProvider.GEMINI;
+  if (provider === "manus") return PlatformCredentialProvider.MANUS;
+  return PlatformCredentialProvider.APIFY;
 }
 
 function toDatabaseStatus(status: Exclude<PlatformCredentialHealth, "disconnected">) {
