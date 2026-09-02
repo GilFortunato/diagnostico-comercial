@@ -206,7 +206,8 @@ export function rankCandidates(candidates: HrCandidate[], dna: JobDna, input: Se
     const score = Math.round(Math.min(100, (required.length ? requiredRatio * 75 : 0) + (desired.length ? desiredRatio * 20 : 0) + titleMatch + locationMatch));
     const matched = evidence.filter((item) => item.result === "atende");
     const missingTitle = candidate.currentTitle ? [] : ["Cargo atual não informado pela fonte"];
-    return { ...candidate, fitScore: score, fitClassification: classify(score), mainSignal: matched[0]?.criterion, pointsToValidate: [...new Set([...missingTitle, ...evidence.filter((item) => item.result !== "atende").map((item) => item.criterion))], evidence };
+    const pointsToValidate = [...new Set([...missingTitle, ...evidence.filter((item) => item.result !== "atende").map((item) => item.criterion)])];
+    return { ...candidate, fitScore: score, fitClassification: classify(score), mainSignal: matched[0]?.criterion, pointsToValidate, evidence };
   }).sort((a, b) => b.fitScore - a.fitScore || a.name.localeCompare(b.name, "pt-BR"));
 }
 
