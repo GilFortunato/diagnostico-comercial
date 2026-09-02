@@ -14,6 +14,13 @@ import { mergePeople, normalizeCompanies, normalizePeople, pickString } from "@/
 import { rankCompanies, rankPeople, targetRolesNotFound } from "@/lib/decision-makers/ranking";
 import { expandRoleFamilies } from "@/lib/decision-makers/roleIntelligence";
 import type { DecisionMakerResult, DecisionMakerSearchInput, HuntingPerson, PersonSearchInput } from "@/lib/decision-makers/search";
+import {
+  manusCompaniesToRawItems,
+  manusPeopleToRawItems,
+  manusWarnings,
+  researchB2bCompaniesWithManus,
+  researchB2bPeopleWithManus,
+} from "@/lib/hunting/manusHuntingProvider";
 
 type HuntingDependencies = {
   discoverCompanies: typeof discoverCompanies;
@@ -22,6 +29,8 @@ type HuntingDependencies = {
   enrichPersonProfile: typeof enrichPersonProfile;
   enrichPersonPosts: typeof enrichPersonPosts;
   researchCompanies: typeof researchCompanies;
+  researchManusCompanies: typeof researchB2bCompaniesWithManus;
+  researchManusPeople: typeof researchB2bPeopleWithManus;
   refineRanking: typeof refineDecisionMakerRanking;
   now: () => Date;
 };
@@ -33,6 +42,8 @@ const defaultDependencies: HuntingDependencies = {
   enrichPersonProfile,
   enrichPersonPosts,
   researchCompanies,
+  researchManusCompanies: researchB2bCompaniesWithManus,
+  researchManusPeople: researchB2bPeopleWithManus,
   refineRanking: refineDecisionMakerRanking,
   now: () => new Date(),
 };
@@ -56,13 +67,37 @@ export async function executeDecisionMakerSearch(input: DecisionMakerSearchInput
 
 async function executeCompanySearch(input: Extract<DecisionMakerSearchInput, { mode: "companies" }>, queryId: string, deps: HuntingDependencies): Promise<DecisionMakerResult> {
   const unit = getBusinessUnitDna(input.businessUnitId);
-  let items: unknown[];
+  const warnings: string[] = [];
+  let items: unknown[] = [];
+  let sourceTitle = "Manus · pesquisa B2B";
+  let manusUsed = false;
+
   try {
-    items = await deps.discoverCompanies(input);
+    const manusResult = await deps.researchManusCompanies(input);
+    warnings.push(...manusWarnings(manusResult));
+    if (manusResult.status === "success_with_results") {
+      items = manusCompaniesToRawItems(manusResult);
+      manusUsed = items.length > 0;
+      if (!manusUsed) warnings.push("Manus retornou registros sem evidência suficiente para serem aceitos; a Share AI acionou o Apify direto como confirmação.");
+    } else if (manusResult.status === "success_empty") {
+      warnings.push("Manus concluiu a pesquisa sem empresas verificáveis; o Apify direto foi consultado para confirmar a cobertura.");
+    } else {
+      warnings.push("Manus não concluiu a pesquisa principal; o Apify direto foi acionado como fallback.");
+    }
   } catch {
-    throw new Error("A fonte principal de descoberta de empresas está indisponível.");
+    warnings.push("Manus ficou indisponível antes de concluir a pesquisa; o Apify direto foi acionado como fallback.");
   }
-  const normalized = normalizeCompanies(items, "LinkedIn Company Search via Harvest");
+
+  if (!manusUsed) {
+    sourceTitle = "LinkedIn Company Search via Harvest";
+    try {
+      items = await deps.discoverCompanies(input);
+    } catch {
+      throw new Error("Manus e a fonte direta de descoberta de empresas estão indisponíveis.");
+    }
+  }
+
+  const normalized = normalizeCompanies(items, sourceTitle);
   if (items.length > 0 && normalized.length === 0) {
     throw new Error("A fonte retornou empresas, mas o formato recebido não pôde ser normalizado com segurança.");
   }
@@ -80,10 +115,10 @@ async function executeCompanySearch(input: Extract<DecisionMakerSearchInput, { m
     targetRolesNotFound: [],
     nextBestAction: companies.some((company) => company.linkedinUrl)
       ? { title: "Selecionar contas e buscar pessoas", reason: "As contas com página pública identificada podem seguir para uma busca econômica de profissionais básicos.", impact: "alto", effort: "baixo" }
-      : { title: "Revisar os filtros de descoberta", reason: "A fonte respondeu normalmente, mas não retornou empresas verificáveis para este recorte.", impact: "alto", effort: "baixo" },
-    sources: [{ title: "LinkedIn Company Search via Harvest", confidence: companies.length ? "provável" : "não verificado", notes: "Resultados públicos normalizados e deduplicados; filtros não suportados pelo Actor são usados apenas na leitura posterior de aderência." }],
-    warnings: [],
-    cost: { strategy: "Busca de empresas limitada à quantidade selecionada pelo usuário.", basicCandidates: companies.length, profileEnrichments: 0, postEnrichments: 0, broadDiscoveryUsed: true },
+      : { title: "Revisar os filtros de descoberta", reason: "As fontes responderam sem confirmar empresas verificáveis para este recorte. Amplie o universo antes de concluir que não existem contas aderentes.", impact: "alto", effort: "baixo" },
+    sources: [{ title: sourceTitle, confidence: companies.length ? "provável" : "não verificado", notes: manusUsed ? "Pesquisa orquestrada pelo Manus com evidências públicas; Apify é usado pelo agente quando autorizado." : "Fallback direto do Apify normalizado e deduplicado pela Share AI." }],
+    warnings: [...new Set(warnings)],
+    cost: { strategy: manusUsed ? "Manus como pesquisa principal; fallback Apify não foi necessário para descoberta." : "Fallback Apify usado porque Manus não produziu cobertura verificável.", basicCandidates: companies.length, profileEnrichments: 0, postEnrichments: 0, broadDiscoveryUsed: !manusUsed },
   };
 }
 
@@ -97,35 +132,56 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   let companyItems: unknown[] = [];
   let harvestFailed = false;
   let broadFailed = false;
+  let manusUsed = false;
+  let primarySource = "Manus + fontes públicas";
 
   try {
-    companyItems = await deps.researchCompanies(input.filters.companyLinkedinUrls);
+    const manusResult = await deps.researchManusPeople(expandedInput);
+    warnings.push(...manusWarnings(manusResult));
+    if (manusResult.status === "success_with_results") {
+      harvestItems = manusPeopleToRawItems(manusResult);
+      manusUsed = harvestItems.length > 0;
+      if (!manusUsed) warnings.push("Manus retornou perfis sem LinkedIn real verificável; a Share AI acionou o Apify direto como confirmação.");
+    } else if (manusResult.status === "success_empty") {
+      warnings.push("Manus concluiu sem pessoas verificáveis; o Apify direto foi consultado para confirmar a cobertura.");
+    } else {
+      warnings.push("Manus não concluiu a pesquisa principal; o Apify direto foi acionado como fallback.");
+    }
   } catch {
-    warnings.push("Os detalhes corporativos não estavam disponíveis; a busca de pessoas continuou com as páginas informadas.");
+    warnings.push("Manus ficou indisponível durante a descoberta; o Apify direto foi acionado como fallback.");
   }
 
-  try {
-    harvestItems = await deps.discoverHarvestPeople(expandedInput);
-  } catch {
-    harvestFailed = true;
-    warnings.push("A busca principal de funcionários da conta falhou.");
-  }
-
-  if (input.filters.includeBroadDiscovery) {
-    warnings.push("A descoberta complementar usa uma segunda busca pública do Harvest e pode gerar custo adicional.");
+  if (!manusUsed) {
+    primarySource = "Funcionários públicos da empresa via Harvest";
     try {
-      broadItems = await deps.discoverBroadPeople(expandedInput);
+      companyItems = await deps.researchCompanies(input.filters.companyLinkedinUrls);
     } catch {
-      broadFailed = true;
-      warnings.push("A descoberta complementar também está indisponível.");
+      warnings.push("Os detalhes corporativos não estavam disponíveis; a busca direta continuou com as páginas informadas.");
+    }
+
+    try {
+      harvestItems = await deps.discoverHarvestPeople(expandedInput);
+    } catch {
+      harvestFailed = true;
+      warnings.push("A busca direta principal de funcionários da conta falhou.");
+    }
+
+    if (input.filters.includeBroadDiscovery) {
+      warnings.push("A descoberta complementar direta usa uma segunda busca pública do Harvest e pode gerar custo adicional.");
+      try {
+        broadItems = await deps.discoverBroadPeople(expandedInput);
+      } catch {
+        broadFailed = true;
+        warnings.push("A descoberta complementar direta também está indisponível.");
+      }
+    }
+
+    if (harvestFailed && (!input.filters.includeBroadDiscovery || broadFailed)) {
+      throw new Error("Manus e as fontes diretas de descoberta de pessoas estão indisponíveis.");
     }
   }
 
-  if (harvestFailed && (!input.filters.includeBroadDiscovery || broadFailed)) {
-    throw new Error("As fontes de descoberta de pessoas estão indisponíveis.");
-  }
-
-  const harvestPeople = normalizePeople(harvestItems, "Funcionários públicos da empresa via Harvest", input.filters.desiredDecisionRole);
+  const harvestPeople = normalizePeople(harvestItems, primarySource, input.filters.desiredDecisionRole);
   const broadPeople = normalizePeople(broadItems, "Descoberta complementar via Harvest Profile Search", input.filters.desiredDecisionRole);
   if ((harvestItems.length > 0 && harvestPeople.length === 0) || (broadItems.length > 0 && broadPeople.length === 0 && harvestPeople.length === 0)) {
     throw new Error("A fonte retornou perfis, mas o formato recebido não pôde ser normalizado com segurança.");
@@ -139,7 +195,7 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
       const profileItems = await deps.enrichPersonProfile(person.linkedinUrl);
       return applyProfileEvidence(person, profileItems) ? 1 : 0;
     } catch {
-      warnings.push(`O perfil de ${person.name} não pôde ser enriquecido; o candidato básico foi mantido.`);
+      warnings.push(`O perfil de ${person.name} não pôde ser enriquecido; o resultado confirmado da descoberta foi mantido.`);
       return 0;
     }
   }));
@@ -186,17 +242,17 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
     targetRolesNotFound: missingRoles,
     nextBestAction: aiNextAction ?? nextActionForPeople(people),
     sources: [
-      { title: "Funcionários públicos das contas selecionadas", confidence: harvestPeople.length ? "provável" : "não verificado", notes: "Busca básica limitada, normalizada e deduplicada pela camada segura de conectores." },
+      { title: manusUsed ? "Manus · pesquisa de decisores" : "Funcionários públicos das contas selecionadas", confidence: harvestPeople.length ? "provável" : "não verificado", notes: manusUsed ? "Pessoas aceitas somente com LinkedIn real e evidência profissional; o conector Apify é priorizado pelo Manus quando autorizado." : "Fallback direto do Harvest normalizado e deduplicado pela camada segura de conectores." },
       { title: "Perfis públicos enriquecidos", confidence: profileEnrichments ? "confirmado" : "não verificado", notes: `${profileEnrichments} dos 5 perfis prioritários receberam evidências adicionais.` },
       { title: "Publicações profissionais recentes", confidence: postEnrichments ? "confirmado" : "não verificado", notes: `${postEnrichments} dos 3 perfis prioritários apresentaram sinais públicos recentes.` },
     ],
     warnings: [...new Set(warnings)],
     cost: {
-      strategy: "Até 25 candidatos básicos; enriquecimento de 5 perfis e publicações de 3 pessoas.",
+      strategy: manusUsed ? "Manus como descoberta principal; enriquecimento Apify limitado aos perfis prioritários." : "Fallback Apify direto usado para descoberta e enriquecimento progressivo.",
       basicCandidates: people.length,
       profileEnrichments,
       postEnrichments,
-      broadDiscoveryUsed: input.filters.includeBroadDiscovery,
+      broadDiscoveryUsed: !manusUsed && input.filters.includeBroadDiscovery,
     },
   };
 }
