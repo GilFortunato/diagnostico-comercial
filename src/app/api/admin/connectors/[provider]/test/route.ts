@@ -19,5 +19,5 @@ export async function POST(_request: Request, context: { params: Promise<{ provi
 }
 
 function parseProvider(provider: string): PlatformProvider | null {
-  return provider === "gemini" || provider === "apify" ? provider : null;
+  return provider === "gemini" || provider === "apify" || provider === "manus" ? provider : null;
 }
