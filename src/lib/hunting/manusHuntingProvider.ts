@@ -103,23 +103,31 @@ export async function researchB2bPeopleWithManus(input: PersonSearchInput) {
 
 export async function researchHrCandidatesWithManus(search: Pick<HrHuntingSearchSnapshot, "title" | "companyName" | "jobDescription" | "jobDna">, input: HrSearchInput) {
   const dna = search.jobDna;
+  const targetTitle = input.currentTitle?.trim() || dna.title || search.title;
+  const targetLocation = input.location?.trim() || dna.location || "";
+  const discoveryMax = Math.min(50, Math.max(25, input.quantity * 2));
+  const searchTerms = uniqueStrings([targetTitle, ...input.keywords]).slice(0, 8);
   const prompt = [
     "Você é o agente de sourcing profissional do HR Hunting da Share AI. Localize profissionais reais para uma vaga; você NÃO decide contratação.",
-    "Use o conector Apify quando disponível como fonte estruturada prioritária e complemente apenas com fontes públicas profissionais verificáveis.",
-    "Faça no máximo uma busca principal e uma expansão semântica controlada de títulos. Título, skills, localização e senioridade são critérios separados.",
-    "REGRA ABSOLUTA: só inclua pessoa com nome real, evidência profissional e URL REAL de LinkedIn /in/. Nunca fabrique URL, cargo, empresa, experiência, formação, e-mail ou telefone.",
+    "Use OBRIGATORIAMENTE o conector Apify desta tarefa. Nesta execução NÃO use browser, pesquisa Google, redirecionadores ou navegação manual para tentar descobrir LinkedIn.",
+    "PASSO 1 — use diretamente o Actor `harvestapi/linkedin-profile-search`. Se precisar localizar a ferramenta, use apenas search-actors/fetch-actor-details, depois call-actor e get-actor-output.",
+    `Input do PASSO 1: profileScraperMode="Short", maxItems=${discoveryMax}, takePages=2, searchQuery="${searchTerms.join(" OR ")}"${targetLocation ? `, locations=["${targetLocation}"]` : ""}.`,
+    "Não empilhe filtros exatos de currentJobTitles e seniorityLevelIds nesta primeira coleta. Título, skills, senioridade e localização serão avaliados depois sobre os perfis retornados.",
+    "Use diretamente o campo linkedinUrl entregue pelo Actor. Não tente resolver URLs por Google ou browser.",
+    "PASSO 2 — somente se o PASSO 1 retornar zero perfis úteis, faça UMA segunda execução do mesmo Actor com uma expansão semântica curta do título, mantendo maxItems e takePages. Não faça terceira rodada e não use outras ferramentas de navegação.",
+    "REGRA ABSOLUTA: inclua somente pessoas reais com nome e URL REAL de LinkedIn /in/ sustentados pelo output do Actor. Cargo, empresa ou localização ausentes devem ser string vazia, nunca inventados.",
     "E-mail/telefone só quando a fonte retornar explicitamente contato profissional; caso contrário string vazia. Ausência de evidência significa não verificado, nunca 'não possui'.",
     "Não pesquisar, inferir, retornar ou usar em avaliação: idade, gênero, raça, etnia, religião, deficiência, orientação sexual, identidade de gênero, estado civil, gravidez, foto, opinião política ou outros atributos protegidos/pessoais.",
     `Vaga: ${search.title}`,
     `Empresa: ${search.companyName || "não informada"}`,
     `Resumo profissional: ${dna.shortSummary}`,
-    `Título-alvo: ${input.currentTitle?.trim() || dna.title || search.title}`,
-    `Senioridade: ${input.seniority.join(", ") || dna.seniority || "não especificada"}`,
-    `Localização: ${input.location?.trim() || dna.location || "não especificada"}`,
+    `Título-alvo para aderência: ${targetTitle}`,
+    `Senioridade desejada para aderência: ${input.seniority.join(", ") || dna.seniority || "não especificada"}`,
+    `Localização desejada para aderência: ${targetLocation || "não especificada"}`,
     `Palavras-chave profissionais: ${input.keywords.join(", ") || "não especificadas"}`,
     `Critérios profissionais da vaga: ${formatCriteria(dna)}`,
-    `Quantidade máxima: ${input.quantity}`,
-    "Retorne somente fatos profissionais sustentados. Se não encontrar candidatos verificáveis, retorne people vazio e registre limitações.",
+    `Quantidade final máxima: ${input.quantity}`,
+    "Em queriesAttempted registre o Actor e os inputs de busca efetivamente usados. Em limitations informe zero real, erro ou ausência de campos sem transformar isso em reprovação do candidato.",
   ].join("\n");
 
   return runManusStructuredTask<PeoplePayload>({
@@ -133,7 +141,7 @@ export async function researchHrCandidatesWithManus(search: Pick<HrHuntingSearch
 export function manusPeopleToRawItems(result: ManusTaskResult<PeoplePayload>) {
   if (!result.value) return [];
   return result.value.people.flatMap((person) => {
-    if (!person.name.trim() || !person.currentTitle.trim() || !isRealLinkedInPersonUrl(person.linkedinUrl)) return [];
+    if (!person.name.trim() || !isRealLinkedInPersonUrl(person.linkedinUrl)) return [];
     return [{
       fullName: person.name.trim(),
       jobTitle: person.currentTitle.trim(),
