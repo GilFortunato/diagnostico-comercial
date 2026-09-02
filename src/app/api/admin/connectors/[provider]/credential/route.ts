@@ -47,7 +47,7 @@ export async function DELETE(_request: Request, context: { params: Promise<{ pro
 }
 
 function parseProvider(provider: string): PlatformProvider | null {
-  return provider === "gemini" || provider === "apify" ? provider : null;
+  return provider === "gemini" || provider === "apify" || provider === "manus" ? provider : null;
 }
 
 function forbidden() {
