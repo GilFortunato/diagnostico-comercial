@@ -56,7 +56,7 @@ export async function runManusStructuredTask<T>({
   const startedAt = Date.now();
   const resolution = await resolveManusCredential();
   if (!resolution.available || !resolution.credential) {
-    return result("unavailable", null, ["Manus não está configurado; a pesquisa seguirá pelo fallback disponível."], null, null, false, startedAt);
+    return result<T>("unavailable", null, ["Manus não está configurado; a pesquisa seguirá pelo fallback disponível."], null, null, false, startedAt);
   }
 
   const warnings: string[] = [];
@@ -95,12 +95,12 @@ export async function runManusStructuredTask<T>({
     if (!createResponse.ok) {
       await recordManusCredentialFailure(resolution.source, createResponse.status);
       const status = createResponse.status === 402 || createResponse.status === 429 ? "quota_exceeded" : "provider_error";
-      return result(status, null, warnings, null, null, Boolean(connectorId), startedAt);
+      return result<T>(status, null, warnings, null, null, Boolean(connectorId), startedAt);
     }
 
     const created = await createResponse.json() as { ok?: boolean; task_id?: string; error?: { message?: string } };
     taskId = created.ok && typeof created.task_id === "string" ? created.task_id : null;
-    if (!taskId) return result("provider_error", null, [...warnings, "Manus não retornou um identificador de tarefa válido."], null, null, Boolean(connectorId), startedAt);
+    if (!taskId) return result<T>("provider_error", null, [...warnings, "Manus não retornou um identificador de tarefa válido."], null, null, Boolean(connectorId), startedAt);
 
     console.info("[manus-hunting]", { event: "task_started", taskId, apifyConnectorUsed: Boolean(connectorId) });
     const timeoutMs = manusTimeoutMs();
@@ -116,7 +116,7 @@ export async function runManusStructuredTask<T>({
       if (!response.ok) {
         await recordManusCredentialFailure(resolution.source, response.status);
         const status = response.status === 402 || response.status === 429 ? "quota_exceeded" : "provider_error";
-        return result(status, null, warnings, taskId, await readCreditUsage(resolution.credential, taskId), Boolean(connectorId), startedAt);
+        return result<T>(status, null, warnings, taskId, await readCreditUsage(resolution.credential, taskId), Boolean(connectorId), startedAt);
       }
 
       const payload = await response.json() as { ok?: boolean; messages?: ManusMessage[] };
@@ -125,12 +125,12 @@ export async function runManusStructuredTask<T>({
       if (structured) {
         const credits = await readCreditUsage(resolution.credential, taskId);
         if (!structured.success) {
-          return result("provider_error", null, [...warnings, structured.error || "Manus não conseguiu estruturar o resultado da pesquisa."], taskId, credits, Boolean(connectorId), startedAt);
+          return result<T>("provider_error", null, [...warnings, structured.error || "Manus não conseguiu estruturar o resultado da pesquisa."], taskId, credits, Boolean(connectorId), startedAt);
         }
         const count = countResults(structured.value);
         const status: ManusRunStatus = count > 0 ? "success_with_results" : "success_empty";
         console.info("[manus-hunting]", { event: "task_completed", taskId, status, resultCount: count, creditUsage: credits, durationMs: Date.now() - startedAt });
-        return result(status, structured.value, warnings, taskId, credits, Boolean(connectorId), startedAt);
+        return result<T>(status, structured.value, warnings, taskId, credits, Boolean(connectorId), startedAt);
       }
 
       const statusEvent = messages.find((message) => message.type === "status_update" && message.status_update)?.status_update;
@@ -139,19 +139,19 @@ export async function runManusStructuredTask<T>({
         const reason = statusEvent.agent_status === "waiting"
           ? "Manus solicitou interação durante uma pesquisa automática; a Share AI acionará o fallback."
           : "A tarefa Manus terminou com erro.";
-        return result("provider_error", null, [...warnings, reason], taskId, credits, Boolean(connectorId), startedAt);
+        return result<T>("provider_error", null, [...warnings, reason], taskId, credits, Boolean(connectorId), startedAt);
       }
       if (statusEvent?.agent_status === "stopped") sawStopped = true;
       if (sawStopped && Date.now() - startedAt + pollIntervalMs >= timeoutMs) break;
     }
 
     await stopTask(resolution.credential, taskId);
-    return result("timeout", null, [...warnings, "Manus excedeu o tempo limite desta pesquisa; a tarefa foi interrompida para evitar consumo indefinido."], taskId, await readCreditUsage(resolution.credential, taskId), Boolean(connectorId), startedAt);
+    return result<T>("timeout", null, [...warnings, "Manus excedeu o tempo limite desta pesquisa; a tarefa foi interrompida para evitar consumo indefinido."], taskId, await readCreditUsage(resolution.credential, taskId), Boolean(connectorId), startedAt);
   } catch (error) {
     if (error instanceof ManusHttpError) await recordManusCredentialFailure(resolution.source, error.status);
     const timeout = error instanceof DOMException && error.name === "TimeoutError";
     if (taskId && timeout) await stopTask(resolution.credential, taskId);
-    return result(timeout ? "timeout" : "provider_error", null, warnings, taskId, taskId ? await readCreditUsage(resolution.credential, taskId) : null, Boolean(connectorId), startedAt);
+    return result<T>(timeout ? "timeout" : "provider_error", null, warnings, taskId, taskId ? await readCreditUsage(resolution.credential, taskId) : null, Boolean(connectorId), startedAt);
   }
 }
 
