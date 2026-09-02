@@ -1,4 +1,4 @@
-export type PlatformProvider = "gemini" | "apify";
+export type PlatformProvider = "gemini" | "apify" | "manus";
 export type PlatformCredentialSource = "managed" | "environment" | null;
 export type PlatformCredentialHealth = "connected" | "limit_reached" | "error" | "disconnected";
 
