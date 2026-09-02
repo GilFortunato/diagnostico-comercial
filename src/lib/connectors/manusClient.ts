@@ -7,7 +7,7 @@ import { resolveManusCredential } from "@/lib/connectors/platformCredentials";
 const manusBaseUrl = "https://api.manus.ai/v2";
 const pollIntervalMs = 3_000;
 const requestTimeoutMs = 15_000;
-let connectorCache: { expiresAt: number; id: string | null } | null = null;
+let connectorCache: { expiresAt: number; id: string } | null = null;
 
 type StructuredResultEvent<T> = {
   success: boolean;
@@ -65,9 +65,21 @@ export async function runManusStructuredTask<T>({
     connectorId = await resolveApifyConnectorId(resolution.credential);
   } catch (error) {
     if (error instanceof ManusHttpError) await recordManusCredentialFailure(resolution.source, error.status);
-    warnings.push("O conector Apify do Manus não pôde ser confirmado; o agente seguirá com as fontes disponíveis e a Share AI mantém o Apify direto como fallback.");
+    warnings.push("O conector Apify do Manus não pôde ser confirmado; a Share AI usará o Apify direto como fallback.");
   }
-  if (!connectorId) warnings.push("Apify não está autorizado como conector no Manus; autorize-o na conta Manus para ampliar a cobertura da pesquisa.");
+
+  if (!connectorId) {
+    console.warn("[manus-hunting]", { event: "apify_connector_unavailable" });
+    return result<T>(
+      "unavailable",
+      null,
+      [...warnings, "O Apify nativo não está disponível para esta API do Manus. Autorize o conector Apify na conta Manus e tente novamente."],
+      null,
+      null,
+      false,
+      startedAt,
+    );
+  }
 
   let taskId: string | null = null;
   try {
@@ -80,7 +92,7 @@ export async function runManusStructuredTask<T>({
       body: JSON.stringify({
         message: {
           content: prompt,
-          ...(connectorId ? { connectors: [connectorId] } : {}),
+          connectors: [connectorId],
         },
         interactive_mode: false,
         hide_in_task_list: true,
@@ -95,14 +107,14 @@ export async function runManusStructuredTask<T>({
     if (!createResponse.ok) {
       await recordManusCredentialFailure(resolution.source, createResponse.status);
       const status = createResponse.status === 402 || createResponse.status === 429 ? "quota_exceeded" : "provider_error";
-      return result<T>(status, null, warnings, null, null, Boolean(connectorId), startedAt);
+      return result<T>(status, null, warnings, null, null, true, startedAt);
     }
 
     const created = await createResponse.json() as { ok?: boolean; task_id?: string; error?: { message?: string } };
     taskId = created.ok && typeof created.task_id === "string" ? created.task_id : null;
-    if (!taskId) return result<T>("provider_error", null, [...warnings, "Manus não retornou um identificador de tarefa válido."], null, null, Boolean(connectorId), startedAt);
+    if (!taskId) return result<T>("provider_error", null, [...warnings, "Manus não retornou um identificador de tarefa válido."], null, null, true, startedAt);
 
-    console.info("[manus-hunting]", { event: "task_started", taskId, apifyConnectorUsed: Boolean(connectorId) });
+    console.info("[manus-hunting]", { event: "task_started", taskId, apifyConnectorUsed: true, connectorId });
     const timeoutMs = manusTimeoutMs();
     let sawStopped = false;
 
@@ -116,7 +128,7 @@ export async function runManusStructuredTask<T>({
       if (!response.ok) {
         await recordManusCredentialFailure(resolution.source, response.status);
         const status = response.status === 402 || response.status === 429 ? "quota_exceeded" : "provider_error";
-        return result<T>(status, null, warnings, taskId, await readCreditUsage(resolution.credential, taskId), Boolean(connectorId), startedAt);
+        return result<T>(status, null, warnings, taskId, await readCreditUsage(resolution.credential, taskId), true, startedAt);
       }
 
       const payload = await response.json() as { ok?: boolean; messages?: ManusMessage[] };
@@ -125,12 +137,12 @@ export async function runManusStructuredTask<T>({
       if (structured) {
         const credits = await readCreditUsage(resolution.credential, taskId);
         if (!structured.success) {
-          return result<T>("provider_error", null, [...warnings, structured.error || "Manus não conseguiu estruturar o resultado da pesquisa."], taskId, credits, Boolean(connectorId), startedAt);
+          return result<T>("provider_error", null, [...warnings, structured.error || "Manus não conseguiu estruturar o resultado da pesquisa."], taskId, credits, true, startedAt);
         }
         const count = countResults(structured.value);
         const status: ManusRunStatus = count > 0 ? "success_with_results" : "success_empty";
-        console.info("[manus-hunting]", { event: "task_completed", taskId, status, resultCount: count, creditUsage: credits, durationMs: Date.now() - startedAt });
-        return result<T>(status, structured.value, warnings, taskId, credits, Boolean(connectorId), startedAt);
+        console.info("[manus-hunting]", { event: "task_completed", taskId, status, resultCount: count, creditUsage: credits, durationMs: Date.now() - startedAt, apifyConnectorUsed: true });
+        return result<T>(status, structured.value, warnings, taskId, credits, true, startedAt);
       }
 
       const statusEvent = messages.find((message) => message.type === "status_update" && message.status_update)?.status_update;
@@ -139,29 +151,35 @@ export async function runManusStructuredTask<T>({
         const reason = statusEvent.agent_status === "waiting"
           ? "Manus solicitou interação durante uma pesquisa automática; a Share AI acionará o fallback."
           : "A tarefa Manus terminou com erro.";
-        return result<T>("provider_error", null, [...warnings, reason], taskId, credits, Boolean(connectorId), startedAt);
+        return result<T>("provider_error", null, [...warnings, reason], taskId, credits, true, startedAt);
       }
       if (statusEvent?.agent_status === "stopped") sawStopped = true;
       if (sawStopped && Date.now() - startedAt + pollIntervalMs >= timeoutMs) break;
     }
 
     await stopTask(resolution.credential, taskId);
-    return result<T>("timeout", null, [...warnings, "Manus excedeu o tempo limite desta pesquisa; a tarefa foi interrompida para evitar consumo indefinido."], taskId, await readCreditUsage(resolution.credential, taskId), Boolean(connectorId), startedAt);
+    return result<T>("timeout", null, [...warnings, "Manus excedeu o tempo limite desta pesquisa; a tarefa foi interrompida para evitar consumo indefinido."], taskId, await readCreditUsage(resolution.credential, taskId), true, startedAt);
   } catch (error) {
     if (error instanceof ManusHttpError) await recordManusCredentialFailure(resolution.source, error.status);
     const timeout = error instanceof DOMException && error.name === "TimeoutError";
     if (taskId && timeout) await stopTask(resolution.credential, taskId);
-    return result<T>(timeout ? "timeout" : "provider_error", null, warnings, taskId, taskId ? await readCreditUsage(resolution.credential, taskId) : null, Boolean(connectorId), startedAt);
+    return result<T>(timeout ? "timeout" : "provider_error", null, warnings, taskId, taskId ? await readCreditUsage(resolution.credential, taskId) : null, true, startedAt);
   }
 }
 
 async function resolveApifyConnectorId(apiKey: string) {
-  const explicit = process.env.MANUS_APIFY_CONNECTOR_ID?.trim();
-  if (explicit) return explicit;
   if (connectorCache && connectorCache.expiresAt > Date.now()) return connectorCache.id;
+
   const connectors = await listManusConnectors(apiKey);
-  const id = findApifyConnectorId(connectors);
-  connectorCache = { id, expiresAt: Date.now() + 10 * 60 * 1000 };
+  const configuredId = process.env.MANUS_APIFY_CONNECTOR_ID?.trim();
+  const validConfiguredId = configuredId && connectors.some((connector) => connector.id === configuredId)
+    ? configuredId
+    : null;
+  const id = findApifyConnectorId(connectors, validConfiguredId);
+
+  // Never cache a missing connector. If the admin authorizes Apify in Manus,
+  // the very next Hunting request must be able to detect it immediately.
+  if (id) connectorCache = { id, expiresAt: Date.now() + 10 * 60 * 1000 };
   return id;
 }
 
