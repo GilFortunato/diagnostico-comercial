@@ -3,14 +3,6 @@ import { apifyActors } from "@/lib/connectors/apifyActors";
 import { runApifyActor } from "@/lib/connectors/apifyClient";
 import type { CompanySearchInput, PersonSearchInput } from "@/lib/decision-makers/search";
 
-const harvestSeniorityIds: Record<PersonSearchInput["filters"]["seniority"][number], string[]> = {
-  manager: ["200", "210"],
-  director: ["220"],
-  vp: ["300"],
-  c_level: ["310"],
-  owner: ["320"],
-};
-
 export function buildCompanyDiscoveryInput(input: CompanySearchInput) {
   const queryTerms = uniqueStrings([
     ...input.filters.keywords,
@@ -34,27 +26,36 @@ export function buildCompanyDiscoveryInput(input: CompanySearchInput) {
 }
 
 export function buildHarvestPeopleInput(input: PersonSearchInput) {
+  const searchTerms = uniqueStrings([
+    ...input.filters.roles,
+    ...input.filters.profileKeywords,
+  ]).slice(0, 8);
+
   return compactInput({
     ...apifyActors.linkedinCompanyEmployees.defaultInput,
     companies: input.filters.companyLinkedinUrls,
-    maxItems: input.filters.quantity,
-    jobTitles: input.filters.roles,
-    locations: input.filters.locations,
-    searchQuery: input.filters.profileKeywords.join(" OR ") || undefined,
-    seniorityLevelIds: [...new Set(input.filters.seniority.flatMap((level) => harvestSeniorityIds[level]))],
+    profileScraperMode: "Short ($4 per 1k)",
+    maxItems: discoveryLimit(input.filters.quantity),
+    // Recall first: LinkedIn's exact title/location/seniority filters are brittle when
+    // combined. We deliberately use one fuzzy query here and rank/filter in Share AI.
+    searchQuery: searchTerms.length ? searchTerms.join(" OR ") : undefined,
   });
 }
 
 export function buildBroadPeopleInput(input: PersonSearchInput) {
+  const searchTerms = uniqueStrings([
+    ...input.filters.roles,
+    ...input.filters.profileKeywords,
+  ]).slice(0, 8);
+
   return compactInput({
     ...apifyActors.linkedinProfileSearch.defaultInput,
     profileScraperMode: "Short",
-    maxItems: input.filters.quantity,
+    maxItems: discoveryLimit(input.filters.quantity),
     currentCompanies: input.filters.companyLinkedinUrls,
-    currentJobTitles: input.filters.roles,
-    locations: input.filters.locations,
-    searchQuery: input.filters.profileKeywords.join(" OR ") || undefined,
-    seniorityLevelIds: [...new Set(input.filters.seniority.flatMap((level) => harvestSeniorityIds[level]))],
+    // Keep the company hard-bound, but avoid stacking exact-title, geo and seniority
+    // filters. The product ranking layer is the right place to apply those signals.
+    searchQuery: searchTerms.length ? searchTerms.join(" OR ") : undefined,
   });
 }
 
@@ -95,6 +96,10 @@ export async function enrichPersonPosts(linkedinUrl: string) {
     scrapeComments: false,
     scrapeReactions: false,
   });
+}
+
+function discoveryLimit(quantity: number) {
+  return Math.min(50, Math.max(25, quantity * 2));
 }
 
 function compactInput(input: Record<string, unknown>) {
