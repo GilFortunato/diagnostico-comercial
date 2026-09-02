@@ -75,7 +75,7 @@ export async function researchB2bPeopleWithManus(input: PersonSearchInput) {
     `No PASSO 1 use as empresas exatamente como recebidas: ${companyUrls || "nenhuma URL informada"}.`,
     `Input esperado do PASSO 1: companies=[URLs acima], profileScraperMode="Short ($4 per 1k)", maxItems=${discoveryMax}${fuzzyQuery ? `, searchQuery="${fuzzyQuery}"` : ""}.`,
     "No PASSO 1 NÃO empilhe filtros exatos de jobTitles, locations e seniorityLevelIds. Primeiro maximize recall dentro da empresa; depois avalie cargo, senioridade, localização e aderência sobre os perfis retornados.",
-    "PASSO 2 — somente se o primeiro Actor não trouxer cobertura suficiente, faça UMA expansão controlada com `harvestapi/linkedin-profile-search`, mantendo currentCompanies preso às mesmas URLs, profileScraperMode="Short", maxItems no mesmo limite e uma busca textual equivalente. Não faça uma terceira rodada.",
+    'PASSO 2 — somente se o primeiro Actor não trouxer cobertura suficiente, faça UMA expansão controlada com `harvestapi/linkedin-profile-search`, mantendo currentCompanies preso às mesmas URLs, profileScraperMode="Short", maxItems no mesmo limite e uma busca textual equivalente. Não faça uma terceira rodada.',
     "Se o Apify retornar perfis reais da empresa que não correspondem perfeitamente ao título, mantenha-os apenas se forem profissionalmente próximos aos cargos-alvo; a Share AI fará o ranking final.",
     "REGRA ABSOLUTA: só inclua uma pessoa se nome, vínculo profissional e uma URL REAL de perfil LinkedIn /in/ forem sustentados por fonte. Nunca fabrique URL, slug, e-mail ou telefone.",
     "E-mail e telefone só podem ser retornados quando a própria fonte fornecer explicitamente um contato profissional. Caso contrário use string vazia.",
