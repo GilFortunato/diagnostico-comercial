@@ -7,6 +7,7 @@ import { resolveManusCredential } from "@/lib/connectors/platformCredentials";
 const manusBaseUrl = "https://api.manus.ai/v2";
 const pollIntervalMs = 3_000;
 const requestTimeoutMs = 15_000;
+const stoppedExtractionGraceMs = 30_000;
 let connectorCache: { expiresAt: number; id: string } | null = null;
 
 type StructuredResultEvent<T> = {
@@ -16,8 +17,20 @@ type StructuredResultEvent<T> = {
 };
 
 type ManusMessage = {
+  id?: string;
   type?: string;
-  status_update?: { agent_status?: "running" | "stopped" | "waiting" | "error" };
+  status_update?: {
+    agent_status?: "running" | "stopped" | "waiting" | "error";
+    status_detail?: {
+      waiting_for_event_type?: string;
+    };
+  };
+  tool_used?: {
+    action_id?: string;
+    tool?: string;
+    status?: "success" | "error" | "rollback";
+    brief?: string;
+  };
   structured_output_result?: StructuredResultEvent<unknown>;
 };
 
@@ -107,20 +120,25 @@ export async function runManusStructuredTask<T>({
     if (!createResponse.ok) {
       await recordManusCredentialFailure(resolution.source, createResponse.status);
       const status = createResponse.status === 402 || createResponse.status === 429 ? "quota_exceeded" : "provider_error";
+      console.warn("[manus-hunting]", { event: "task_create_failed", status, httpStatus: createResponse.status, apifyConnectorUsed: true });
       return result<T>(status, null, warnings, null, null, true, startedAt);
     }
 
     const created = await createResponse.json() as { ok?: boolean; task_id?: string; error?: { message?: string } };
     taskId = created.ok && typeof created.task_id === "string" ? created.task_id : null;
-    if (!taskId) return result<T>("provider_error", null, [...warnings, "Manus não retornou um identificador de tarefa válido."], null, null, true, startedAt);
+    if (!taskId) {
+      console.warn("[manus-hunting]", { event: "task_create_invalid_response", apifyConnectorUsed: true });
+      return result<T>("provider_error", null, [...warnings, "Manus não retornou um identificador de tarefa válido."], null, null, true, startedAt);
+    }
 
     console.info("[manus-hunting]", { event: "task_started", taskId, apifyConnectorUsed: true, connectorId });
     const timeoutMs = manusTimeoutMs();
-    let sawStopped = false;
+    const seenToolActions = new Set<string>();
+    let stoppedAt: number | null = null;
 
     while (Date.now() - startedAt < timeoutMs) {
       await sleep(pollIntervalMs);
-      const response = await fetch(`${manusBaseUrl}/task.listMessages?task_id=${encodeURIComponent(taskId)}&order=desc&limit=50`, {
+      const response = await fetch(`${manusBaseUrl}/task.listMessages?task_id=${encodeURIComponent(taskId)}&order=desc&limit=100&verbose=true`, {
         headers: { "x-manus-api-key": resolution.credential },
         cache: "no-store",
         signal: AbortSignal.timeout(requestTimeoutMs),
@@ -128,15 +146,32 @@ export async function runManusStructuredTask<T>({
       if (!response.ok) {
         await recordManusCredentialFailure(resolution.source, response.status);
         const status = response.status === 402 || response.status === 429 ? "quota_exceeded" : "provider_error";
+        console.warn("[manus-hunting]", { event: "task_poll_failed", taskId, status, httpStatus: response.status, apifyConnectorUsed: true });
         return result<T>(status, null, warnings, taskId, await readCreditUsage(resolution.credential, taskId), true, startedAt);
       }
 
       const payload = await response.json() as { ok?: boolean; messages?: ManusMessage[] };
       const messages = Array.isArray(payload.messages) ? payload.messages : [];
+
+      for (const message of messages) {
+        if (message.type !== "tool_used" || !message.tool_used) continue;
+        const actionKey = message.tool_used.action_id || message.id;
+        if (!actionKey || seenToolActions.has(actionKey)) continue;
+        seenToolActions.add(actionKey);
+        console.info("[manus-hunting]", {
+          event: "tool_used",
+          taskId,
+          tool: message.tool_used.tool || "unknown",
+          status: message.tool_used.status || "unknown",
+          brief: sanitizeLogText(message.tool_used.brief),
+        });
+      }
+
       const structured = messages.find((message) => message.type === "structured_output_result" && message.structured_output_result)?.structured_output_result as StructuredResultEvent<T> | undefined;
       if (structured) {
         const credits = await readCreditUsage(resolution.credential, taskId);
         if (!structured.success) {
+          console.warn("[manus-hunting]", { event: "structured_output_failed", taskId, creditUsage: credits, apifyConnectorUsed: true });
           return result<T>("provider_error", null, [...warnings, structured.error || "Manus não conseguiu estruturar o resultado da pesquisa."], taskId, credits, true, startedAt);
         }
         const count = countResults(structured.value);
@@ -148,21 +183,30 @@ export async function runManusStructuredTask<T>({
       const statusEvent = messages.find((message) => message.type === "status_update" && message.status_update)?.status_update;
       if (statusEvent?.agent_status === "error" || statusEvent?.agent_status === "waiting") {
         const credits = await readCreditUsage(resolution.credential, taskId);
+        const waitingType = statusEvent.status_detail?.waiting_for_event_type || null;
         const reason = statusEvent.agent_status === "waiting"
-          ? "Manus solicitou interação durante uma pesquisa automática; a Share AI acionará o fallback."
+          ? `Manus solicitou interação durante uma pesquisa automática${waitingType ? ` (${waitingType})` : ""}; a Share AI acionará o fallback.`
           : "A tarefa Manus terminou com erro.";
+        console.warn("[manus-hunting]", { event: "task_blocked", taskId, agentStatus: statusEvent.agent_status, waitingType, creditUsage: credits, apifyConnectorUsed: true });
         return result<T>("provider_error", null, [...warnings, reason], taskId, credits, true, startedAt);
       }
-      if (statusEvent?.agent_status === "stopped") sawStopped = true;
-      if (sawStopped && Date.now() - startedAt + pollIntervalMs >= timeoutMs) break;
+      if (statusEvent?.agent_status === "stopped" && stoppedAt === null) stoppedAt = Date.now();
+      if (stoppedAt && Date.now() - stoppedAt >= stoppedExtractionGraceMs) {
+        const credits = await readCreditUsage(resolution.credential, taskId);
+        console.warn("[manus-hunting]", { event: "structured_output_missing_after_stop", taskId, creditUsage: credits, apifyConnectorUsed: true });
+        return result<T>("provider_error", null, [...warnings, "Manus concluiu a tarefa, mas não entregou o resultado estruturado dentro da janela esperada."], taskId, credits, true, startedAt);
+      }
     }
 
     await stopTask(resolution.credential, taskId);
-    return result<T>("timeout", null, [...warnings, "Manus excedeu o tempo limite desta pesquisa; a tarefa foi interrompida para evitar consumo indefinido."], taskId, await readCreditUsage(resolution.credential, taskId), true, startedAt);
+    const credits = await readCreditUsage(resolution.credential, taskId);
+    console.warn("[manus-hunting]", { event: "task_timeout", taskId, creditUsage: credits, durationMs: Date.now() - startedAt, apifyConnectorUsed: true });
+    return result<T>("timeout", null, [...warnings, "Manus excedeu o tempo limite desta pesquisa; a tarefa foi interrompida para evitar consumo indefinido."], taskId, credits, true, startedAt);
   } catch (error) {
     if (error instanceof ManusHttpError) await recordManusCredentialFailure(resolution.source, error.status);
     const timeout = error instanceof DOMException && error.name === "TimeoutError";
     if (taskId && timeout) await stopTask(resolution.credential, taskId);
+    console.warn("[manus-hunting]", { event: "task_exception", taskId, timeout, errorName: error instanceof Error ? error.name : "UnknownError", apifyConnectorUsed: true });
     return result<T>(timeout ? "timeout" : "provider_error", null, warnings, taskId, taskId ? await readCreditUsage(resolution.credential, taskId) : null, true, startedAt);
   }
 }
@@ -224,8 +268,13 @@ function manusAgentProfile(): "standard" | "lite" | "max" {
 
 function manusTimeoutMs() {
   const configured = Number(process.env.MANUS_HUNTING_TIMEOUT_MS);
-  if (!Number.isFinite(configured)) return 90_000;
-  return Math.max(20_000, Math.min(120_000, Math.round(configured)));
+  if (!Number.isFinite(configured)) return 180_000;
+  return Math.max(30_000, Math.min(240_000, Math.round(configured)));
+}
+
+function sanitizeLogText(value: string | undefined) {
+  if (!value) return null;
+  return value.replace(/[\r\n]+/g, " ").slice(0, 160);
 }
 
 function result<T>(status: ManusRunStatus, value: T | null, warnings: string[], taskId: string | null, creditUsage: number | null, apifyConnectorUsed: boolean, startedAt: number): ManusTaskResult<T> {
