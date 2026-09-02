@@ -11,7 +11,11 @@ export async function validatePlatformCredential(provider: PlatformProvider, cre
   }
 
   try {
-    const response = provider === "gemini" ? await validateGemini(credential) : await validateApify(credential);
+    const response = provider === "gemini"
+      ? await validateGemini(credential)
+      : provider === "manus"
+        ? await validateManus(credential)
+        : await validateApify(credential);
     if (response.ok) return { ok: true, status: "connected", adminMessage: null };
     return classifyValidationFailure(response.status);
   } catch (error) {
@@ -44,6 +48,13 @@ async function validateGemini(credential: string) {
 async function validateApify(credential: string) {
   return fetch("https://api.apify.com/v2/users/me", {
     headers: { Authorization: `Bearer ${credential}` },
+    signal: AbortSignal.timeout(validationTimeoutMs),
+  });
+}
+
+async function validateManus(credential: string) {
+  return fetch("https://api.manus.ai/v2/connector.list", {
+    headers: { "x-manus-api-key": credential },
     signal: AbortSignal.timeout(validationTimeoutMs),
   });
 }
