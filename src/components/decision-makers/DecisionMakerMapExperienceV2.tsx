@@ -49,7 +49,8 @@ export function DecisionMakerMapExperienceV2() {
       setError(mode === "companies" ? "Informe setor, palavra-chave ou domínio." : "Informe ao menos uma página corporativa do LinkedIn e um cargo.");
       return;
     }
-    loadMore ? setIsLoadingMore(true) : setIsSearching(true);
+    if (loadMore) setIsLoadingMore(true);
+    else setIsSearching(true);
     setError(null);
     try {
       const currentCount = mode === "companies" ? result?.companies.length || 0 : result?.people.length || 0;
