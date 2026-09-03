@@ -439,7 +439,7 @@ function ContentDraftPanel({ draft }: { draft: ContentDraft }) { return <div cla
 
 function buildProfileReviewInsight(item: AuthorityAssessment["profileReview"][number], assessment: AuthorityAssessment, businessUnitShortName: string) {
   const guidance = assessment.input.businessUnitContext ?? buildBusinessUnitGuidance(assessment.input.businessUnitId);
-  const personalContext = Boolean(guidance.isPersonalContext);
+  const personalContext = isPersonalBusinessContext(assessment.input.businessUnitId);
   const territory = guidance.territories[0] ?? assessment.input.businessUnitName;
   const persona = guidance.personas[0] ?? guidance.icps[0] ?? (personalContext ? "seu público profissional" : "decisores do ICP");
   const contextReference = personalContext ? "seu foco profissional" : businessUnitShortName;
