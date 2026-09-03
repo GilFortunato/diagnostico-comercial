@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { LogIn, LogOut, UserCircle } from "lucide-react";
 import { getProviders, signIn, signOut, useSession } from "next-auth/react";
+import { clearShareAiClientState, markShareAiActivity } from "@/lib/auth/clientSession";
 
 export function LoginButton({ variant = "dark", label = "Entrar com Google" }: { variant?: "dark" | "light"; label?: string }) {
   const { data: session, status } = useSession();
@@ -14,6 +15,15 @@ export function LoginButton({ variant = "dark", label = "Entrar com Google" }: {
       setHasGoogleProvider(Boolean(providers?.google));
     });
   }, []);
+
+  useEffect(() => {
+    if (session?.user) markShareAiActivity();
+  }, [session?.user]);
+
+  async function handleSignOut() {
+    clearShareAiClientState();
+    await signOut({ callbackUrl: "/", redirect: true });
+  }
 
   if (status === "loading") {
     return <span className={`rounded-md border px-3 py-2 text-sm ${isLight ? "border-[var(--share-line)] text-zinc-500" : "border-white/15 text-white/70"}`}>Carregando acesso</span>;
@@ -28,7 +38,7 @@ export function LoginButton({ variant = "dark", label = "Entrar com Google" }: {
         </span>
         <button
           type="button"
-          onClick={() => signOut()}
+          onClick={handleSignOut}
           className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold ${isLight ? "border-[var(--share-line)] bg-white text-[var(--share-green-950)] hover:bg-[#edf7eb]" : "border-white/15 text-white hover:bg-white/10"}`}
         >
           <LogOut className="h-4 w-4" />

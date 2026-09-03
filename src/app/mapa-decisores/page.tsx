@@ -1,5 +1,5 @@
-import { DecisionMakerMapExperience } from "@/components/decision-makers/DecisionMakerMapExperience";
+import { DecisionMakerMapExperienceV2 } from "@/components/decision-makers/DecisionMakerMapExperienceV2";
 
 export default function DecisionMakerMapPage() {
-  return <DecisionMakerMapExperience />;
+  return <DecisionMakerMapExperienceV2 />;
 }

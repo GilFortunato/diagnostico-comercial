@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, LockKeyhole, Network, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, LockKeyhole, Network, ShieldCheck } from "lucide-react";
 import { LoginButton } from "@/components/auth/LoginButton";
 import { ConnectorReadiness } from "@/components/connectors/ConnectorReadiness";
 
-export function ConnectorsPageExperience({ mode = "status" }: { mode?: "status" | "setup" | "admin" }) {
+export function ConnectorsPageExperience({ mode = "status", isAdminUser = false }: { mode?: "status" | "setup" | "admin"; isAdminUser?: boolean }) {
   const isAdmin = mode === "admin";
 
   return (
@@ -24,14 +24,14 @@ export function ConnectorsPageExperience({ mode = "status" }: { mode?: "status" 
       <div className="mx-auto grid max-w-7xl gap-6 px-5 py-8">
         <section className="rounded-lg bg-[var(--share-green-950)] p-6 text-white shadow-[0_28px_90px_rgb(0_63_46_/_0.18)] md:p-8">
           <div className="h-2 w-56 rounded-r-md bg-[var(--share-lime)]" />
-          <p className="mt-8 text-xs font-semibold uppercase text-[var(--share-lime)]">{isAdmin ? "Administração da plataforma" : "Disponibilidade"}</p>
+          <p className="mt-8 text-xs font-semibold uppercase text-[var(--share-lime)]">{isAdmin ? "Administração da plataforma" : "Recuperação de conexão"}</p>
           <h1 className="mt-3 max-w-4xl text-4xl font-semibold leading-tight md:text-5xl">
-            {isAdmin ? "Conexões globais da Share AI." : "A plataforma cuida das conexões para você."}
+            {isAdmin ? "Conexões globais da Share AI." : "Teste novamente antes de interromper seu trabalho."}
           </h1>
           <p className="mt-5 max-w-3xl text-base leading-7 text-white/74">
             {isAdmin
               ? "Valide e gerencie as credenciais usadas pela inteligência e pelas fontes públicas, sem depender de novo deploy."
-              : "Aqui você acompanha apenas se os recursos necessários estão disponíveis. Chaves e fornecedores ficam protegidos na administração."}
+              : "Esta tela não expõe chaves nem configurações técnicas. Você pode testar novamente os recursos da plataforma e continuar assim que a conexão for restabelecida."}
           </p>
         </section>
 
@@ -44,6 +44,19 @@ export function ConnectorsPageExperience({ mode = "status" }: { mode?: "status" 
         ) : null}
 
         <ConnectorReadiness mode={isAdmin ? "admin" : "status"} />
+
+        {!isAdmin && isAdminUser ? (
+          <section className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[var(--share-line)] bg-white p-5">
+            <div>
+              <p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Acesso administrativo</p>
+              <h2 className="mt-1 text-lg font-semibold text-[var(--share-green-950)]">Precisa substituir uma chave?</h2>
+              <p className="mt-1 text-sm leading-6 text-zinc-600">A troca de credenciais fica restrita ao Admin.</p>
+            </div>
+            <Link href="/admin/connectors" className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb]">
+              Ir para Admin <ArrowRight className="h-4 w-4" />
+            </Link>
+          </section>
+        ) : null}
       </div>
     </main>
   );

@@ -19,6 +19,7 @@ type ConnectorStatus = {
 export function ConnectorReadiness({ mode = "status" }: { mode?: "status" | "setup" | "admin" }) {
   const [status, setStatus] = useState<ConnectorStatus | null>(null);
   const [pageMessage, setPageMessage] = useState<string | null>(null);
+  const [rechecking, setRechecking] = useState(false);
 
   const refreshStatus = useCallback(async () => {
     const response = await fetch("/api/connectors/status", { cache: "no-store" });
@@ -42,6 +43,21 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: "status" | "set
     return () => { active = false; };
   }, []);
 
+  async function recheckConnections() {
+    setRechecking(true);
+    setPageMessage(null);
+    try {
+      const response = await fetch("/api/connectors/recheck", { method: "POST", cache: "no-store" });
+      const payload = await response.json() as { message?: string; error?: string };
+      setPageMessage(payload.message ?? payload.error ?? (response.ok ? "Conexões verificadas." : "Algum recurso ainda está indisponível."));
+      await refreshStatus();
+    } catch {
+      setPageMessage("Não foi possível testar as conexões agora. Tente novamente em instantes.");
+    } finally {
+      setRechecking(false);
+    }
+  }
+
   if (!status) {
     return (
       <section className="py-8">
@@ -55,11 +71,30 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: "status" | "set
   }
 
   if (mode !== "admin") {
+    const ready = status.google.connected && status.intelligence.available && status.publicSources.available;
     return (
-      <section className="grid gap-3 md:grid-cols-3">
-        <AvailabilityTile icon={ShieldCheck} title="Identidade" description={status.google.label} available={status.google.connected} />
-        <AvailabilityTile icon={BrainCircuit} title="Análise especialista" description={status.intelligence.label} available={status.intelligence.available} />
-        <AvailabilityTile icon={DatabaseZap} title="Pesquisa de dados públicos" description={status.publicSources.label} available={status.publicSources.available} />
+      <section className="grid gap-4 rounded-lg border border-[var(--share-line)] bg-white p-5 shadow-[0_16px_44px_rgb(0_63_46_/_0.06)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Status da plataforma</p>
+            <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{ready ? "Conexões disponíveis" : "Uma conexão precisa de atenção"}</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
+              {ready
+                ? "Os recursos necessários estão respondendo. Você pode voltar ao fluxo e tentar novamente."
+                : "Teste novamente as conexões. Nenhuma chave ou configuração sensível é exibida nesta tela."}
+            </p>
+          </div>
+          <button type="button" onClick={recheckConnections} disabled={rechecking} className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#edf7eb] disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${rechecking ? "animate-spin" : ""}`} />
+            {rechecking ? "Testando conexões" : ready ? "Testar novamente" : "Tentar reconectar"}
+          </button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <AvailabilityTile icon={ShieldCheck} title="Acesso" description={status.google.label} available={status.google.connected} />
+          <AvailabilityTile icon={BrainCircuit} title="Análise" description={status.intelligence.label} available={status.intelligence.available} />
+          <AvailabilityTile icon={DatabaseZap} title="Pesquisa" description={status.publicSources.label} available={status.publicSources.available} />
+        </div>
+        {pageMessage ? <p className="rounded-md bg-[#f3f8f1] px-3 py-2 text-sm leading-6 text-[var(--share-green-950)]">{pageMessage}</p> : null}
       </section>
     );
   }
@@ -78,7 +113,7 @@ export function ConnectorReadiness({ mode = "status" }: { mode?: "status" | "set
       <div className="flex items-start gap-3 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-4 py-3">
         <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--share-green-800)]" />
         <p className="text-sm leading-6 text-zinc-600">
-          As credenciais são globais, criptografadas e usadas somente no servidor. No Hunting, Manus é a pesquisa principal e o Apify direto permanece como fallback quando necessário.
+          As credenciais são globais, criptografadas e usadas somente no servidor. O B2B pode usar Manus + Apify e o HR Hunting usa coleta estruturada com Apify para maior previsibilidade.
         </p>
       </div>
     </section>
@@ -177,12 +212,8 @@ function AdminConnectorCard({ provider, eyebrow, name, credentialLabel, status, 
 }
 
 function ProviderLink({ provider }: { provider: PlatformProvider }) {
-  if (provider === "gemini") {
-    return <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-[var(--share-green-800)] hover:underline">Abrir o Google AI Studio<ExternalLink className="h-3.5 w-3.5" /></a>;
-  }
-  if (provider === "apify") {
-    return <a href="https://console.apify.com/account/integrations" target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-[var(--share-green-800)] hover:underline">Abrir a área de tokens<ExternalLink className="h-3.5 w-3.5" /></a>;
-  }
+  if (provider === "gemini") return <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-[var(--share-green-800)] hover:underline">Abrir o Google AI Studio<ExternalLink className="h-3.5 w-3.5" /></a>;
+  if (provider === "apify") return <a href="https://console.apify.com/account/integrations" target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-[var(--share-green-800)] hover:underline">Abrir a área de tokens<ExternalLink className="h-3.5 w-3.5" /></a>;
   return <a href="https://manus.im/app" target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-[var(--share-green-800)] hover:underline">Abrir o Manus<ExternalLink className="h-3.5 w-3.5" /></a>;
 }
 

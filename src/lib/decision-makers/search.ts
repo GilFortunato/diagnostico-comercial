@@ -23,7 +23,7 @@ export const companySearchSchema = commonSchema.extend({
     technologies: z.array(z.string().trim().min(2)).max(10).default([]),
     revenueRanges: z.array(z.enum(revenueRanges)).max(7).default([]),
     domains: z.array(z.string().trim().min(3)).max(10).default([]),
-    quantity: z.number().int().min(5).max(25).default(15),
+    quantity: z.number().int().min(5).max(50).default(15),
   }),
 });
 
@@ -38,7 +38,7 @@ export const personSearchSchema = commonSchema.extend({
     locations: z.array(z.string().trim().min(2)).max(10).default([]),
     profileKeywords: z.array(z.string().trim().min(2)).max(15).default([]),
     desiredDecisionRole: z.enum(decisionRoles).default("Decisor funcional"),
-    quantity: z.number().int().min(5).max(25).default(20),
+    quantity: z.number().int().min(5).max(50).default(20),
     includeBroadDiscovery: z.boolean().default(false),
   }),
 });
