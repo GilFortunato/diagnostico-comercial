@@ -54,7 +54,17 @@ function configuredActorId(actorKey: ApifyActorKey) {
     linkedinCompanySearch: process.env.APIFY_LINKEDIN_COMPANY_SEARCH_ACTOR_ID,
     leadDiscovery: process.env.APIFY_LEAD_DISCOVERY_ACTOR_ID,
   };
-  return variables[actorKey]?.trim() || undefined;
+  const configured = variables[actorKey]?.trim();
+  if (!configured) return undefined;
+
+  // Variáveis antigas da produção ainda podem apontar para os Actors Harvest que
+  // esgotaram o trial. Para descoberta de pessoas, esses overrides não podem
+  // substituir os Actors públicos atuais definidos em apifyActors.
+  const normalized = configured.toLocaleLowerCase("en-US");
+  if (actorKey === "linkedinProfileSearch" && normalized.includes("harvestapi/linkedin-profile-search")) return undefined;
+  if (actorKey === "linkedinCompanyEmployees" && normalized.includes("harvestapi/linkedin-company-employees")) return undefined;
+
+  return configured;
 }
 
 function encodeActorId(actorId: string) {
