@@ -98,6 +98,8 @@ export function buildBroadPeopleRecallInput(input: PersonSearchInput) {
     profileScraperMode: "Short",
     maxItems: discoveryLimit(input.filters.quantity),
     currentCompanies: input.filters.companyLinkedinUrls,
+    currentJobTitles: uniqueStrings(input.filters.roles).slice(0, 20),
+    locations: uniqueStrings(input.filters.locations).slice(0, 20),
     searchQuery: searchTerms.length ? searchTerms.join(" OR ") : undefined,
   });
 }
@@ -154,10 +156,16 @@ export async function enrichPersonPosts(linkedinUrl: string) {
 function isPublicPersonRow(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  const profileUrl = [record.profileUrl, record.linkedinUrl, record.linkedin_url, record.url]
+  if (record.recordType === "diagnostic" || record.ok === false) return false;
+
+  const profileUrl = [record.profileUrl, record.linkedinUrl, record.linkedin_url, record.linkedinProfileUrl, record.navigationUrl, record.url]
     .find((candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0);
-  const name = [record.fullName, record.name]
+  const explicitName = [record.fullName, record.name]
     .find((candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0);
+  const firstName = typeof record.firstName === "string" ? record.firstName.trim() : "";
+  const lastName = typeof record.lastName === "string" ? record.lastName.trim() : "";
+  const name = explicitName?.trim() || [firstName, lastName].filter(Boolean).join(" ").trim();
+
   return Boolean(name && profileUrl && /linkedin\.com\/in\//i.test(profileUrl));
 }
 
