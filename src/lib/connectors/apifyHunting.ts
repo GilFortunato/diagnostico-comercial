@@ -33,10 +33,17 @@ export function buildCompanyDiscoveryInput(input: CompanySearchInput) {
   });
 }
 
-// Mantidos como contratos públicos para chamadas legadas. A descoberta principal de
-// pessoas em produção usa os builders específicos dos novos providers abaixo.
+// Contrato legado mantido para consumidores/testes que ainda inspecionam o payload
+// Harvest. A descoberta B2B principal em produção usa buildPrimaryPeopleRecallInput.
 export function buildHarvestPeopleInput(input: PersonSearchInput) {
-  return buildPrimaryPeopleRecallInput(input);
+  return compactInput({
+    companies: input.filters.companyLinkedinUrls,
+    maxItems: input.filters.quantity,
+    jobTitles: input.filters.roles,
+    locations: input.filters.locations,
+    searchQuery: input.filters.profileKeywords.join(" OR ") || undefined,
+    seniorityLevelIds: [...new Set(input.filters.seniority.flatMap((level) => harvestSeniorityIds[level]))],
+  });
 }
 
 export function buildBroadPeopleInput(input: PersonSearchInput) {
