@@ -109,7 +109,8 @@ export async function discoverCompanies(input: CompanySearchInput) {
 }
 
 export async function discoverHarvestPeople(input: PersonSearchInput) {
-  return runApifyActor("linkedinCompanyEmployees", buildPrimaryPeopleRecallInput(input));
+  const items = await runApifyActor("linkedinCompanyEmployees", buildPrimaryPeopleRecallInput(input));
+  return items.filter(isPublicPersonRow);
 }
 
 export async function researchCompanies(companyLinkedinUrls: string[]) {
@@ -120,7 +121,8 @@ export async function researchCompanies(companyLinkedinUrls: string[]) {
 }
 
 export async function discoverBroadPeople(input: PersonSearchInput) {
-  return runApifyActor("linkedinCompanyEmployeesFallback", buildFallbackPeopleRecallInput(input));
+  const items = await runApifyActor("linkedinCompanyEmployeesFallback", buildFallbackPeopleRecallInput(input));
+  return items.filter(isPublicPersonRow);
 }
 
 export async function enrichPersonProfile(linkedinUrl: string) {
@@ -141,6 +143,16 @@ export async function enrichPersonPosts(linkedinUrl: string) {
     scrapeComments: false,
     scrapeReactions: false,
   });
+}
+
+function isPublicPersonRow(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  const profileUrl = [record.profileUrl, record.linkedinUrl, record.linkedin_url, record.url]
+    .find((candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0);
+  const name = [record.fullName, record.name]
+    .find((candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0);
+  return Boolean(name && profileUrl && /linkedin\.com\/in\//i.test(profileUrl));
 }
 
 function discoveryLimit(quantity: number) {
