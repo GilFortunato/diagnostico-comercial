@@ -33,10 +33,9 @@ export function buildCompanyDiscoveryInput(input: CompanySearchInput) {
   });
 }
 
-// Contrato legado mantido para consumidores/testes que ainda inspecionam o payload
-// Harvest. A descoberta B2B principal em produção usa buildPrimaryPeopleRecallInput.
 export function buildHarvestPeopleInput(input: PersonSearchInput) {
   return compactInput({
+    ...apifyActors.linkedinCompanyEmployees.defaultInput,
     companies: input.filters.companyLinkedinUrls,
     maxItems: input.filters.quantity,
     profileScraperMode: "Short ($4 per 1k)",
@@ -61,18 +60,17 @@ export function buildBroadPeopleInput(input: PersonSearchInput) {
 }
 
 export function buildPrimaryPeopleRecallInput(input: PersonSearchInput) {
-  const roleTerms = uniqueStrings(input.filters.roles).slice(0, 12);
-  const profileTerms = uniqueStrings(input.filters.profileKeywords).slice(0, 8);
-  const locations = uniqueStrings(input.filters.locations).slice(0, 10);
+  const searchTerms = uniqueStrings([
+    ...input.filters.roles,
+    ...input.filters.profileKeywords,
+  ]).slice(0, 8);
 
   return compactInput({
     ...apifyActors.linkedinCompanyEmployees.defaultInput,
     companies: input.filters.companyLinkedinUrls,
-    resultsLimit: discoveryLimit(input.filters.quantity),
-    jobTitles: roleTerms,
-    locations,
-    searchQuery: profileTerms.length ? profileTerms.join(" OR ") : undefined,
-    includeMentions: false,
+    profileScraperMode: "Short ($4 per 1k)",
+    maxItems: discoveryLimit(input.filters.quantity),
+    searchQuery: searchTerms.length ? searchTerms.join(" OR ") : undefined,
   });
 }
 
@@ -90,17 +88,17 @@ export function buildHarvestPeopleRecallInput(input: PersonSearchInput) {
 }
 
 export function buildBroadPeopleRecallInput(input: PersonSearchInput) {
-  const roleTerms = uniqueStrings(input.filters.roles).slice(0, 20);
-  const profileTerms = uniqueStrings(input.filters.profileKeywords).slice(0, 8);
-  const locations = uniqueStrings(input.filters.locations).slice(0, 20);
+  const searchTerms = uniqueStrings([
+    ...input.filters.roles,
+    ...input.filters.profileKeywords,
+  ]).slice(0, 8);
 
   return compactInput({
     ...apifyActors.linkedinProfileSearch.defaultInput,
+    profileScraperMode: "Short",
     maxItems: discoveryLimit(input.filters.quantity),
     currentCompanies: input.filters.companyLinkedinUrls,
-    currentJobTitles: roleTerms,
-    locations,
-    searchQuery: profileTerms.length ? profileTerms.join(" OR ") : undefined,
+    searchQuery: searchTerms.length ? searchTerms.join(" OR ") : undefined,
   });
 }
 
@@ -121,19 +119,16 @@ export async function researchCompanies(companyLinkedinUrls: string[]) {
 }
 
 export async function discoverBroadPeople(input: PersonSearchInput) {
-  // Primeiro preservamos a segunda fonte por empresa. Se ela estiver vazia,
-  // indisponível ou retornar apenas linha diagnóstica, ampliamos a descoberta
-  // com uma busca pública de perfis por empresa + cargo + localização.
   try {
-    const employeeItems = await runApifyActor("linkedinCompanyEmployeesFallback", buildFallbackPeopleRecallInput(input));
-    const employees = employeeItems.filter(isPublicPersonRow);
-    if (employees.length) return employees;
+    const profileItems = await runApifyActor("linkedinProfileSearch", buildBroadPeopleRecallInput(input));
+    const profiles = profileItems.filter(isPublicPersonRow);
+    if (profiles.length) return profiles;
   } catch {
-    // A terceira fonte abaixo ainda pode responder; só propagamos erro se ela também falhar.
+    // A fonte alternativa por empresa ainda pode responder.
   }
 
-  const profileItems = await runApifyActor("linkedinProfileSearch", buildBroadPeopleRecallInput(input));
-  return profileItems.filter(isPublicPersonRow);
+  const employeeItems = await runApifyActor("linkedinCompanyEmployeesFallback", buildFallbackPeopleRecallInput(input));
+  return employeeItems.filter(isPublicPersonRow);
 }
 
 export async function enrichPersonProfile(linkedinUrl: string) {
