@@ -39,6 +39,7 @@ export function buildHarvestPeopleInput(input: PersonSearchInput) {
   return compactInput({
     companies: input.filters.companyLinkedinUrls,
     maxItems: input.filters.quantity,
+    profileScraperMode: "Short ($4 per 1k)",
     jobTitles: input.filters.roles,
     locations: input.filters.locations,
     searchQuery: input.filters.profileKeywords.join(" OR ") || undefined,
