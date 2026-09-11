@@ -41,12 +41,11 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
   },
   linkedinProfileSearch: {
     key: "linkedinProfileSearch",
-    actorId: "harvestapi/linkedin-profile-search",
+    actorId: "dami_studio/linkedin-profile-search-scraper",
     label: "Busca pública de profissionais",
-    purpose: "Buscar profissionais públicos por cargo, localização, empresa e senioridade com filtros suportados pelo Harvest.",
+    purpose: "Buscar profissionais públicos por cargo, localização e empresa sem depender de login, cookie ou trial do Harvest.",
     stage: "decision_maker",
     defaultInput: {
-      profileScraperMode: "Short",
       maxItems: 25,
     },
   },
