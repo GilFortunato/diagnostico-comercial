@@ -5,6 +5,7 @@ export const platformModules = [
   "content.intelligence",
   "decision.makers",
   "hr.hunting",
+  "humanship.r1ship",
   "rapport",
   "meeting.intelligence",
 ] as const;
@@ -18,6 +19,7 @@ const defaultModuleAccess: Record<PlatformModule, boolean> = {
   "content.intelligence": true,
   "decision.makers": true,
   "hr.hunting": true,
+  "humanship.r1ship": true,
   rapport: false,
   "meeting.intelligence": false,
 };

@@ -5,6 +5,7 @@ export function getAppNavigation(isAdmin: boolean) {
     { label: "Diagnóstico", href: "/#diagnostico" },
     { label: "HR Hunting", href: "/hr-hunting" },
     { label: "B2B Hunting", href: "/mapa-decisores" },
+    { label: "Humanship", href: "/humanship" },
     ...(isAdmin ? [{ label: "Admin", href: "/admin" }] : []),
   ];
 }

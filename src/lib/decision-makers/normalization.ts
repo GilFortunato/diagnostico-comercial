@@ -5,9 +5,9 @@ type UnknownRecord = Record<string, unknown>;
 
 export function normalizeCompanies(items: unknown[], source: string): HuntingCompany[] {
   const normalized = items.filter(isRecord).reduce<HuntingCompany[]>((accumulator, item) => {
-    const name = pickString(item, ["name", "companyName", "organization.name", "company.name"]);
+    const name = pickString(item, ["name", "companyName", "organizationName", "organization.name", "company.name"]);
     if (!name) return accumulator;
-    const linkedinUrl = normalizeLinkedInUrl(pickString(item, ["linkedinUrl", "linkedin_url", "companyLinkedinUrl", "organization.linkedinUrl", "company.linkedinUrl"]));
+    const linkedinUrl = findLinkedInCompanyUrl(item);
     const website = pickString(item, ["website", "websiteUrl", "companyWebsite", "organization.website", "company.website"]);
     const domain = pickString(item, ["domain", "companyDomain", "organization.primaryDomain", "company.domain"]) || domainFromUrl(website);
     const industry = pickString(item, ["industry", "industryName", "organization.industry", "company.industry"]);
@@ -179,6 +179,53 @@ function firstRecord(value: unknown): UnknownRecord {
     return first ?? {};
   }
   return isRecord(value) ? value : {};
+}
+
+function findLinkedInCompanyUrl(record: UnknownRecord) {
+  const direct = pickString(record, [
+    "linkedinUrl",
+    "linkedin_url",
+    "linkedinCompanyUrl",
+    "companyLinkedinUrl",
+    "companyLinkedinURL",
+    "company_linkedin_url",
+    "companyUrl",
+    "navigationUrl",
+    "url",
+    "link",
+    "linkedin",
+    "organization.linkedinUrl",
+    "organization.navigationUrl",
+    "organization.url",
+    "company.linkedinUrl",
+    "company.navigationUrl",
+    "company.url",
+  ]);
+  const normalizedDirect = normalizeLinkedInUrl(direct);
+  if (normalizedDirect && /linkedin\.com\/company\//i.test(normalizedDirect)) return normalizedDirect;
+  return findNestedLinkedInCompanyUrl(record, 0);
+}
+
+function findNestedLinkedInCompanyUrl(value: unknown, depth: number): string {
+  if (depth > 4 || value == null) return "";
+  if (typeof value === "string") {
+    const normalized = normalizeLinkedInUrl(value);
+    return normalized && /linkedin\.com\/company\//i.test(normalized) ? normalized : "";
+  }
+  if (Array.isArray(value)) {
+    for (const item of value.slice(0, 20)) {
+      const found = findNestedLinkedInCompanyUrl(item, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+  if (isRecord(value)) {
+    for (const nested of Object.values(value)) {
+      const found = findNestedLinkedInCompanyUrl(nested, depth + 1);
+      if (found) return found;
+    }
+  }
+  return "";
 }
 
 function normalizeLinkedInUrl(value: string) {
