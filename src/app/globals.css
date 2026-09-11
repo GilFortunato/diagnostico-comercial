@@ -80,3 +80,19 @@ textarea {
 .share-button-primary:hover {
   background: #b6ff2e;
 }
+
+/* B2B Hunting: depois que uma busca gera tabela, os filtros deixam de consumir
+   largura e os resultados passam a usar toda a área disponível. Ao trocar de
+   modo, o resultado é limpo e o painel de filtros reaparece automaticamente. */
+.share-shell section > div.grid:has(> aside + div table) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.share-shell section > div.grid:has(> aside + div table) > aside {
+  display: none;
+}
+
+.share-shell section > div.grid:has(> aside + div table) > div {
+  width: 100%;
+  min-width: 0;
+}
