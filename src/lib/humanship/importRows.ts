@@ -6,12 +6,13 @@ const ignoredHeaders = [/^cpf$/i, /autorizo o tratamento/i, /consent/i];
 
 export async function parseHumanshipExcel(buffer: ArrayBuffer) {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(Buffer.from(buffer));
+  await workbook.xlsx.load(Buffer.from(new Uint8Array(buffer)) as never);
   const worksheet = workbook.worksheets.find((sheet) => sheet.actualRowCount > 0) || workbook.worksheets[0];
   if (!worksheet) return [];
   const rows: unknown[][] = [];
   worksheet.eachRow({ includeEmpty: false }, (row) => {
-    rows.push(row.values.slice(1).map(cellValue));
+    const values = Array.isArray(row.values) ? row.values : [];
+    rows.push(values.slice(1).map(cellValue));
   });
   return normalizeHumanshipRows(rows);
 }
