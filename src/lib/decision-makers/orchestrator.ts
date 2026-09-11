@@ -10,7 +10,7 @@ import {
   researchCompanies,
 } from "@/lib/connectors/apifyHunting";
 import { applyAiRanking, refineDecisionMakerRanking } from "@/lib/decision-makers/aiRanking";
-import { mergePeople, normalizeCompanies, normalizePeople } from "@/lib/decision-makers/normalization";
+import { mergePeople, normalizeCompanies, normalizePeople, pickString } from "@/lib/decision-makers/normalization";
 import { rankCompanies, rankPeople, targetRolesNotFound } from "@/lib/decision-makers/ranking";
 import { expandRoleFamilies } from "@/lib/decision-makers/roleIntelligence";
 import type { DecisionMakerResult, DecisionMakerSearchInput, HuntingPerson, PersonSearchInput } from "@/lib/decision-makers/search";
@@ -134,11 +134,18 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   const warnings: string[] = [];
   let primaryItems: unknown[] = [];
   let fallbackItems: unknown[] = [];
+  let companyItems: unknown[] = [];
   let primaryFailed = false;
   let fallbackFailed = false;
   let fallbackUsed = false;
   let manusUsed = false;
   let primarySource = "Funcionários públicos via Dami Studio";
+
+  try {
+    companyItems = await deps.researchCompanies(input.filters.companyLinkedinUrls);
+  } catch {
+    warnings.push("Os detalhes corporativos não estavam disponíveis; a busca de decisores continuou com as páginas informadas.");
+  }
 
   try {
     primaryItems = await deps.discoverHarvestPeople(expandedInput);
@@ -155,7 +162,7 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
     } catch {
       fallbackFailed = true;
       if (!primaryItems.length) warnings.push("A segunda fonte de funcionários também não respondeu.");
-      else warnings.push("A expansão complementar não respondeu; os resultados da fonte principal foram preservados.");
+      else warnings.push("A descoberta complementar também está indisponível; os resultados da fonte principal foram preservados.");
     }
   }
 
@@ -184,11 +191,32 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   let people = mergePeople(primaryPeople, fallbackPeople).slice(0, input.filters.quantity);
   people = rankPeople(people, expandedInput);
 
-  // Enriquecimentos individuais de perfil/posts saíram do caminho crítico. Eles geravam
-  // várias execuções adicionais por pesquisa e podiam transformar uma descoberta válida
-  // em timeout. A primeira resposta agora prioriza velocidade e evidência básica.
-  const profileEnrichments = 0;
-  const postEnrichments = 0;
+  const profileResults = await Promise.all(people.slice(0, 5).map(async (person) => {
+    try {
+      const profileItems = await deps.enrichPersonProfile(person.linkedinUrl);
+      return applyProfileEvidence(person, profileItems) ? 1 : 0;
+    } catch {
+      warnings.push(`O perfil de ${person.name} não pôde ser enriquecido; o resultado confirmado da descoberta foi mantido.`);
+      return 0;
+    }
+  }));
+  const profileEnrichments = profileResults.reduce<number>((total, current) => total + current, 0);
+
+  const postResults = await Promise.all(people.slice(0, 3).map(async (person) => {
+    try {
+      const postItems = await deps.enrichPersonPosts(person.linkedinUrl);
+      const signals = extractPostSignals(postItems);
+      if (!signals.length) return 0;
+      person.recentSignals = signals;
+      return 1;
+    } catch {
+      warnings.push(`As publicações de ${person.name} não estavam disponíveis; o ranking continua baseado no perfil.`);
+      return 0;
+    }
+  }));
+  const postEnrichments = postResults.reduce<number>((total, current) => total + current, 0);
+
+  people = rankPeople(people, expandedInput);
 
   let aiNextAction: DecisionMakerResult["nextBestAction"] | null = null;
   if (people.length) {
@@ -204,7 +232,8 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   }
 
   const missingRoles = targetRolesNotFound(input.filters.roles, people);
-  const companies = companiesFromPeople(people);
+  const researchedCompanies = normalizeCompanies(companyItems, "Páginas corporativas públicas");
+  const companies = researchedCompanies.length ? researchedCompanies : companiesFromPeople(people);
   const discoveryTitle = manusUsed
     ? "Manus · fallback de decisores"
     : fallbackUsed && !primaryPeople.length
@@ -224,26 +253,51 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
     people,
     targetRolesNotFound: missingRoles,
     nextBestAction: aiNextAction ?? nextActionForPeople(people),
-    sources: [{
-      title: discoveryTitle,
-      confidence: people.length ? "provável" : "não verificado",
-      notes: manusUsed
-        ? "Os Actors diretos falharam e o Manus foi usado somente como último fallback."
-        : "A descoberta usa Actors diretos de funcionários e aceita apenas perfis com URL pública real do LinkedIn.",
-    }],
+    sources: [
+      {
+        title: discoveryTitle,
+        confidence: people.length ? "provável" : "não verificado",
+        notes: manusUsed
+          ? "Os Actors diretos falharam e o Manus foi usado somente como último fallback."
+          : "A descoberta usa Actors diretos de funcionários e aceita apenas perfis com URL pública real do LinkedIn.",
+      },
+      { title: "Perfis públicos enriquecidos", confidence: profileEnrichments ? "confirmado" : "não verificado", notes: `${profileEnrichments} dos 5 perfis prioritários receberam evidências adicionais.` },
+      { title: "Publicações profissionais recentes", confidence: postEnrichments ? "confirmado" : "não verificado", notes: `${postEnrichments} dos 3 perfis prioritários apresentaram sinais públicos recentes.` },
+    ],
     warnings: [...new Set(warnings)],
     cost: {
       strategy: manusUsed
         ? "Actors diretos indisponíveis; Manus usado como último fallback."
         : fallbackUsed
-          ? "Actor principal direto com segunda fonte usada para cobertura."
-          : "Actor principal direto; sem Manus e sem enriquecimentos individuais no caminho crítico.",
+          ? "Actor principal direto com segunda fonte usada para cobertura; enriquecimento limitado aos perfis prioritários."
+          : "Actor principal direto; sem Manus na descoberta e enriquecimento limitado aos perfis prioritários.",
       basicCandidates: people.length,
       profileEnrichments,
       postEnrichments,
       broadDiscoveryUsed: fallbackUsed,
     },
   };
+}
+
+function applyProfileEvidence(person: HuntingPerson, items: unknown[]) {
+  const record = items.find((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)));
+  if (!record) return false;
+  const summary = pickString(record, ["about", "summary", "description", "headline"]);
+  if (summary) person.profileSummary = summary;
+  const location = pickString(record, ["location", "locationName", "geo"]);
+  if (location) person.location = location;
+  return Boolean(summary || location);
+}
+
+function extractPostSignals(items: unknown[]) {
+  const signals: string[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const text = pickString(item as Record<string, unknown>, ["text", "content", "commentary", "postText", "title"]);
+    if (text.trim().length >= 20) signals.push(text.trim().slice(0, 180));
+    if (signals.length === 3) break;
+  }
+  return signals;
 }
 
 function companiesFromPeople(people: HuntingPerson[]) {
