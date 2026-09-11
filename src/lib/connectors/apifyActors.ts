@@ -2,6 +2,7 @@ export type ApifyActorKey =
   | "linkedinProfile"
   | "linkedinProfilePosts"
   | "linkedinProfileSearch"
+  | "linkedinProfileSearchFallback"
   | "linkedinCompanyEmployees"
   | "linkedinCompanyEmployeesFallback"
   | "linkedinCompanyDetails"
@@ -47,6 +48,16 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
     stage: "decision_maker",
     defaultInput: {
       profileScraperMode: "Short",
+      maxItems: 25,
+    },
+  },
+  linkedinProfileSearchFallback: {
+    key: "linkedinProfileSearchFallback",
+    actorId: "dami_studio/linkedin-profile-search-scraper",
+    label: "Busca pública de profissionais · contingência",
+    purpose: "Fonte pública de contingência quando o Harvest responde sem perfis ou fica indisponível.",
+    stage: "decision_maker",
+    defaultInput: {
       maxItems: 25,
     },
   },
