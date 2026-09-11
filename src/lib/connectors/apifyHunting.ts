@@ -90,17 +90,17 @@ export function buildHarvestPeopleRecallInput(input: PersonSearchInput) {
 }
 
 export function buildBroadPeopleRecallInput(input: PersonSearchInput) {
-  const searchTerms = uniqueStrings([
-    ...input.filters.roles,
-    ...input.filters.profileKeywords,
-  ]).slice(0, 8);
+  const roleTerms = uniqueStrings(input.filters.roles).slice(0, 20);
+  const profileTerms = uniqueStrings(input.filters.profileKeywords).slice(0, 8);
+  const locations = uniqueStrings(input.filters.locations).slice(0, 20);
 
   return compactInput({
     ...apifyActors.linkedinProfileSearch.defaultInput,
-    profileScraperMode: "Short",
     maxItems: discoveryLimit(input.filters.quantity),
     currentCompanies: input.filters.companyLinkedinUrls,
-    searchQuery: searchTerms.length ? searchTerms.join(" OR ") : undefined,
+    currentJobTitles: roleTerms,
+    locations,
+    searchQuery: profileTerms.length ? profileTerms.join(" OR ") : undefined,
   });
 }
 
@@ -121,8 +121,19 @@ export async function researchCompanies(companyLinkedinUrls: string[]) {
 }
 
 export async function discoverBroadPeople(input: PersonSearchInput) {
-  const items = await runApifyActor("linkedinCompanyEmployeesFallback", buildFallbackPeopleRecallInput(input));
-  return items.filter(isPublicPersonRow);
+  // Primeiro preservamos a segunda fonte por empresa. Se ela estiver vazia,
+  // indisponível ou retornar apenas linha diagnóstica, ampliamos a descoberta
+  // com uma busca pública de perfis por empresa + cargo + localização.
+  try {
+    const employeeItems = await runApifyActor("linkedinCompanyEmployeesFallback", buildFallbackPeopleRecallInput(input));
+    const employees = employeeItems.filter(isPublicPersonRow);
+    if (employees.length) return employees;
+  } catch {
+    // A terceira fonte abaixo ainda pode responder; só propagamos erro se ela também falhar.
+  }
+
+  const profileItems = await runApifyActor("linkedinProfileSearch", buildBroadPeopleRecallInput(input));
+  return profileItems.filter(isPublicPersonRow);
 }
 
 export async function enrichPersonProfile(linkedinUrl: string) {
