@@ -33,14 +33,13 @@ export function buildCompanyDiscoveryInput(input: CompanySearchInput) {
   });
 }
 
-// Legacy strict builder kept as a stable contract for callers/tests that need to inspect
-// the complete Harvest filter mapping. Production discovery now uses the recall-first
-// builder below so a valid employee is not excluded by stacked exact filters.
+// Contrato legado mantido para consumidores/testes que ainda inspecionam o payload
+// Harvest. A descoberta B2B principal em produção usa buildPrimaryPeopleRecallInput.
 export function buildHarvestPeopleInput(input: PersonSearchInput) {
   return compactInput({
-    ...apifyActors.linkedinCompanyEmployees.defaultInput,
     companies: input.filters.companyLinkedinUrls,
     maxItems: input.filters.quantity,
+    profileScraperMode: "Short ($4 per 1k)",
     jobTitles: input.filters.roles,
     locations: input.filters.locations,
     searchQuery: input.filters.profileKeywords.join(" OR ") || undefined,
@@ -61,19 +60,33 @@ export function buildBroadPeopleInput(input: PersonSearchInput) {
   });
 }
 
-export function buildHarvestPeopleRecallInput(input: PersonSearchInput) {
-  const searchTerms = uniqueStrings([
-    ...input.filters.roles,
-    ...input.filters.profileKeywords,
-  ]).slice(0, 8);
+export function buildPrimaryPeopleRecallInput(input: PersonSearchInput) {
+  const roleTerms = uniqueStrings(input.filters.roles).slice(0, 12);
+  const profileTerms = uniqueStrings(input.filters.profileKeywords).slice(0, 8);
+  const locations = uniqueStrings(input.filters.locations).slice(0, 10);
 
   return compactInput({
     ...apifyActors.linkedinCompanyEmployees.defaultInput,
     companies: input.filters.companyLinkedinUrls,
-    profileScraperMode: "Short ($4 per 1k)",
-    maxItems: discoveryLimit(input.filters.quantity),
-    searchQuery: searchTerms.length ? searchTerms.join(" OR ") : undefined,
+    resultsLimit: discoveryLimit(input.filters.quantity),
+    jobTitles: roleTerms,
+    locations,
+    searchQuery: profileTerms.length ? profileTerms.join(" OR ") : undefined,
+    includeMentions: false,
   });
+}
+
+export function buildFallbackPeopleRecallInput(input: PersonSearchInput) {
+  return compactInput({
+    ...apifyActors.linkedinCompanyEmployeesFallback.defaultInput,
+    companyUrls: input.filters.companyLinkedinUrls,
+    proMode: false,
+    maxEmployees: discoveryLimit(input.filters.quantity),
+  });
+}
+
+export function buildHarvestPeopleRecallInput(input: PersonSearchInput) {
+  return buildPrimaryPeopleRecallInput(input);
 }
 
 export function buildBroadPeopleRecallInput(input: PersonSearchInput) {
@@ -96,7 +109,7 @@ export async function discoverCompanies(input: CompanySearchInput) {
 }
 
 export async function discoverHarvestPeople(input: PersonSearchInput) {
-  return runApifyActor("linkedinCompanyEmployees", buildHarvestPeopleRecallInput(input));
+  return runApifyActor("linkedinCompanyEmployees", buildPrimaryPeopleRecallInput(input));
 }
 
 export async function researchCompanies(companyLinkedinUrls: string[]) {
@@ -107,7 +120,7 @@ export async function researchCompanies(companyLinkedinUrls: string[]) {
 }
 
 export async function discoverBroadPeople(input: PersonSearchInput) {
-  return runApifyActor("linkedinProfileSearch", buildBroadPeopleRecallInput(input));
+  return runApifyActor("linkedinCompanyEmployeesFallback", buildFallbackPeopleRecallInput(input));
 }
 
 export async function enrichPersonProfile(linkedinUrl: string) {

@@ -69,32 +69,25 @@ async function executeCompanySearch(input: Extract<DecisionMakerSearchInput, { m
   const unit = getBusinessUnitDna(input.businessUnitId);
   const warnings: string[] = [];
   let items: unknown[] = [];
-  let sourceTitle = "Manus · pesquisa B2B";
-  let manusUsed = false;
+  let sourceTitle = "LinkedIn Company Search via Harvest";
+  let manusFallbackUsed = false;
 
   try {
-    const manusResult = await deps.researchManusCompanies(input);
-    warnings.push(...manusWarnings(manusResult));
-    if (manusResult.status === "success_with_results") {
-      items = manusCompaniesToRawItems(manusResult);
-      manusUsed = items.length > 0;
-      if (!manusUsed) warnings.push("Manus retornou registros sem evidência suficiente para serem aceitos; a Share AI acionou o Apify direto como confirmação.");
-    } else if (manusResult.status === "success_empty") {
-      warnings.push("Manus concluiu a pesquisa sem empresas verificáveis; o Apify direto foi consultado para confirmar a cobertura.");
-    } else {
-      warnings.push("Manus não concluiu a pesquisa principal; o Apify direto foi acionado como fallback.");
-    }
+    items = await deps.discoverCompanies(input);
   } catch {
-    warnings.push("Manus ficou indisponível antes de concluir a pesquisa; o Apify direto foi acionado como fallback.");
-  }
-
-  if (!manusUsed) {
-    sourceTitle = "LinkedIn Company Search via Harvest";
+    warnings.push("A busca direta de empresas ficou indisponível; o Manus foi acionado apenas como fallback.");
     try {
-      items = await deps.discoverCompanies(input);
+      const manusResult = await deps.researchManusCompanies(input);
+      warnings.push(...manusWarnings(manusResult));
+      if (manusResult.status === "success_with_results") {
+        items = manusCompaniesToRawItems(manusResult);
+        manusFallbackUsed = items.length > 0;
+        sourceTitle = "Manus · fallback de pesquisa B2B";
+      }
     } catch {
-      throw new Error("Manus e a fonte direta de descoberta de empresas estão indisponíveis.");
+      warnings.push("O fallback do Manus também ficou indisponível.");
     }
+    if (!items.length) throw new Error("As fontes de descoberta de empresas estão indisponíveis no momento.");
   }
 
   const normalized = normalizeCompanies(items, sourceTitle);
@@ -114,11 +107,23 @@ async function executeCompanySearch(input: Extract<DecisionMakerSearchInput, { m
     people: [],
     targetRolesNotFound: [],
     nextBestAction: companies.some((company) => company.linkedinUrl)
-      ? { title: "Selecionar contas e buscar pessoas", reason: "As contas com página pública identificada podem seguir para uma busca econômica de profissionais básicos.", impact: "alto", effort: "baixo" }
-      : { title: "Revisar os filtros de descoberta", reason: "As fontes responderam sem confirmar empresas verificáveis para este recorte. Amplie o universo antes de concluir que não existem contas aderentes.", impact: "alto", effort: "baixo" },
-    sources: [{ title: sourceTitle, confidence: companies.length ? "provável" : "não verificado", notes: manusUsed ? "Pesquisa orquestrada pelo Manus com evidências públicas; Apify é usado pelo agente quando autorizado." : "Fallback direto do Apify normalizado e deduplicado pela Share AI." }],
+      ? { title: "Buscar decisores nas contas encontradas", reason: "As contas com LinkedIn identificado já podem disparar a busca de pessoas diretamente pela própria linha.", impact: "alto", effort: "baixo" }
+      : { title: "Revisar os filtros de descoberta", reason: "A fonte respondeu sem confirmar empresas verificáveis para este recorte. Amplie os critérios antes de concluir que não existem contas aderentes.", impact: "alto", effort: "baixo" },
+    sources: [{
+      title: sourceTitle,
+      confidence: companies.length ? "provável" : "não verificado",
+      notes: manusFallbackUsed
+        ? "O Manus foi usado somente porque a fonte direta de empresas falhou."
+        : "A busca de empresas foi executada diretamente no Actor especializado, sem Manus no caminho crítico.",
+    }],
     warnings: [...new Set(warnings)],
-    cost: { strategy: manusUsed ? "Manus como pesquisa principal; fallback Apify não foi necessário para descoberta." : "Fallback Apify usado porque Manus não produziu cobertura verificável.", basicCandidates: companies.length, profileEnrichments: 0, postEnrichments: 0, broadDiscoveryUsed: !manusUsed },
+    cost: {
+      strategy: manusFallbackUsed ? "Apify direto falhou; Manus usado como fallback." : "Apify direto como fonte principal; Manus não foi necessário.",
+      basicCandidates: companies.length,
+      profileEnrichments: 0,
+      postEnrichments: 0,
+      broadDiscoveryUsed: manusFallbackUsed,
+    },
   };
 }
 
@@ -127,67 +132,63 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   const filters = { ...input.filters, roles: expandRoleFamilies(input.filters.roles) };
   const expandedInput: PersonSearchInput = { ...input, filters };
   const warnings: string[] = [];
-  let harvestItems: unknown[] = [];
-  let broadItems: unknown[] = [];
+  let primaryItems: unknown[] = [];
+  let fallbackItems: unknown[] = [];
   let companyItems: unknown[] = [];
-  let harvestFailed = false;
-  let broadFailed = false;
+  let primaryFailed = false;
+  let fallbackFailed = false;
+  let fallbackUsed = false;
   let manusUsed = false;
-  let primarySource = "Manus + fontes públicas";
+  let primarySource = "Funcionários públicos via Dami Studio";
 
   try {
-    const manusResult = await deps.researchManusPeople(expandedInput);
-    warnings.push(...manusWarnings(manusResult));
-    if (manusResult.status === "success_with_results") {
-      harvestItems = manusPeopleToRawItems(manusResult);
-      manusUsed = harvestItems.length > 0;
-      if (!manusUsed) warnings.push("Manus retornou perfis sem LinkedIn real verificável; a Share AI acionou o Apify direto como confirmação.");
-    } else if (manusResult.status === "success_empty") {
-      warnings.push("Manus concluiu sem pessoas verificáveis; o Apify direto foi consultado para confirmar a cobertura.");
-    } else {
-      warnings.push("Manus não concluiu a pesquisa principal; o Apify direto foi acionado como fallback.");
-    }
+    companyItems = await deps.researchCompanies(input.filters.companyLinkedinUrls);
   } catch {
-    warnings.push("Manus ficou indisponível durante a descoberta; o Apify direto foi acionado como fallback.");
+    warnings.push("Os detalhes corporativos não estavam disponíveis; a busca de decisores continuou com as páginas informadas.");
   }
 
-  if (!manusUsed) {
-    primarySource = "Funcionários públicos da empresa via Harvest";
-    try {
-      companyItems = await deps.researchCompanies(input.filters.companyLinkedinUrls);
-    } catch {
-      warnings.push("Os detalhes corporativos não estavam disponíveis; a busca direta continuou com as páginas informadas.");
-    }
+  try {
+    primaryItems = await deps.discoverHarvestPeople(expandedInput);
+  } catch {
+    primaryFailed = true;
+    warnings.push("O Actor principal de funcionários não respondeu; a segunda fonte foi acionada automaticamente.");
+  }
 
+  if (!primaryItems.length || input.filters.includeBroadDiscovery) {
     try {
-      harvestItems = await deps.discoverHarvestPeople(expandedInput);
+      fallbackItems = await deps.discoverBroadPeople(expandedInput);
+      fallbackUsed = fallbackItems.length > 0;
+      if (!primaryItems.length && fallbackUsed) warnings.push("A segunda fonte de funcionários assumiu a descoberta porque a principal não trouxe cobertura.");
     } catch {
-      harvestFailed = true;
-      warnings.push("A busca direta principal de funcionários da conta falhou.");
+      fallbackFailed = true;
+      if (!primaryItems.length) warnings.push("A segunda fonte de funcionários também não respondeu.");
+      else warnings.push("A descoberta complementar também está indisponível; os resultados da fonte principal foram preservados.");
     }
+  }
 
-    if (input.filters.includeBroadDiscovery) {
-      warnings.push("A descoberta complementar direta usa uma segunda busca pública do Harvest e pode gerar custo adicional.");
-      try {
-        broadItems = await deps.discoverBroadPeople(expandedInput);
-      } catch {
-        broadFailed = true;
-        warnings.push("A descoberta complementar também está indisponível.");
+  if (!primaryItems.length && !fallbackItems.length && primaryFailed && fallbackFailed) {
+    warnings.push("Os dois Actors diretos falharam; o Manus foi acionado como último fallback.");
+    try {
+      const manusResult = await deps.researchManusPeople(expandedInput);
+      warnings.push(...manusWarnings(manusResult));
+      if (manusResult.status === "success_with_results") {
+        primaryItems = manusPeopleToRawItems(manusResult);
+        manusUsed = primaryItems.length > 0;
+        if (manusUsed) primarySource = "Manus · fallback de pesquisa de decisores";
       }
+    } catch {
+      warnings.push("O fallback do Manus também ficou indisponível.");
     }
-
-    if (harvestFailed && (!input.filters.includeBroadDiscovery || broadFailed)) {
-      throw new Error("Manus e as fontes diretas de descoberta de pessoas estão indisponíveis.");
-    }
+    if (!primaryItems.length) throw new Error("As fontes de descoberta de pessoas estão indisponíveis no momento.");
   }
 
-  const harvestPeople = normalizePeople(harvestItems, primarySource, input.filters.desiredDecisionRole);
-  const broadPeople = normalizePeople(broadItems, "Descoberta complementar via Harvest Profile Search", input.filters.desiredDecisionRole);
-  if ((harvestItems.length > 0 && harvestPeople.length === 0) || (broadItems.length > 0 && broadPeople.length === 0 && harvestPeople.length === 0)) {
+  const primaryPeople = normalizePeople(primaryItems, primarySource, input.filters.desiredDecisionRole);
+  const fallbackPeople = normalizePeople(fallbackItems, "Funcionários públicos via Apt Marble", input.filters.desiredDecisionRole);
+  if ((primaryItems.length > 0 && primaryPeople.length === 0) || (fallbackItems.length > 0 && fallbackPeople.length === 0 && primaryPeople.length === 0)) {
     throw new Error("A fonte retornou perfis, mas o formato recebido não pôde ser normalizado com segurança.");
   }
 
-  let people = mergePeople(harvestPeople, broadPeople).slice(0, input.filters.quantity);
+  let people = mergePeople(primaryPeople, fallbackPeople).slice(0, input.filters.quantity);
   people = rankPeople(people, expandedInput);
 
   const profileResults = await Promise.all(people.slice(0, 5).map(async (person) => {
@@ -216,20 +217,31 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   const postEnrichments = postResults.reduce<number>((total, current) => total + current, 0);
 
   people = rankPeople(people, expandedInput);
+
   let aiNextAction: DecisionMakerResult["nextBestAction"] | null = null;
-  try {
-    const refinement = await deps.refineRanking(people, input.objective, unit.name);
-    if (refinement) {
-      people = applyAiRanking(people, refinement);
-      aiNextAction = { title: refinement.nextBestAction.title, reason: refinement.nextBestAction.reason, impact: "alto", effort: "baixo" };
+  if (people.length) {
+    try {
+      const refinement = await deps.refineRanking(people, input.objective, unit.name);
+      if (refinement) {
+        people = applyAiRanking(people, refinement);
+        aiNextAction = { title: refinement.nextBestAction.title, reason: refinement.nextBestAction.reason, impact: "alto", effort: "baixo" };
+      }
+    } catch {
+      warnings.push("A revisão especialista está indisponível; o ranking explicável por evidências foi preservado.");
     }
-  } catch {
-    warnings.push("A revisão especialista está indisponível; o ranking explicável por evidências foi preservado.");
   }
 
   const missingRoles = targetRolesNotFound(input.filters.roles, people);
   const researchedCompanies = normalizeCompanies(companyItems, "Páginas corporativas públicas");
   const companies = researchedCompanies.length ? researchedCompanies : companiesFromPeople(people);
+  const discoveryTitle = manusUsed
+    ? "Manus · fallback de decisores"
+    : fallbackUsed && !primaryPeople.length
+      ? "Apt Marble · funcionários públicos"
+      : fallbackUsed
+        ? "Dami Studio + Apt Marble · funcionários públicos"
+        : "Dami Studio · funcionários públicos";
+
   return {
     mode: "people",
     queryId,
@@ -242,17 +254,27 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
     targetRolesNotFound: missingRoles,
     nextBestAction: aiNextAction ?? nextActionForPeople(people),
     sources: [
-      { title: manusUsed ? "Manus · pesquisa de decisores" : "Funcionários públicos das contas selecionadas", confidence: harvestPeople.length ? "provável" : "não verificado", notes: manusUsed ? "Pessoas aceitas somente com LinkedIn real e evidência profissional; o conector Apify é priorizado pelo Manus quando autorizado." : "Fallback direto do Harvest normalizado e deduplicado pela camada segura de conectores." },
+      {
+        title: discoveryTitle,
+        confidence: people.length ? "provável" : "não verificado",
+        notes: manusUsed
+          ? "Os Actors diretos falharam e o Manus foi usado somente como último fallback."
+          : "A descoberta usa Actors diretos de funcionários e aceita apenas perfis com URL pública real do LinkedIn.",
+      },
       { title: "Perfis públicos enriquecidos", confidence: profileEnrichments ? "confirmado" : "não verificado", notes: `${profileEnrichments} dos 5 perfis prioritários receberam evidências adicionais.` },
       { title: "Publicações profissionais recentes", confidence: postEnrichments ? "confirmado" : "não verificado", notes: `${postEnrichments} dos 3 perfis prioritários apresentaram sinais públicos recentes.` },
     ],
     warnings: [...new Set(warnings)],
     cost: {
-      strategy: manusUsed ? "Manus como descoberta principal; enriquecimento Apify limitado aos perfis prioritários." : "Fallback Apify direto usado para descoberta e enriquecimento progressivo.",
+      strategy: manusUsed
+        ? "Actors diretos indisponíveis; Manus usado como último fallback."
+        : fallbackUsed
+          ? "Actor principal direto com segunda fonte usada para cobertura; enriquecimento limitado aos perfis prioritários."
+          : "Actor principal direto; sem Manus na descoberta e enriquecimento limitado aos perfis prioritários.",
       basicCandidates: people.length,
       profileEnrichments,
       postEnrichments,
-      broadDiscoveryUsed: !manusUsed && input.filters.includeBroadDiscovery,
+      broadDiscoveryUsed: fallbackUsed,
     },
   };
 }

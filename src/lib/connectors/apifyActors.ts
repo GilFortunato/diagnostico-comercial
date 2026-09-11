@@ -3,6 +3,7 @@ export type ApifyActorKey =
   | "linkedinProfilePosts"
   | "linkedinProfileSearch"
   | "linkedinCompanyEmployees"
+  | "linkedinCompanyEmployeesFallback"
   | "linkedinCompanyDetails"
   | "linkedinCompanySearch"
   | "leadDiscovery";
@@ -51,15 +52,28 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
   },
   linkedinCompanyEmployees: {
     key: "linkedinCompanyEmployees",
-    actorId: "harvestapi/linkedin-company-employees",
-    label: "Funcionários da empresa",
-    purpose: "Mapear colaboradores e filtrar possíveis decisores para a etapa de rapport.",
+    actorId: "dami_studio/linkedin-company-employees-scraper",
+    label: "Funcionários públicos da empresa",
+    purpose: "Mapear colaboradores públicos por empresa, cargo e localização sem depender do Actor Harvest limitado por trial.",
     stage: "decision_maker",
     defaultInput: {
       companies: [],
-      maxItems: 25,
-      profileScraperMode: "Short ($4 per 1k)",
-      companyBatchMode: "all_at_once",
+      resultsLimit: 25,
+      jobTitles: [],
+      locations: [],
+      includeMentions: false,
+    },
+  },
+  linkedinCompanyEmployeesFallback: {
+    key: "linkedinCompanyEmployeesFallback",
+    actorId: "apt_marble/linkedin-company-employees-scraper",
+    label: "Funcionários públicos da empresa · fallback",
+    purpose: "Segunda fonte pública de funcionários por empresa quando o Actor principal não responder ou não retornar cobertura.",
+    stage: "decision_maker",
+    defaultInput: {
+      companyUrls: [],
+      proMode: false,
+      maxEmployees: 50,
     },
   },
   linkedinCompanyDetails: {
