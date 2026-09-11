@@ -1,7 +1,8 @@
 import "server-only";
 import { getPrisma } from "@/lib/db/prisma";
-import { executeHrHuntingSearch, findOwnedHrHuntingSearch } from "@/lib/hr-hunting/service";
-import { executeStrategicHrHuntingSearch, simplifyFunctionalTitle } from "@/lib/hr-hunting/strategicSearch";
+import { findOwnedHrHuntingSearch } from "@/lib/hr-hunting/service";
+import { executeSafeStrategicHrHuntingSearch } from "@/lib/hr-hunting/safeStrategicSearch";
+import { simplifyFunctionalTitle } from "@/lib/hr-hunting/strategicSearch";
 
 type SearchInput = {
   quantity: number;
@@ -13,45 +14,22 @@ type SearchInput = {
 
 export async function executeResilientHrHuntingSearch(id: string, ownerId: string, input: SearchInput) {
   try {
-    return await executeStrategicHrHuntingSearch(id, ownerId, input);
+    return await executeSafeStrategicHrHuntingSearch(id, ownerId, input);
   } catch (error) {
-    console.warn("[hr-hunting] strategic sourcing failed; activating conservative search", {
+    console.error("[hr-hunting] repeat-safe strategic search failed", {
       errorName: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? error.message.slice(0, 240) : "unknown",
     });
-    return executeConservativeFallback(id, ownerId, input);
+
+    const current = await findOwnedHrHuntingSearch(id, ownerId);
+    if (!current) return null;
+    const warning = "A busca encontrou uma falha interna antes de concluir a persistência. Os resultados anteriores foram preservados; tente novamente sem alterar a vaga.";
+    await getPrisma().hrHuntingSearch.updateMany({
+      where: { id, ownerId },
+      data: { status: "connector_error", connectorWarnings: [...new Set([...current.connectorWarnings, warning])] },
+    });
+    return findOwnedHrHuntingSearch(id, ownerId);
   }
 }
 
-async function executeConservativeFallback(id: string, ownerId: string, input: SearchInput) {
-  const exact = await executeHrHuntingSearch(id, ownerId, input);
-  if (!exact || exact.status !== "no_results") return exact;
-
-  const originalTitle = input.currentTitle?.trim() || exact.jobDna.title?.trim() || exact.title;
-  const broaderTitle = simplifyFunctionalTitle(originalTitle);
-  const canBroaden = Boolean(input.location?.trim()) || normalize(originalTitle) !== normalize(broaderTitle);
-  if (!canBroaden) return exact;
-
-  const broadened = await executeHrHuntingSearch(id, ownerId, {
-    ...input,
-    currentTitle: broaderTitle,
-    location: undefined,
-  });
-  if (!broadened) return exact;
-
-  const explanation = broadened.candidates.length
-    ? `A estratégia inteligente ficou indisponível nesta execução. A busca foi ampliada de forma conservadora para a família profissional “${broaderTitle}” sem bloquear por cidade; valide os resultados antes do contato.`
-    : `A estratégia inteligente ficou indisponível e a expansão conservadora para a família profissional “${broaderTitle}” também não confirmou candidatos suficientes.`;
-
-  await getPrisma().hrHuntingSearch.updateMany({
-    where: { id, ownerId },
-    data: { connectorWarnings: [...new Set([...broadened.connectorWarnings, explanation])] },
-  });
-
-  return findOwnedHrHuntingSearch(id, ownerId);
-}
-
 export { simplifyFunctionalTitle };
-
-function normalize(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").replace(/\s+/g, " ").trim();
-}
