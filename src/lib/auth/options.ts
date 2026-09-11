@@ -6,20 +6,28 @@ const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
 export const authOptions: NextAuthOptions = {
-  session: {
-    strategy: "jwt",
-  },
+  session: { strategy: "jwt" },
   providers:
     googleClientId && googleClientSecret
-      ? [
-          GoogleProvider({
-            clientId: googleClientId,
-            clientSecret: googleClientSecret,
-          }),
-        ]
+      ? [GoogleProvider({
+          clientId: googleClientId,
+          clientSecret: googleClientSecret,
+          authorization: {
+            params: {
+              scope: "openid email profile https://www.googleapis.com/auth/spreadsheets.readonly",
+              access_type: "offline",
+              prompt: "consent",
+            },
+          },
+        })]
       : [],
   callbacks: {
     async jwt({ token, account }) {
+      if (account?.provider === "google") {
+        token.googleAccessToken = account.access_token;
+        token.googleRefreshToken = account.refresh_token || token.googleRefreshToken;
+        token.googleExpiresAt = account.expires_at;
+      }
       if (!token.email) return token;
       const user = await ensureGoogleUser({
         email: token.email,
@@ -39,7 +47,5 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  pages: {
-    signIn: "/",
-  },
+  pages: { signIn: "/" },
 };
