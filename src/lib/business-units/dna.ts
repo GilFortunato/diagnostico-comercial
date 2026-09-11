@@ -161,8 +161,8 @@ const sharePeopleHubDna: BusinessUnitDna = {
 
 const humanShipDna: BusinessUnitDna = {
   id: "bu_human_ship",
-  name: "Human Ship",
-  shortName: "Human Ship",
+  name: "Humanship",
+  shortName: "Humanship",
   slug: "human-ship",
   contextType: "business",
   status: "published",
