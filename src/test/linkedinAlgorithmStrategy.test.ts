@@ -11,7 +11,7 @@ test("plano de 30 dias ensina dwell time sem inventar métrica", () => {
   assert.match(prompt, /short dwell\/skip/i);
   assert.match(prompt, /NÃO recebe uma métrica individual de dwell time/i);
   assert.match(prompt, /primeiras 2–3 linhas/i);
-  assert.match(prompt, /não.*primeira hora decide o post/i);
+  assert.match(prompt, /sem afirmar que.*primeira hora decide o post/i);
 });
 
 test("plano usa benchmarks de 2026 como hipótese e privilegia dados próprios", () => {
