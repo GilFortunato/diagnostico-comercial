@@ -1,6 +1,5 @@
 import "server-only";
-import { getToken } from "next-auth/jwt";
-import type { NextRequest } from "next/server";
+import { getHumanshipGoogleAccessToken } from "@/lib/humanship/googleAuthorization";
 import { normalizeHumanshipRows } from "@/lib/humanship/importRows";
 
 export type GoogleSheetReadResult = {
@@ -10,10 +9,10 @@ export type GoogleSheetReadResult = {
   rows: ReturnType<typeof normalizeHumanshipRows>;
 };
 
-export async function readHumanshipGoogleSheet(request: NextRequest, sheetUrlOrId: string): Promise<GoogleSheetReadResult> {
+export async function readHumanshipGoogleSheet(ownerId: string, sheetUrlOrId: string): Promise<GoogleSheetReadResult> {
   const spreadsheetId = extractSpreadsheetId(sheetUrlOrId);
   if (!spreadsheetId) throw new Error("Cole um link válido do Google Sheets.");
-  const accessToken = await resolveGoogleAccessToken(request);
+  const accessToken = await getHumanshipGoogleAccessToken(ownerId);
 
   const metadataResponse = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=properties.title,sheets.properties`, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -53,38 +52,11 @@ export function extractSpreadsheetId(value: string) {
   return /^[a-zA-Z0-9_-]{20,}$/.test(trimmed) ? trimmed : null;
 }
 
-async function resolveGoogleAccessToken(request: NextRequest) {
-  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-  if (!token) throw new Error("Sua sessão Google expirou. Entre novamente para sincronizar a planilha.");
-  const accessToken = typeof token.googleAccessToken === "string" ? token.googleAccessToken : null;
-  const refreshToken = typeof token.googleRefreshToken === "string" ? token.googleRefreshToken : null;
-  const expiresAt = typeof token.googleExpiresAt === "number" ? token.googleExpiresAt * 1000 : 0;
-
-  if (accessToken && (!expiresAt || expiresAt > Date.now() + 60_000)) return accessToken;
-  if (!refreshToken) throw new Error("Reconecte sua conta Google para autorizar a leitura do Google Sheets. O upload em Excel continua disponível.");
-
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID || "",
-      client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
-      refresh_token: refreshToken,
-      grant_type: "refresh_token",
-    }),
-    cache: "no-store",
-  });
-  if (!response.ok) throw new Error("Não foi possível renovar o acesso ao Google Sheets. Saia e entre novamente com Google.");
-  const payload = await response.json() as { access_token?: string };
-  if (!payload.access_token) throw new Error("O Google não devolveu uma autorização válida para o Sheets.");
-  return payload.access_token;
-}
-
 async function googleError(response: Response, fallback: string) {
   try {
     const payload = await response.json() as { error?: { message?: string } };
     const message = payload.error?.message || "";
-    if (/insufficient.*scope|permission/i.test(message)) return "Sua conta ainda não autorizou a leitura do Google Sheets. Saia e entre novamente com Google para conceder acesso somente leitura.";
+    if (/insufficient.*scope|permission/i.test(message)) return "A conexão do Google Sheets não tem permissão de leitura suficiente. Reconecte a conta no Humanship.";
     if (/not found|requested entity/i.test(message)) return "Essa planilha não foi encontrada ou não está disponível para a conta Google conectada.";
   } catch {
     // fall through
