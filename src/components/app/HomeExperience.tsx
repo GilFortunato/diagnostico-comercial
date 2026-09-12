@@ -86,7 +86,7 @@ export function HomeExperience({ isAdmin = false }: { isAdmin?: boolean }) {
                   <HeroMetric icon={Brain} label="IA" value="Share AI" />
                 </div>
               </div>
-              <p className="mt-6 text-sm leading-6 text-white/70">Os módulos de Hunting e Administração permanecem disponíveis no menu superior.</p>
+              <p className="mt-6 text-sm leading-6 text-white/70">O Diagnóstico de LinkedIn é o acesso inicial da plataforma. Outros módulos aparecem no menu somente quando forem liberados para a sua conta.</p>
             </div>
           </div>
         </section>

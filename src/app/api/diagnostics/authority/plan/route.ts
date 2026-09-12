@@ -10,6 +10,8 @@ import {
   saveAuthorityPlanSnapshot,
 } from "@/lib/repositories/authorityRepository";
 
+export const maxDuration = 120;
+
 const requestSchema = z.object({
   assessmentId: z.string().min(1).optional(),
   assessment: z.object({ id: z.string().min(1) }).passthrough().optional(),
