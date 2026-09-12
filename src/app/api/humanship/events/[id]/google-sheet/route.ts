@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!reference) return NextResponse.json({ error: "Cole o link da planilha do Google Sheets." }, { status: 400 });
 
   try {
-    const sheet = await readHumanshipGoogleSheet(request, reference);
+    const sheet = await readHumanshipGoogleSheet(access.user.id, reference);
     if (!sheet.rows.length) return NextResponse.json({ error: "Não encontrei participantes válidos na planilha." }, { status: 400 });
     const event = await syncHumanshipRows({
       ownerId: access.user.id,
