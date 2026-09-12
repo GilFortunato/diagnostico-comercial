@@ -3,7 +3,7 @@ import { createStructuredAuthorityThirtyDayPlan, normalizeAuthorityThirtyDayPlan
 import { generateGeminiJson } from "@/lib/ai/geminiClient";
 import { generateManusJson } from "@/lib/ai/manusStructuredClient";
 import { ptBrEditorialInstruction, reviewPortugueseCopy, reviewPortugueseList, silentEditorialReviewInstruction } from "@/lib/copy/editorial";
-import { buildLinkedInAlgorithmPromptSection } from "@/lib/social-selling/linkedinAlgorithmStrategy";
+import { buildLinkedInAlgorithmPlanPromptSection, buildLinkedInAlgorithmPromptSection } from "@/lib/social-selling/linkedinAlgorithmStrategy";
 import { buildSocialSellingPromptSection } from "@/lib/social-selling/socialSellingStrategy";
 import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
 
@@ -245,6 +245,7 @@ Você é especialista sênior em personal branding, LinkedIn, social selling, au
 Crie um plano NOVO de 30 dias que funcione ao mesmo tempo como estratégia e como tutorial operacional para uma pessoa iniciante.
 ${ptBrEditorialInstruction}
 ${silentEditorialReviewInstruction}
+${buildLinkedInAlgorithmPlanPromptSection()}
 
 REGRA CENTRAL — ENSINE O B + A = BA:
 A pessoa não pode receber "otimize seu perfil", "comente em posts", "faça networking" ou "publique uma tese" e ter que descobrir sozinha como fazer.
