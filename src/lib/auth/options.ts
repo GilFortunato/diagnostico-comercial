@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { ensureGoogleUser } from "@/lib/auth/userRepository";
+import { GOOGLE_SHEETS_SCOPE, saveHumanshipGoogleAuthorization } from "@/lib/humanship/googleAuthorization";
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -14,20 +15,13 @@ export const authOptions: NextAuthOptions = {
           clientSecret: googleClientSecret,
           authorization: {
             params: {
-              scope: "openid email profile https://www.googleapis.com/auth/spreadsheets.readonly",
-              access_type: "offline",
-              prompt: "consent",
+              scope: "openid email profile",
             },
           },
         })]
       : [],
   callbacks: {
     async jwt({ token, account }) {
-      if (account?.provider === "google") {
-        token.googleAccessToken = account.access_token;
-        token.googleRefreshToken = account.refresh_token || token.googleRefreshToken;
-        token.googleExpiresAt = account.expires_at;
-      }
       if (!token.email) return token;
       const user = await ensureGoogleUser({
         email: token.email,
@@ -37,6 +31,12 @@ export const authOptions: NextAuthOptions = {
       });
       token.userId = user.id;
       token.accountActive = user.active;
+
+      if (account?.provider === "google" && account.scope?.split(/\s+/).includes(GOOGLE_SHEETS_SCOPE)) {
+        await saveHumanshipGoogleAuthorization(user.id, account).catch((error) => {
+          console.error("[humanship-google] failed to persist Sheets authorization", error);
+        });
+      }
       return token;
     },
     session({ session, token }) {
