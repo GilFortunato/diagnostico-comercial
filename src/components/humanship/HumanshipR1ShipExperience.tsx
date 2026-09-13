@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Clipboard, ExternalLink, FileSpreadsheet, Link2, LoaderCircle, Plus, RefreshCw, Search, ShieldCheck, X } from "lucide-react";
+import { Check, Clipboard, ExternalLink, FileSpreadsheet, LoaderCircle, Plus, Search, ShieldCheck, X } from "lucide-react";
 import { humanshipCompanyRestrictionGroups, humanshipRestrictionVersion, humanshipRoleReferences } from "@/lib/humanship/restrictions";
 import type { HumanshipClassification, HumanshipDecision, HumanshipEvent, HumanshipParticipant } from "@/lib/humanship/types";
 
-type Pending = "load" | "create" | "upload" | "sheet" | "search" | "decision" | "copy" | null;
+type Pending = "load" | "create" | "upload" | "search" | "decision" | "copy" | null;
 type Tab = "source" | "results" | "restrictions";
 type Filter = "all" | HumanshipClassification | "approved" | "rejected";
 
@@ -13,7 +13,6 @@ export function HumanshipR1ShipExperience({ accountName }: { accountName: string
   const [events, setEvents] = useState<HumanshipEvent[]>([]);
   const [event, setEvent] = useState<HumanshipEvent | null>(null);
   const [eventName, setEventName] = useState("");
-  const [sheetUrl, setSheetUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [tab, setTab] = useState<Tab>("source");
   const [filter, setFilter] = useState<Filter>("all");
@@ -69,30 +68,46 @@ export function HumanshipR1ShipExperience({ accountName }: { accountName: string
     finally { setPending(null); }
   }
 
-  async function uploadExcel() {
-    if (!event || !file) return;
-    setPending("upload"); setError(null);
-    try {
-      const form = new FormData(); form.append("file", file);
-      const response = await fetch(`/api/humanship/events/${event.id}/import`, { method: "POST", body: form });
-      const body = await response.json() as { event?: HumanshipEvent; error?: string };
-      if (!response.ok || !body.event) throw new Error(body.error || "Não foi possível importar o Excel.");
-      setEvent(body.event); setFile(null); setTab("results"); await loadEvents(body.event.id);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível importar o Excel."); }
-    finally { setPending(null); }
+  function chooseSpreadsheet(nextFile: File | null) {
+    setError(null);
+    if (!nextFile) {
+      setFile(null);
+      return;
+    }
+    const lower = nextFile.name.toLocaleLowerCase("pt-BR");
+    if (!lower.endsWith(".xlsx") && !lower.endsWith(".csv")) {
+      setFile(null);
+      setError("Formato não suportado. Escolha um arquivo .xlsx ou .csv.");
+      return;
+    }
+    if (nextFile.size > 12 * 1024 * 1024) {
+      setFile(null);
+      setError("O arquivo excede o limite de 12 MB.");
+      return;
+    }
+    setFile(nextFile);
   }
 
-  async function syncSheet(useExisting = false) {
-    if (!event) return;
-    setPending("sheet"); setError(null);
+  async function uploadExcel() {
+    if (!event) {
+      setError("Crie ou selecione um evento antes de importar a planilha.");
+      return;
+    }
+    if (!file) {
+      setError("Escolha uma planilha .xlsx ou .csv antes de importar.");
+      return;
+    }
+    setPending("upload"); setError(null);
     try {
-      const response = await fetch(`/api/humanship/events/${event.id}/google-sheet`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sheetUrl: useExisting ? "" : sheetUrl }),
-      });
-      const body = await response.json() as { event?: HumanshipEvent; error?: string };
-      if (!response.ok || !body.event) throw new Error(body.error || "Não foi possível sincronizar o Google Sheets.");
-      setEvent(body.event); setSheetUrl(""); setTab("results"); await loadEvents(body.event.id);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível sincronizar o Google Sheets."); }
+      const form = new FormData(); form.append("file", file, file.name);
+      const response = await fetch(`/api/humanship/events/${event.id}/import`, { method: "POST", body: form });
+      const contentType = response.headers.get("content-type") || "";
+      const body = contentType.includes("application/json")
+        ? await response.json() as { event?: HumanshipEvent; error?: string }
+        : { error: await response.text() };
+      if (!response.ok || !body.event) throw new Error(body.error || "Não foi possível importar a planilha.");
+      setEvent(body.event); setFile(null); setTab("results"); await loadEvents(body.event.id);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível importar a planilha."); }
     finally { setPending(null); }
   }
 
@@ -168,7 +183,7 @@ export function HumanshipR1ShipExperience({ accountName }: { accountName: string
         {event ? <>
           <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--share-line)] bg-white p-4"><div><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Evento atual</p><h2 className="text-xl font-semibold text-[var(--share-green-950)]">{event.name}</h2><p className="text-sm text-zinc-500">{event.sourceRowCount} participante(s) · restrições {event.restrictionVersion}</p></div><div className="flex gap-2">{(["source", "results", "restrictions"] as Tab[]).map((item) => <button key={item} type="button" onClick={() => setTab(item)} className={`rounded-md px-3 py-2 text-sm font-semibold ${tab === item ? "bg-[var(--share-green-950)] text-white" : "border border-[var(--share-line)] text-zinc-700"}`}>{item === "source" ? "Fonte de dados" : item === "results" ? "Resultados" : "Restrições"}</button>)}</div></section>
 
-          {tab === "source" ? <SourceTab event={event} sheetUrl={sheetUrl} setSheetUrl={setSheetUrl} file={file} setFile={setFile} pending={pending} onSheet={syncSheet} onUpload={uploadExcel} /> : null}
+          {tab === "source" ? <SourceTab event={event} file={file} onFile={chooseSpreadsheet} pending={pending} onUpload={uploadExcel} /> : null}
           {tab === "results" ? <ResultsTab event={event} visible={visible} counts={counts} filter={filter} setFilter={setFilter} pending={pending} onSearch={searchLinkedin} onDecision={decide} onMessages={setSelected} /> : null}
           {tab === "restrictions" ? <RestrictionsTab /> : null}
         </> : null}
@@ -179,9 +194,25 @@ export function HumanshipR1ShipExperience({ accountName }: { accountName: string
   );
 }
 
-function SourceTab({ event, sheetUrl, setSheetUrl, file, setFile, pending, onSheet, onUpload }: { event: HumanshipEvent; sheetUrl: string; setSheetUrl: (v: string) => void; file: File | null; setFile: (v: File | null) => void; pending: Pending; onSheet: (existing?: boolean) => void; onUpload: () => void }) {
-  return <section className="mt-5 grid gap-4 lg:grid-cols-2"><article className="rounded-lg border border-[var(--share-line)] bg-white p-5"><div className="flex items-start gap-3"><span className="rounded-md bg-[#edf7eb] p-2 text-[var(--share-green-900)]"><Link2 className="h-5 w-5" /></span><div><h3 className="font-semibold text-[var(--share-green-950)]">Google Sheets</h3><p className="mt-1 text-sm leading-6 text-zinc-600">Cole o link da planilha da conta Google conectada. O acesso solicitado é somente leitura.</p></div></div><input value={sheetUrl} onChange={(e) => setSheetUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className="mt-4 h-10 w-full rounded-md border border-[var(--share-line)] px-3 text-sm" /><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => onSheet(false)} disabled={pending === "sheet" || !sheetUrl.trim()} className="inline-flex items-center gap-2 rounded-md bg-[var(--share-green-950)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{pending === "sheet" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Conectar e sincronizar</button>{event.sourceKind === "google_sheets" ? <button type="button" onClick={() => onSheet(true)} disabled={pending === "sheet"} className="rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)]">Sincronizar agora</button> : null}</div>{event.sourceKind === "google_sheets" ? <p className="mt-4 rounded-md bg-[#fbfdf8] p-3 text-sm text-zinc-600"><strong>Conectada:</strong> {event.sourceName}{event.sourceSheetName ? ` · ${event.sourceSheetName}` : ""}<br />Última sincronização: {formatDate(event.lastSyncedAt)}</p> : null}</article>
-  <article className="rounded-lg border border-[var(--share-line)] bg-white p-5"><div className="flex items-start gap-3"><span className="rounded-md bg-[#edf7eb] p-2 text-[var(--share-green-900)]"><FileSpreadsheet className="h-5 w-5" /></span><div><h3 className="font-semibold text-[var(--share-green-950)]">Importar Excel</h3><p className="mt-1 text-sm leading-6 text-zinc-600">Alternativa para quem não quiser conectar o Google. Aceita .xlsx e pode ser atualizado com um novo arquivo depois.</p></div></div><input type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} className="mt-4 block w-full text-sm text-zinc-600" /><button type="button" onClick={onUpload} disabled={pending === "upload" || !file} className="mt-3 inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] disabled:opacity-60">{pending === "upload" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}Importar planilha</button>{event.sourceKind === "excel" ? <p className="mt-4 rounded-md bg-[#fbfdf8] p-3 text-sm text-zinc-600"><strong>Arquivo atual:</strong> {event.sourceName}<br />Importado: {formatDate(event.lastSyncedAt)}</p> : null}</article></section>;
+function SourceTab({ event, file, onFile, pending, onUpload }: { event: HumanshipEvent; file: File | null; onFile: (v: File | null) => void; pending: Pending; onUpload: () => void }) {
+  return <section className="mt-5">
+    <article className="rounded-lg border border-[var(--share-line)] bg-white p-5">
+      <div className="flex items-start gap-3">
+        <span className="rounded-md bg-[#edf7eb] p-2 text-[var(--share-green-900)]"><FileSpreadsheet className="h-5 w-5" /></span>
+        <div>
+          <h3 className="font-semibold text-[var(--share-green-950)]">Importar planilha</h3>
+          <p className="mt-1 text-sm leading-6 text-zinc-600">Escolha um arquivo .xlsx ou .csv de até 12 MB. A conexão com Google Sheets fica somente no bloco superior da página.</p>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <input id="humanship-spreadsheet-upload" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" onChange={(e) => onFile(e.currentTarget.files?.[0] || null)} className="sr-only" />
+        <label htmlFor="humanship-spreadsheet-upload" className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] hover:bg-[#fbfdf8]"><FileSpreadsheet className="h-4 w-4" />Escolher planilha</label>
+        <span className="min-w-0 flex-1 truncate text-sm text-zinc-600">{file ? file.name : "Nenhum arquivo selecionado"}</span>
+      </div>
+      <button type="button" onClick={onUpload} disabled={pending === "upload" || !file} className="mt-4 inline-flex items-center gap-2 rounded-md bg-[var(--share-green-950)] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45">{pending === "upload" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}{pending === "upload" ? "Importando..." : "Importar planilha"}</button>
+      {event.sourceKind === "excel" ? <p className="mt-4 rounded-md bg-[#fbfdf8] p-3 text-sm text-zinc-600"><strong>Arquivo atual:</strong> {event.sourceName}<br />Importado: {formatDate(event.lastSyncedAt)}</p> : null}
+    </article>
+  </section>;
 }
 
 function ResultsTab({ event, visible, counts, filter, setFilter, pending, onSearch, onDecision, onMessages }: { event: HumanshipEvent; visible: HumanshipParticipant[]; counts: Record<string, number>; filter: Filter; setFilter: (v: Filter) => void; pending: Pending; onSearch: (rescan?: boolean) => void; onDecision: (p: HumanshipParticipant, d: HumanshipDecision) => void; onMessages: (p: HumanshipParticipant) => void }) {
