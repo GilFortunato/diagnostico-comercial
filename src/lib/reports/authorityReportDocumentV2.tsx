@@ -29,7 +29,7 @@ const styles = StyleSheet.create({
   header: { position: "absolute", top: 22, left: 44, right: 44, paddingBottom: 7, borderBottomWidth: 1, borderBottomColor: colors.line, flexDirection: "row", justifyContent: "space-between" },
   headerBrand: { fontFamily: "Times-Bold", fontSize: 15, color: colors.green950 },
   headerText: { fontSize: 7, color: colors.muted },
-  footer: { position: "absolute", left: 44, right: 44, bottom: 20, paddingTop: 6, borderTopWidth: 1, borderTopColor: colors.line, flexDirection: "row", justifyContent: "space-between", fontSize: 6.8, color: colors.muted },
+  footer: { position: "absolute", left: 44, right: 44, bottom: 20, paddingTop: 6, borderTopWidth: 1, borderBottomColor: colors.line, flexDirection: "row", justifyContent: "space-between", fontSize: 6.8, color: colors.muted },
   eyebrow: { fontSize: 7.2, fontFamily: "Helvetica-Bold", letterSpacing: 1.1, color: colors.green800 },
   title: { marginTop: 7, fontSize: 23, lineHeight: 1.1, fontFamily: "Helvetica-Bold", color: colors.green950 },
   intro: { marginTop: 9, maxWidth: 450, fontSize: 10, lineHeight: 1.5, color: colors.muted },
@@ -68,11 +68,17 @@ const styles = StyleSheet.create({
   tagWrap: { marginTop: 10, flexDirection: "row", flexWrap: "wrap" },
   tag: { marginRight: 6, marginBottom: 6, paddingVertical: 4, paddingHorizontal: 7, backgroundColor: colors.paper, fontSize: 7.5, color: colors.green950 },
   methodology: { marginTop: 14, padding: 12, backgroundColor: colors.paper },
+  headlineBox: { marginTop: 9, padding: 10, borderLeftWidth: 3, borderLeftColor: colors.lime, backgroundColor: colors.paper },
+  headlineLabel: { fontSize: 6.7, fontFamily: "Helvetica-Bold", color: colors.green800 },
+  headlineText: { marginTop: 3, fontSize: 8.6, lineHeight: 1.4, color: colors.green950 },
+  aboutBox: { marginTop: 10, padding: 12, backgroundColor: colors.paper },
+  aboutText: { fontSize: 8.1, lineHeight: 1.45, color: colors.ink },
 });
 
 export function AuthorityReportDocumentV2({ snapshot }: { snapshot: AuthorityReportSnapshot }) {
   const report = buildAuthorityReportViewModel(snapshot);
   const signaling = report.authoritySignaling;
+  const kit = report.implementationKit;
   return (
     <Document title={`Diagnóstico LinkedIn V2 - ${report.subjectName}`} author="Share AI" subject="Diagnóstico de posicionamento e autoridade no LinkedIn">
       <Page size="A4" style={styles.cover}>
@@ -142,6 +148,21 @@ export function AuthorityReportDocumentV2({ snapshot }: { snapshot: AuthorityRep
           {report.strategicGaps.length ? <Section title="Gaps prioritários">{report.strategicGaps.slice(0, 5).map((gap) => <View key={gap.title} style={styles.item}><View style={styles.itemHeading}><Text style={styles.itemTitle}>{gap.title}</Text><Text style={styles.itemMeta}>{gap.priority.toUpperCase()}</Text></View><Text style={styles.itemText}>{gap.expertReading}</Text><Text style={styles.evidence}>Ação: {gap.recommendation}</Text></View>)}</Section> : null}
         </ReportPage>
       ) : null}
+
+      <ReportPage title="Kit de implementação" intro="O diagnóstico não termina na nota: abaixo estão rascunhos e prioridades construídos a partir do LinkedIn analisado e do contexto comercial informado.">
+        <Section title="Headlines testáveis">
+          {kit.headlineVariants.map((item) => <View key={item.label} style={styles.headlineBox} wrap={false}><Text style={styles.headlineLabel}>{item.label.toUpperCase()}</Text><Text style={styles.headlineText}>{item.text}</Text></View>)}
+        </Section>
+        <Section title="Rascunho do Sobre"><View style={styles.aboutBox}><Text style={styles.aboutText}>{kit.aboutDraft}</Text></View></Section>
+      </ReportPage>
+
+      <ReportPage title="Kit de implementação · conteúdo e prova" intro="Sugestões práticas para transformar gaps em sinais de autoridade no próprio LinkedIn.">
+        <Section title="Featured recomendado">{kit.featuredRecommendations.map((item, index) => <Text key={`${index}-${item}`} style={styles.itemText}>• {item}</Text>)}</Section>
+        {kit.caseCandidates.length ? <Section title="Cases a desenvolver">{kit.caseCandidates.map((item, index) => <Text key={`${index}-${item}`} style={styles.itemText}>• {item}</Text>)}</Section> : null}
+        <Section title="5 ideias de conteúdo">{kit.contentIdeas.map((item, index) => <Text key={`${index}-${item}`} style={styles.itemText}>• {item}</Text>)}</Section>
+        <Section title="Teses de thought leadership">{kit.thoughtLeadershipTheses.map((item, index) => <Text key={`${index}-${item}`} style={styles.itemText}>• {item}</Text>)}</Section>
+        {kit.priorityKeywords.length ? <Section title="Palavras-chave prioritárias"><View style={styles.tagWrap}>{kit.priorityKeywords.map((item) => <Text key={item} style={styles.tag}>{item}</Text>)}</View></Section> : null}
+      </ReportPage>
 
       {report.plan?.actions?.length ? (
         <ReportPage title="Plano estratégico · 30 dias" intro={report.plan.summary}>
