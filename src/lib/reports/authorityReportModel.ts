@@ -85,7 +85,7 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
         ? { priority: primaryRecommendation, why: assessment.gaps?.[0] || assessment.summary || null, actions: (assessment.personalAuthorityPlan?.actions ?? assessment.nextActions ?? []).slice(0, 4) }
         : null,
     plan: snapshot.plan30Days,
-    implementationKit: isV2 ? buildAuthorityImplementationKit(assessment) : null,
+    implementationKit: buildAuthorityImplementationKit(assessment),
     territories,
     themes: assessment.themeAlignment?.map((item) => item.theme) ?? [],
     sources: (assessment.sources ?? []).map((source) => ({
