@@ -1,6 +1,5 @@
 import type { AuthorityAssessment, ConfidenceLevel } from "@/lib/diagnostics/authority";
 import { buildAuthorityImplementationKit } from "@/lib/diagnostics/authorityImplementationKit";
-import { upgradeAuthorityAssessmentV2 } from "@/lib/diagnostics/authorityV2";
 import type { AuthorityThirtyDayPlan } from "@/lib/diagnostics/authorityPlan";
 import { confidenceLabel } from "@/lib/copy/editorial";
 
@@ -18,7 +17,8 @@ export type AuthorityReportSnapshot = {
 export type AuthorityReportViewModel = ReturnType<typeof buildAuthorityReportViewModel>;
 
 export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot) {
-  const assessment = upgradeAuthorityAssessmentV2(snapshot.assessment);
+  const assessment = snapshot.assessment;
+  const isV2 = assessment.dimensions?.length > 0 && assessment.dimensions.every((item) => item.key.startsWith("v2_"));
   const subjectName = resolveAnalyzedProfileName(assessment);
   const authorityScore = assessment.authoritySellingScore ?? assessment.overallScore;
   const businessUnitName = assessment.currentFocus?.businessUnitName || assessment.input.businessUnitName;
@@ -85,7 +85,7 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
         ? { priority: primaryRecommendation, why: assessment.gaps?.[0] || assessment.summary || null, actions: (assessment.personalAuthorityPlan?.actions ?? assessment.nextActions ?? []).slice(0, 4) }
         : null,
     plan: snapshot.plan30Days,
-    implementationKit: buildAuthorityImplementationKit(assessment),
+    implementationKit: isV2 ? buildAuthorityImplementationKit(assessment) : null,
     territories,
     themes: assessment.themeAlignment?.map((item) => item.theme) ?? [],
     sources: (assessment.sources ?? []).map((source) => ({
@@ -93,11 +93,18 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
       notes: publicSourceNotes(source.notes),
       status: confidenceLabel(source.confidence),
     })),
-    methodology: {
-      title: "Metodologia LinkedIn-first V2",
-      summary: "A pontuação principal usa apenas pilares com evidência disponível. Dados ausentes permanecem não avaliados e não viram zero. Search & Discoverability é cobertura semântica inferida até que Analytics/Search Appearances sejam fornecidos.",
-      pillars: (assessment.dimensions ?? []).map((dimension) => `${dimension.label}: ${dimension.score === null ? "não avaliado" : `${dimension.score}/100`}`),
-    },
+    methodology: isV2
+      ? {
+          title: "Metodologia LinkedIn-first V2",
+          summary: "A pontuação principal usa apenas pilares com evidência disponível. Dados ausentes permanecem não avaliados e não viram zero. Search & Discoverability é cobertura semântica inferida até que Analytics/Search Appearances sejam fornecidos.",
+          pillars: (assessment.dimensions ?? []).map((dimension) => `${dimension.label}: ${dimension.score === null ? "não avaliado" : `${dimension.score}/100`}`),
+        }
+      : {
+          title: "Metodologia preservada do diagnóstico histórico",
+          summary: "Este diagnóstico foi gerado antes da metodologia LinkedIn-first V2 e mantém exatamente os scores, dimensões e evidências salvos no momento da análise para preservar o histórico.",
+          pillars: (assessment.dimensions ?? []).map((dimension) => `${dimension.label}: ${dimension.score === null ? "não avaliado" : `${dimension.score}/100`}`),
+        },
+    isV2,
   };
 }
 
