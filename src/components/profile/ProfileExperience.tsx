@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, ExternalLink, Save } from "lucide-react";
+import { CheckCircle2, Download, ExternalLink, LockKeyhole, Save } from "lucide-react";
 
 type ProfileResponse = {
   profile?: { linkedinUrl: string | null; linkedinUpdatedAt: string | null; lastAuthorityAnalysisAt: string | null } | null;
   error?: string;
 };
+
+const linkedinDataHelp = "https://www.linkedin.com/help/linkedin/answer/a1339364/downloading-your-account-data";
+const linkedinAnalyticsHelp = "https://www.linkedin.com/help/linkedin/answer/a705312";
 
 export function ProfileExperience() {
   const [linkedinUrl, setLinkedinUrl] = useState("");
@@ -53,6 +56,25 @@ export function ProfileExperience() {
           {linkedinUrl ? <a href={linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-md border border-[var(--share-line)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)]"><ExternalLink className="h-4 w-4" />Abrir LinkedIn</a> : null}
         </div>
         {notice ? <p className="mt-5 inline-flex items-center gap-2 rounded-md bg-[#edf7eb] px-3 py-2 text-sm text-[var(--share-green-900)]"><CheckCircle2 className="h-4 w-4" />{notice}</p> : null}
+
+        <div className="mt-8 border-t border-[var(--share-line)] pt-7">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Aumente a cobertura da análise</p>
+          <h2 className="mt-2 text-xl font-semibold text-[var(--share-green-950)]">Baixe seus próprios dados diretamente do LinkedIn</h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">A Share AI não precisa da sua senha. Quando você quiser usar dados complementares, faça o download pela área oficial de privacidade do LinkedIn e mantenha o arquivo sob seu controle.</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <a href={linkedinDataHelp} target="_blank" rel="noreferrer" className="rounded-lg border border-[var(--share-line)] bg-[#fbfdf8] p-4 transition hover:border-[var(--share-green-800)]">
+              <span className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--share-green-950)]"><Download className="h-4 w-4" />Baixar dados da conta</span>
+              <p className="mt-2 text-xs leading-5 text-zinc-600">Abra as instruções oficiais do LinkedIn para solicitar uma cópia dos seus dados.</p>
+              <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--share-green-800)]">Abrir LinkedIn <ExternalLink className="h-3.5 w-3.5" /></span>
+            </a>
+            <a href={linkedinAnalyticsHelp} target="_blank" rel="noreferrer" className="rounded-lg border border-[var(--share-line)] bg-[#fbfdf8] p-4 transition hover:border-[var(--share-green-800)]">
+              <span className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--share-green-950)]"><ExternalLink className="h-4 w-4" />Entender seus Analytics</span>
+              <p className="mt-2 text-xs leading-5 text-zinc-600">Use os Analytics como camada opcional para evoluir de cobertura inferida para sinais reais de audiência.</p>
+              <span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--share-green-800)]">Ver ajuda oficial <ExternalLink className="h-3.5 w-3.5" /></span>
+            </a>
+          </div>
+          <p className="mt-4 inline-flex items-start gap-2 rounded-md bg-[#edf7eb] px-3 py-2 text-xs leading-5 text-[var(--share-green-900)]"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />Nunca informe sua senha do LinkedIn à Share AI. O diagnóstico usa o perfil informado e, quando habilitado, arquivos que você decidir fornecer.</p>
+        </div>
       </section>
     </main>
   );
