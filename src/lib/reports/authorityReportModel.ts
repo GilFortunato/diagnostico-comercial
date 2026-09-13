@@ -1,4 +1,5 @@
 import type { AuthorityAssessment, ConfidenceLevel } from "@/lib/diagnostics/authority";
+import { upgradeAuthorityAssessmentV2 } from "@/lib/diagnostics/authorityV2";
 import type { AuthorityThirtyDayPlan } from "@/lib/diagnostics/authorityPlan";
 import { confidenceLabel } from "@/lib/copy/editorial";
 
@@ -16,7 +17,7 @@ export type AuthorityReportSnapshot = {
 export type AuthorityReportViewModel = ReturnType<typeof buildAuthorityReportViewModel>;
 
 export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot) {
-  const { assessment } = snapshot;
+  const assessment = upgradeAuthorityAssessmentV2(snapshot.assessment);
   const subjectName = resolveAnalyzedProfileName(assessment);
   const authorityScore = assessment.authoritySellingScore ?? assessment.overallScore;
   const businessUnitName = assessment.currentFocus?.businessUnitName || assessment.input.businessUnitName;
@@ -30,6 +31,7 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
   })).filter((item) => item.value).sort((left, right) => evidenceOrder(left.field, evidencePriority) - evidenceOrder(right.field, evidencePriority)).slice(0, 6);
   const territories = assessment.input.businessUnitContext?.territories ?? [];
   const primaryRecommendation = assessment.personalAuthorityPlan?.priority || assessment.recommendations?.[0] || assessment.nextActions?.[0] || null;
+  const confidence = coverageConfidence(assessment.scoreCoverage ?? 0);
 
   return {
     id: assessment.id,
@@ -46,6 +48,7 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
     },
     classification: assessment.authorityClassification ?? null,
     scoreCoverage: assessment.scoreCoverage ?? null,
+    scoreConfidence: confidence,
     scoreExplanations: assessment.scoreExplanations ?? null,
     executiveOpinion: assessment.summary || null,
     executiveSignals: compact([
@@ -54,10 +57,8 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
       assessment.gaps?.[0] ? { label: "Lacuna prioritária", value: assessment.gaps[0] } : null,
       primaryRecommendation ? { label: "Recomendação prioritária", value: primaryRecommendation } : null,
     ]),
-    dimensions: [
-      ...(assessment.dimensions ?? []).filter((dimension) => dimension.score !== null).slice(0, 11),
-      ...(assessment.dimensions ?? []).filter((dimension) => dimension.score === null).slice(0, 3),
-    ].map((dimension) => ({
+    dimensions: (assessment.dimensions ?? []).map((dimension) => ({
+      key: dimension.key,
       label: dimension.label,
       score: dimension.score,
       status: dimension.status ?? (dimension.score === null ? "not_evaluated" : "evaluated"),
@@ -67,7 +68,8 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
     profileEvidence,
     themeAlignment: assessment.themeAlignment ?? [],
     authorityMap: assessment.authorityMap ?? [],
-    authorityPerception: assessment.authorityPerception ?? null,
+    authoritySignaling: assessment.authorityPerception ?? null,
+    authorityPerception: null,
     evidencePortfolio: assessment.evidencePortfolio ?? null,
     commercialExposure: (assessment.commercialExposure ?? []).slice(0, 6),
     strategicGaps: (assessment.strategicGaps ?? []).slice(0, 5),
@@ -89,6 +91,11 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
       notes: publicSourceNotes(source.notes),
       status: confidenceLabel(source.confidence),
     })),
+    methodology: {
+      title: "Metodologia LinkedIn-first V2",
+      summary: "A pontuação principal usa apenas pilares com evidência disponível. Dados ausentes permanecem não avaliados e não viram zero. Search & Discoverability é cobertura semântica inferida até que Analytics/Search Appearances sejam fornecidos.",
+      pillars: (assessment.dimensions ?? []).map((dimension) => `${dimension.label}: ${dimension.score === null ? "não avaliado" : `${dimension.score}/100`}`),
+    },
   };
 }
 
@@ -122,7 +129,7 @@ function resolveAnalyzedProfileName(assessment: AuthorityAssessment) {
 
 function publicSourceLabel(value: string) {
   if (/\b(?:apify|actor|scraper|endpoint|api)\b/i.test(value)) return "Perfil público do LinkedIn";
-  if (/\b(?:gemini|provider|modelo)\b/i.test(value)) return "Análise estruturada da Share AI";
+  if (/\b(?:gemini|provider|modelo|manus)\b/i.test(value)) return "Análise estruturada da Share AI";
   return value;
 }
 
@@ -130,6 +137,7 @@ function publicSourceNotes(value: string) {
   return value
     .replace(/Apify/gi, "fonte pública autorizada")
     .replace(/Gemini/gi, "inteligência da Share AI")
+    .replace(/Manus/gi, "inteligência da Share AI")
     .replace(/\bActors?\b/gi, "fontes")
     .replace(/\bAPI\b/gi, "integração");
 }
@@ -141,4 +149,11 @@ function evidenceOrder(field: string, priority: string[]) {
 
 function compact<T>(items: Array<T | null | undefined>): T[] {
   return items.filter((item): item is T => item !== null && item !== undefined);
+}
+
+function coverageConfidence(coverage: number) {
+  if (coverage >= 84) return "Alta";
+  if (coverage >= 67) return "Média-alta";
+  if (coverage >= 50) return "Média";
+  return "Baixa";
 }
