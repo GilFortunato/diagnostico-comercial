@@ -70,7 +70,7 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
     themeAlignment: assessment.themeAlignment ?? [],
     authorityMap: assessment.authorityMap ?? [],
     authoritySignaling: assessment.authorityPerception ?? null,
-    authorityPerception: null,
+    authorityPerception: assessment.authorityPerception ?? null,
     evidencePortfolio: assessment.evidencePortfolio ?? null,
     commercialExposure: (assessment.commercialExposure ?? []).slice(0, 6),
     strategicGaps: (assessment.strategicGaps ?? []).slice(0, 5),
