@@ -25,10 +25,40 @@ export function findApifyConnectorId(connectors: ManusConnector[], override?: st
   if (native) return native.id;
 
   const match = connectors.find((connector) => {
-    const searchable = `${connector.name} ${connector.description ?? ""} ${connector.category ?? ""}`.toLocaleLowerCase("pt-BR");
+    const searchable = connectorSearchText(connector);
     return searchable.includes("apify") || searchable.includes("mcp.apify.com");
   });
   return match?.id ?? null;
+}
+
+/**
+ * Selects the professional-research connectors already authorized in Manus.
+ * The order is intentional: Apify remains the primary discovery source while
+ * Apollo, ZoomInfo and Firecrawl can broaden identity resolution when present.
+ */
+export function findResearchConnectorIds(
+  connectors: ManusConnector[],
+  preferred = ["apify", "apollo", "zoominfo", "firecrawl"],
+) {
+  const selected: ManusConnector[] = [];
+  const seen = new Set<string>();
+
+  for (const keyword of preferred) {
+    const normalizedKeyword = keyword.toLocaleLowerCase("en-US");
+    for (const connector of connectors) {
+      if (seen.has(connector.id)) continue;
+      const searchable = connectorSearchText(connector);
+      const matches = normalizedKeyword === "apify"
+        ? connector.id === MANUS_NATIVE_APIFY_CONNECTOR_ID || searchable.includes("apify") || searchable.includes("mcp.apify.com")
+        : searchable.includes(normalizedKeyword);
+      if (!matches) continue;
+      selected.push(connector);
+      seen.add(connector.id);
+      break;
+    }
+  }
+
+  return selected;
 }
 
 export function classifyManusHttpStatus(status: number): Exclude<ManusRunStatus, "success_with_results" | "success_empty" | "partial" | "timeout" | "unavailable"> {
@@ -53,4 +83,8 @@ export function isRealLinkedInCompanyUrl(value: string | null | undefined) {
   } catch {
     return false;
   }
+}
+
+function connectorSearchText(connector: ManusConnector) {
+  return `${connector.name} ${connector.description ?? ""} ${connector.category ?? ""} ${connector.type ?? ""}`.toLocaleLowerCase("en-US");
 }
