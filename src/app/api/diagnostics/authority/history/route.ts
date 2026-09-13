@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { listAuthorityAssessments } from "@/lib/repositories/authorityRepository";
 import { authorizeModule } from "@/lib/auth/moduleRequest";
+import { upgradeAuthorityAssessmentV2 } from "@/lib/diagnostics/authorityV2";
 
 export async function GET(request: Request) {
   const access = await authorizeModule("authority.personal");
@@ -13,5 +14,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Selecione uma BU antes de consultar o histórico." }, { status: 400 });
   }
 
-  return NextResponse.json({ items: await listAuthorityAssessments(businessUnitId, access.user.id), adapter: "database" });
+  const items = await listAuthorityAssessments(businessUnitId, access.user.id);
+  return NextResponse.json({ items: items.map(upgradeAuthorityAssessmentV2), adapter: "database" });
 }
