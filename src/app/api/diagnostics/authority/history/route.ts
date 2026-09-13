@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { listAuthorityAssessments } from "@/lib/repositories/authorityRepository";
 import { authorizeModule } from "@/lib/auth/moduleRequest";
-import { upgradeAuthorityAssessmentV2 } from "@/lib/diagnostics/authorityV2";
 
 export async function GET(request: Request) {
   const access = await authorizeModule("authority.personal");
@@ -15,5 +14,5 @@ export async function GET(request: Request) {
   }
 
   const items = await listAuthorityAssessments(businessUnitId, access.user.id);
-  return NextResponse.json({ items: items.map(upgradeAuthorityAssessmentV2), adapter: "database" });
+  return NextResponse.json({ items, adapter: "database" });
 }
