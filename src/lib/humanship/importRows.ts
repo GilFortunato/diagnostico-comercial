@@ -1,4 +1,3 @@
-import "server-only";
 import ExcelJS from "exceljs";
 import type { ImportedHumanshipRow } from "@/lib/humanship/types";
 
