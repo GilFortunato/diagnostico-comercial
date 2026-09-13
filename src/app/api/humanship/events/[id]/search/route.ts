@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authorizeModule } from "@/lib/auth/moduleRequest";
-import { runHumanshipLinkedinSearch } from "@/lib/humanship/service";
+import { enhanceHumanshipEventWithDeepSearch } from "@/lib/humanship/deepSearchService";
+import { getHumanshipEvent, runHumanshipLinkedinSearch } from "@/lib/humanship/service";
 
 const schema = z.object({ rescan: z.boolean().optional().default(false) });
 
@@ -12,6 +13,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "Parâmetros inválidos." }, { status: 400 });
-  const event = await runHumanshipLinkedinSearch(access.user.id, (await params).id, parsed.data);
-  return event ? NextResponse.json({ event }) : NextResponse.json({ error: "Evento não encontrado." }, { status: 404 });
+
+  const eventId = (await params).id;
+  const direct = await runHumanshipLinkedinSearch(access.user.id, eventId, parsed.data);
+  if (!direct) return NextResponse.json({ error: "Evento não encontrado." }, { status: 404 });
+
+  const deepSearch = await enhanceHumanshipEventWithDeepSearch(access.user.id, direct);
+  const event = await getHumanshipEvent(access.user.id, eventId);
+
+  return NextResponse.json({
+    event,
+    deepSearch: {
+      attempted: deepSearch.attempted,
+      improved: deepSearch.improved,
+      warnings: deepSearch.warnings,
+    },
+  });
 }
