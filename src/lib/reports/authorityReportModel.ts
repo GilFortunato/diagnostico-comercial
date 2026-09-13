@@ -1,4 +1,5 @@
 import type { AuthorityAssessment, ConfidenceLevel } from "@/lib/diagnostics/authority";
+import { buildAuthorityImplementationKit } from "@/lib/diagnostics/authorityImplementationKit";
 import { upgradeAuthorityAssessmentV2 } from "@/lib/diagnostics/authorityV2";
 import type { AuthorityThirtyDayPlan } from "@/lib/diagnostics/authorityPlan";
 import { confidenceLabel } from "@/lib/copy/editorial";
@@ -84,6 +85,7 @@ export function buildAuthorityReportViewModel(snapshot: AuthorityReportSnapshot)
         ? { priority: primaryRecommendation, why: assessment.gaps?.[0] || assessment.summary || null, actions: (assessment.personalAuthorityPlan?.actions ?? assessment.nextActions ?? []).slice(0, 4) }
         : null,
     plan: snapshot.plan30Days,
+    implementationKit: buildAuthorityImplementationKit(assessment),
     territories,
     themes: assessment.themeAlignment?.map((item) => item.theme) ?? [],
     sources: (assessment.sources ?? []).map((source) => ({
