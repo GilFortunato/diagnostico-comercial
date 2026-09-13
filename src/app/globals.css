@@ -97,34 +97,34 @@ textarea {
   min-width: 0;
 }
 
-/* Humanship: o cargo precisa comunicar a aderência antes mesmo da leitura do badge.
-   Verde = elegível, amarelo = próximo/validar, vermelho = possível reprovado. */
-.share-shell table tbody tr:has(> td:nth-child(5) > span.text-emerald-800) > td:nth-child(3) {
+/* Humanship: a cor da coluna Cargo representa a avaliação do cargo em si,
+   independentemente de outras restrições da pessoa, como empresa concorrente. */
+.share-shell table tbody td[data-role-tone="eligible"] {
   color: var(--share-green-950);
   font-weight: 700;
 }
 
-.share-shell table tbody tr:has(> td:nth-child(5) > span.text-emerald-800) > td:nth-child(3) > p {
+.share-shell table tbody td[data-role-tone="eligible"] > p {
   color: var(--share-green-900);
   font-weight: 600;
 }
 
-.share-shell table tbody tr:has(> td:nth-child(5) > span.text-amber-800) > td:nth-child(3) {
+.share-shell table tbody td[data-role-tone="validate"] {
   color: #92400e;
   font-weight: 700;
 }
 
-.share-shell table tbody tr:has(> td:nth-child(5) > span.text-amber-800) > td:nth-child(3) > p {
+.share-shell table tbody td[data-role-tone="validate"] > p {
   color: #a16207;
   font-weight: 600;
 }
 
-.share-shell table tbody tr:has(> td:nth-child(5) > span.text-red-800) > td:nth-child(3) {
+.share-shell table tbody td[data-role-tone="possible_rejected"] {
   color: #991b1b;
   font-weight: 700;
 }
 
-.share-shell table tbody tr:has(> td:nth-child(5) > span.text-red-800) > td:nth-child(3) > p {
+.share-shell table tbody td[data-role-tone="possible_rejected"] > p {
   color: #b91c1c;
   font-weight: 600;
 }

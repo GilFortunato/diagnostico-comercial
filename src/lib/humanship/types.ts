@@ -2,6 +2,17 @@ export type HumanshipDataSource = "google_sheets" | "excel";
 export type HumanshipClassification = "eligible" | "validate" | "possible_rejected" | "pending";
 export type HumanshipDecision = "pending" | "approved" | "review" | "rejected";
 export type HumanshipSearchStatus = "pending" | "searching" | "found" | "probable" | "not_found" | "error";
+export type HumanshipRoleRuleDecision = "accepted" | "rejected";
+
+export type HumanshipRoleRule = {
+  id: string;
+  title: string;
+  normalizedTitle: string;
+  decision: HumanshipRoleRuleDecision;
+  decidedByName?: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type HumanshipParticipant = {
   id: string;
@@ -49,6 +60,7 @@ export type HumanshipEvent = {
   createdAt: string;
   updatedAt: string;
   participants: HumanshipParticipant[];
+  roleRules?: HumanshipRoleRule[];
 };
 
 export type ImportedHumanshipRow = {

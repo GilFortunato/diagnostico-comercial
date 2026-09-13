@@ -1,3 +1,5 @@
+import type { HumanshipRoleRuleDecision } from "@/lib/humanship/types";
+
 export const humanshipRestrictionVersion = "2026-09-11-v1";
 
 export const humanshipCompanyRestrictionGroups = [
@@ -88,10 +90,17 @@ export function assessCompanyRestriction(company: string | undefined | null): Co
   return { restricted: false, matchedCompany: null, reference: null, category: null, reason: "Nenhuma restrição de empresa identificada." };
 }
 
-export function assessRole(title: string | undefined | null): RoleAssessment {
+export function assessRole(title: string | undefined | null, learnedDecision?: HumanshipRoleRuleDecision | null): RoleAssessment {
   const raw = (title || "").trim();
   const value = normalize(raw);
   if (!value) return { classification: "possible_rejected", reference: null, score: 0, reason: "Cargo não informado." };
+
+  if (learnedDecision === "accepted") {
+    return { classification: "eligible", reference: raw, score: 100, reason: `Cargo aprovado manualmente e incluído na lista de cargos aceitos: ${raw}.` };
+  }
+  if (learnedDecision === "rejected") {
+    return { classification: "possible_rejected", reference: raw, score: 0, reason: `Cargo reprovado manualmente e incluído na lista de cargos reprovados: ${raw}.` };
+  }
 
   const exact = humanshipRoleReferences.find((reference) => normalize(reference) === value);
   if (exact && normalize(exact) !== "cpo") {
@@ -131,11 +140,12 @@ export function classifyHumanshipParticipant(input: {
   linkedinCompany?: string | null;
   linkedinTitle?: string | null;
   linkedinFound: boolean;
+  roleRuleDecision?: HumanshipRoleRuleDecision | null;
 }) {
   const company = input.linkedinCompany || input.sourceCompany || "";
   const title = input.linkedinTitle || input.sourceTitle || "";
   const companyAssessment = assessCompanyRestriction(company);
-  const roleAssessment = assessRole(title);
+  const roleAssessment = assessRole(title, input.roleRuleDecision);
 
   if (companyAssessment.restricted) {
     return {
@@ -161,6 +171,10 @@ export function classifyHumanshipParticipant(input: {
     roleAssessment,
     companyAssessment,
   };
+}
+
+export function normalizeHumanshipRoleTitle(value: string | undefined | null) {
+  return normalize(value || "").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function closestRole(title: string) {

@@ -18,6 +18,20 @@ test("Humanship keeps low-seniority HR titles as possible rejected", () => {
   assert.equal(assessRole("Analista de Recursos Humanos").classification, "possible_rejected");
 });
 
+test("Humanship learned role approval overrides fuzzy heuristics", () => {
+  const result = assessRole("People Experience Lead", "accepted");
+  assert.equal(result.classification, "eligible");
+  assert.equal(result.score, 100);
+  assert.match(result.reason, /aprovado manualmente/i);
+});
+
+test("Humanship learned role rejection overrides fuzzy heuristics", () => {
+  const result = assessRole("People and Culture Head", "rejected");
+  assert.equal(result.classification, "possible_rejected");
+  assert.equal(result.score, 0);
+  assert.match(result.reason, /reprovado manualmente/i);
+});
+
 test("Humanship identifies company restrictions from the current mapping", () => {
   assert.equal(assessCompanyRestriction("InHire").restricted, true);
   assert.equal(assessCompanyRestriction("Robert Half Brasil").restricted, true);
@@ -31,6 +45,17 @@ test("company restriction always becomes possible rejected but stays reviewable"
     linkedinFound: true,
   });
   assert.equal(result.classification, "possible_rejected");
+});
+
+test("company restriction still wins when a role was learned as accepted", () => {
+  const result = classifyHumanshipParticipant({
+    sourceCompany: "Gupy",
+    sourceTitle: "People Experience Lead",
+    linkedinFound: true,
+    roleRuleDecision: "accepted",
+  });
+  assert.equal(result.classification, "possible_rejected");
+  assert.equal(result.roleAssessment.classification, "eligible");
 });
 
 test("Humanship imports rows even when the spreadsheet has a preamble", () => {
