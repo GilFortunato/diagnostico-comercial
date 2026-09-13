@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { runApifyActor } from "@/lib/connectors/apifyClient";
 import { getPrisma } from "@/lib/db/prisma";
 import { normalizeCandidates } from "@/lib/hr-hunting/service";
+import { buildHumanshipLinkedinQueries, chooseHumanshipLinkedinMatch, type HumanshipLinkedinMatch } from "@/lib/humanship/linkedinMatch";
 import { classifyHumanshipParticipant, currentRestrictionSnapshot, humanshipRestrictionVersion } from "@/lib/humanship/restrictions";
 import type { HumanshipDecision, HumanshipEvent, HumanshipParticipant, ImportedHumanshipRow } from "@/lib/humanship/types";
 
@@ -112,20 +113,30 @@ export async function runHumanshipLinkedinSearch(ownerId: string, eventId: strin
   const event = await getHumanshipEvent(ownerId, eventId);
   if (!event) return null;
   await getPrisma().$executeRaw(Prisma.sql`UPDATE "HumanshipEvent" SET "status" = 'searching', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${eventId} AND "ownerId" = ${ownerId}`);
-  const targets = event.participants.filter((participant) => options?.rescan || participant.searchStatus !== "found");
+  const targets = event.participants.filter((participant) => options?.rescan || !["found", "probable"].includes(participant.searchStatus));
 
   await concurrentMap(targets, 4, async (participant) => {
     await updateSearchStatus(participant.id, "searching");
     try {
-      const query = buildPersonQuery(participant);
-      const raw = await runApifyActor("linkedinProfileSearch", {
-        profileScraperMode: "Short",
-        maxItems: 8,
-        takePages: 1,
-        searchQuery: query,
-      });
-      const candidates = normalizeCandidates(raw);
-      const best = chooseBestLinkedinMatch(participant, candidates);
+      const queries = buildHumanshipLinkedinQueries(participant);
+      let match: HumanshipLinkedinMatch | null = null;
+      const attemptedQueries: string[] = [];
+
+      for (const query of queries) {
+        attemptedQueries.push(query);
+        const raw = await runApifyActor("linkedinProfileSearch", {
+          profileScraperMode: "Short",
+          maxItems: match ? 18 : 12,
+          takePages: match ? 2 : 1,
+          searchQuery: query,
+        });
+        const candidates = normalizeCandidates(raw);
+        const current = chooseHumanshipLinkedinMatch(participant, candidates);
+        if (current && (!match || match.confidence !== "confirmed" || current.confidence === "confirmed" || current.score > match.score)) match = current;
+        if (match?.confidence === "confirmed") break;
+      }
+
+      const best = match?.candidate;
       const classification = classifyHumanshipParticipant({
         sourceCompany: participant.company,
         sourceTitle: participant.jobTitle,
@@ -133,6 +144,16 @@ export async function runHumanshipLinkedinSearch(ownerId: string, eventId: strin
         linkedinTitle: best?.currentTitle,
         linkedinFound: Boolean(best?.profileUrl),
       });
+      const probable = match?.confidence === "probable";
+      const finalClassification = probable && classification.classification === "eligible" ? "validate" : classification.classification;
+      const classificationReason = probable
+        ? `Correspondência provável no LinkedIn; valide o perfil antes da decisão final. ${classification.reason}`
+        : classification.reason;
+      const rawSnapshot = best
+        ? { ...best, humanshipMatch: { confidence: match?.confidence, score: match?.score, nameScore: match?.nameScore, companyScore: match?.companyScore, titleScore: match?.titleScore, queries: attemptedQueries } }
+        : null;
+      const searchStatus = best?.profileUrl ? (probable ? "probable" : "found") : "not_found";
+
       await getPrisma().$executeRaw(Prisma.sql`
         UPDATE "HumanshipParticipant" SET
           "linkedinUrl" = ${best?.profileUrl || null},
@@ -140,10 +161,10 @@ export async function runHumanshipLinkedinSearch(ownerId: string, eventId: strin
           "linkedinTitle" = ${best?.currentTitle || null},
           "linkedinCompany" = ${best?.currentCompany || null},
           "linkedinLocation" = ${best?.location || null},
-          "rawLinkedin" = ${best ? Prisma.sql`CAST(${JSON.stringify(best)} AS jsonb)` : Prisma.sql`NULL`},
-          "searchStatus" = ${best?.profileUrl ? "found" : "not_found"},
-          "classification" = ${classification.classification},
-          "classificationReason" = ${classification.reason},
+          "rawLinkedin" = ${rawSnapshot ? Prisma.sql`CAST(${JSON.stringify(rawSnapshot)} AS jsonb)` : Prisma.sql`NULL`},
+          "searchStatus" = ${searchStatus},
+          "classification" = ${finalClassification},
+          "classificationReason" = ${classificationReason},
           "roleReference" = ${classification.roleAssessment.reference},
           "roleScore" = ${classification.roleAssessment.score},
           "companyRestriction" = ${classification.companyAssessment.restricted ? classification.companyAssessment.reason : null},
@@ -202,34 +223,6 @@ export async function markHumanshipMessageCopied(input: { ownerId: string; parti
 
 async function updateSearchStatus(participantId: string, status: string) {
   await getPrisma().$executeRaw(Prisma.sql`UPDATE "HumanshipParticipant" SET "searchStatus" = ${status}, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${participantId}`);
-}
-
-function buildPersonQuery(participant: HumanshipParticipant) {
-  return [quote(participant.fullName), participant.company ? quote(participant.company) : "", participant.jobTitle ? quote(participant.jobTitle) : ""]
-    .filter(Boolean)
-    .join(" ")
-    .slice(0, 500);
-}
-
-function chooseBestLinkedinMatch(participant: HumanshipParticipant, candidates: ReturnType<typeof normalizeCandidates>) {
-  const ranked = candidates.map((candidate) => {
-    const name = textSimilarity(participant.fullName, candidate.name);
-    const company = textSimilarity(participant.company || "", candidate.currentCompany || "");
-    const title = textSimilarity(participant.jobTitle || "", candidate.currentTitle || "");
-    return { candidate, name, score: name * 0.75 + company * 0.2 + title * 0.05 };
-  }).filter((item) => item.name >= 0.5).sort((a, b) => b.score - a.score);
-  return ranked[0]?.score >= 0.55 ? ranked[0].candidate : null;
-}
-
-function textSimilarity(a: string, b: string) {
-  const leftText = normalize(a);
-  const rightText = normalize(b);
-  if (!leftText || !rightText) return 0;
-  if (leftText === rightText || leftText.includes(rightText) || rightText.includes(leftText)) return 1;
-  const left = new Set(leftText.split(/[^a-z0-9]+/).filter((token) => token.length >= 2));
-  const right = new Set(rightText.split(/[^a-z0-9]+/).filter((token) => token.length >= 2));
-  const intersection = [...left].filter((token) => right.has(token)).length;
-  return intersection / Math.max(left.size, right.size, 1);
 }
 
 async function concurrentMap<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>) {
@@ -294,13 +287,4 @@ function serializeParticipant(row: ParticipantRow): HumanshipParticipant {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
-}
-
-function quote(value: string) {
-  const cleaned = value.replace(/"/g, "").trim();
-  return cleaned.includes(" ") ? `"${cleaned}"` : cleaned;
-}
-
-function normalize(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").replace(/\s+/g, " ").trim();
 }
