@@ -96,3 +96,35 @@ textarea {
   width: 100%;
   min-width: 0;
 }
+
+/* Humanship: o cargo precisa comunicar a aderência antes mesmo da leitura do badge.
+   Verde = elegível, amarelo = próximo/validar, vermelho = possível reprovado. */
+.share-shell table tbody tr:has(> td:nth-child(5) > span.text-emerald-800) > td:nth-child(3) {
+  color: var(--share-green-950);
+  font-weight: 700;
+}
+
+.share-shell table tbody tr:has(> td:nth-child(5) > span.text-emerald-800) > td:nth-child(3) > p {
+  color: var(--share-green-900);
+  font-weight: 600;
+}
+
+.share-shell table tbody tr:has(> td:nth-child(5) > span.text-amber-800) > td:nth-child(3) {
+  color: #92400e;
+  font-weight: 700;
+}
+
+.share-shell table tbody tr:has(> td:nth-child(5) > span.text-amber-800) > td:nth-child(3) > p {
+  color: #a16207;
+  font-weight: 600;
+}
+
+.share-shell table tbody tr:has(> td:nth-child(5) > span.text-red-800) > td:nth-child(3) {
+  color: #991b1b;
+  font-weight: 700;
+}
+
+.share-shell table tbody tr:has(> td:nth-child(5) > span.text-red-800) > td:nth-child(3) > p {
+  color: #b91c1c;
+  font-weight: 600;
+}
