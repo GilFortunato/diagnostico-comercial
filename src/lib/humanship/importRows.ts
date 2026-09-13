@@ -95,13 +95,20 @@ function findHeader(headers: string[], aliases: string[]) {
   const normalizedAliases = aliases.map(normalizeHeader);
   return headers.findIndex((header) => {
     const normalized = normalizeHeader(header);
-    return normalizedAliases.some((alias) => normalized === alias || normalized.includes(alias));
+    return normalizedAliases.some((alias) => headerMatches(normalized, alias));
   });
 }
 
 function matchesHeader(value: string, aliases: string[]) {
   const normalized = normalizeHeader(value);
-  return aliases.map(normalizeHeader).some((alias) => normalized === alias || normalized.includes(alias));
+  return aliases.map(normalizeHeader).some((alias) => headerMatches(normalized, alias));
+}
+
+function headerMatches(normalized: string, alias: string) {
+  if (!normalized || !alias) return false;
+  return normalized === alias
+    || normalized.startsWith(`${alias} `)
+    || normalized.endsWith(` ${alias}`);
 }
 
 function stableSourceKey(email: string, name: string, company: string) {
