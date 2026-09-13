@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authorizeModule } from "@/lib/auth/moduleRequest";
 import { createHumanshipEvent, listHumanshipEvents } from "@/lib/humanship/service";
+import { deleteAllHumanshipEvents } from "@/lib/humanship/cleanup";
 
 const createSchema = z.object({ name: z.string().trim().min(2).max(180) });
 
@@ -18,4 +19,11 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Informe um nome para o evento." }, { status: 400 });
   const event = await createHumanshipEvent(access.user.id, parsed.data.name);
   return NextResponse.json({ event }, { status: 201 });
+}
+
+export async function DELETE() {
+  const access = await authorizeModule("humanship.r1ship");
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  const deleted = await deleteAllHumanshipEvents(access.user.id);
+  return NextResponse.json({ deleted });
 }
