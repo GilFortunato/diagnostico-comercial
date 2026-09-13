@@ -1,7 +1,7 @@
 export type HumanshipDataSource = "google_sheets" | "excel";
 export type HumanshipClassification = "eligible" | "validate" | "possible_rejected" | "pending";
 export type HumanshipDecision = "pending" | "approved" | "review" | "rejected";
-export type HumanshipSearchStatus = "pending" | "searching" | "found" | "not_found" | "error";
+export type HumanshipSearchStatus = "pending" | "searching" | "found" | "probable" | "not_found" | "error";
 
 export type HumanshipParticipant = {
   id: string;
