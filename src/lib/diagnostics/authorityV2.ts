@@ -217,7 +217,7 @@ function buildCaseMaturity(assessment: AuthorityAssessment) {
   if (!results.length) return { rationale: "Nenhum resultado mensurável suficientemente explícito foi recuperado no LinkedIn.", evidence: [] as string[] };
   const levels = results.map((text) => caseMaturityLevel(text));
   const max = Math.max(...levels);
-  const avg = levels.reduce((sum, value) => sum + value, 0) / levels.length;
+  const avg = levels.reduce<number>((sum, value) => sum + value, 0) / levels.length;
   return {
     rationale: `Maturidade dos cases: média ${avg.toFixed(1)}/4; melhor evidência ${max}/4. Números isolados não são tratados automaticamente como case completo.`,
     evidence: [`${results.length} resultado(s) mensurável(is) recuperado(s); maturidade máxima ${max}/4.`],
