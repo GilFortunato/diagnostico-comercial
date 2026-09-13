@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Clipboard, ExternalLink, FileSpreadsheet, LoaderCircle, MessageCircle, Plus, Search, ShieldCheck, X } from "lucide-react";
 import { humanshipCompanyRestrictionGroups, humanshipRestrictionVersion, humanshipRoleReferences } from "@/lib/humanship/restrictions";
-import type { HumanshipClassification, HumanshipDecision, HumanshipEvent, HumanshipParticipant } from "@/lib/humanship/types";
+import type { HumanshipClassification, HumanshipDecision, HumanshipEvent, HumanshipParticipant, HumanshipRoleRule, HumanshipRoleRuleDecision } from "@/lib/humanship/types";
 import { buildWhatsAppLink } from "@/lib/humanship/whatsapp";
 
-type Pending = "load" | "create" | "upload" | "search" | "decision" | "copy" | null;
+type Pending = "load" | "create" | "upload" | "search" | "decision" | "role" | "copy" | null;
 type Tab = "source" | "results" | "restrictions";
 type Filter = "all" | HumanshipClassification | "approved" | "rejected";
 
@@ -71,33 +71,20 @@ export function HumanshipR1ShipExperience({ accountName }: { accountName: string
 
   function chooseSpreadsheet(nextFile: File | null) {
     setError(null);
-    if (!nextFile) {
-      setFile(null);
-      return;
-    }
+    if (!nextFile) { setFile(null); return; }
     const lower = nextFile.name.toLocaleLowerCase("pt-BR");
     if (!lower.endsWith(".xlsx") && !lower.endsWith(".csv")) {
-      setFile(null);
-      setError("Formato não suportado. Escolha um arquivo .xlsx ou .csv.");
-      return;
+      setFile(null); setError("Formato não suportado. Escolha um arquivo .xlsx ou .csv."); return;
     }
     if (nextFile.size > 12 * 1024 * 1024) {
-      setFile(null);
-      setError("O arquivo excede o limite de 12 MB.");
-      return;
+      setFile(null); setError("O arquivo excede o limite de 12 MB."); return;
     }
     setFile(nextFile);
   }
 
   async function uploadExcel() {
-    if (!event) {
-      setError("Crie ou selecione um evento antes de importar a planilha.");
-      return;
-    }
-    if (!file) {
-      setError("Escolha uma planilha .xlsx ou .csv antes de importar.");
-      return;
-    }
+    if (!event) { setError("Crie ou selecione um evento antes de importar a planilha."); return; }
+    if (!file) { setError("Escolha uma planilha .xlsx ou .csv antes de importar."); return; }
     setPending("upload"); setError(null);
     try {
       const form = new FormData(); form.append("file", file, file.name);
@@ -131,6 +118,22 @@ export function HumanshipR1ShipExperience({ accountName }: { accountName: string
       if (!response.ok) throw new Error("Não foi possível salvar a decisão.");
       if (event) await loadEvent(event.id);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível salvar a decisão."); }
+    finally { setPending(null); }
+  }
+
+  async function decideRole(participant: HumanshipParticipant, decision: HumanshipRoleRuleDecision) {
+    if (!event) return;
+    setPending("role"); setError(null);
+    try {
+      const response = await fetch(`/api/humanship/participants/${participant.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "role_rule", decision }),
+      });
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(body.error || "Não foi possível salvar a regra do cargo.");
+      await loadEvent(event.id);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível salvar a regra do cargo."); }
     finally { setPending(null); }
   }
 
@@ -185,8 +188,8 @@ export function HumanshipR1ShipExperience({ accountName }: { accountName: string
           <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--share-line)] bg-white p-4"><div><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Evento atual</p><h2 className="text-xl font-semibold text-[var(--share-green-950)]">{event.name}</h2><p className="text-sm text-zinc-500">{event.sourceRowCount} participante(s) · restrições {event.restrictionVersion}</p></div><div className="flex gap-2">{(["source", "results", "restrictions"] as Tab[]).map((item) => <button key={item} type="button" onClick={() => setTab(item)} className={`rounded-md px-3 py-2 text-sm font-semibold ${tab === item ? "bg-[var(--share-green-950)] text-white" : "border border-[var(--share-line)] text-zinc-700"}`}>{item === "source" ? "Fonte de dados" : item === "results" ? "Resultados" : "Restrições"}</button>)}</div></section>
 
           {tab === "source" ? <SourceTab event={event} file={file} onFile={chooseSpreadsheet} pending={pending} onUpload={uploadExcel} /> : null}
-          {tab === "results" ? <ResultsTab event={event} visible={visible} counts={counts} filter={filter} setFilter={setFilter} pending={pending} onSearch={searchLinkedin} onDecision={decide} onMessages={setSelected} /> : null}
-          {tab === "restrictions" ? <RestrictionsTab /> : null}
+          {tab === "results" ? <ResultsTab event={event} visible={visible} counts={counts} filter={filter} setFilter={setFilter} pending={pending} onSearch={searchLinkedin} onDecision={decide} onRoleRule={decideRole} onMessages={setSelected} /> : null}
+          {tab === "restrictions" ? <RestrictionsTab event={event} /> : null}
         </> : null}
 
         {selected && event ? <MessageDrawer participant={selected} event={event} accountName={accountName} pending={pending === "copy"} onClose={() => setSelected(null)} onCopy={copyMessage} /> : null}
@@ -216,13 +219,68 @@ function SourceTab({ event, file, onFile, pending, onUpload }: { event: Humanshi
   </section>;
 }
 
-function ResultsTab({ event, visible, counts, filter, setFilter, pending, onSearch, onDecision, onMessages }: { event: HumanshipEvent; visible: HumanshipParticipant[]; counts: Record<string, number>; filter: Filter; setFilter: (v: Filter) => void; pending: Pending; onSearch: (rescan?: boolean) => void; onDecision: (p: HumanshipParticipant, d: HumanshipDecision) => void; onMessages: (p: HumanshipParticipant) => void }) {
+function ResultsTab({ event, visible, counts, filter, setFilter, pending, onSearch, onDecision, onRoleRule, onMessages }: {
+  event: HumanshipEvent;
+  visible: HumanshipParticipant[];
+  counts: Record<string, number>;
+  filter: Filter;
+  setFilter: (v: Filter) => void;
+  pending: Pending;
+  onSearch: (rescan?: boolean) => void;
+  onDecision: (p: HumanshipParticipant, d: HumanshipDecision) => void;
+  onRoleRule: (p: HumanshipParticipant, d: HumanshipRoleRuleDecision) => void;
+  onMessages: (p: HumanshipParticipant) => void;
+}) {
   const hasSearchResults = event.participants.some((item) => item.searchStatus === "found" || item.searchStatus === "probable");
-  return <section className="mt-5 rounded-lg border border-[var(--share-line)] bg-white"><div className="flex flex-wrap items-end justify-between gap-4 p-5"><div><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Resultado operacional</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Participantes e validação</h2><p className="mt-1 text-sm text-zinc-600">A busca agora também preserva correspondências prováveis. Perfis prováveis ficam para validação humana antes da decisão final.</p></div><div className="flex gap-2"><button type="button" onClick={() => onSearch(false)} disabled={pending === "search" || !event.participants.length} className="inline-flex items-center gap-2 rounded-md bg-[var(--share-green-950)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{pending === "search" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{pending === "search" ? "Pesquisando LinkedIn" : "Encontrar no LinkedIn"}</button>{hasSearchResults ? <button type="button" onClick={() => onSearch(true)} disabled={pending === "search"} className="rounded-md border border-[var(--share-line)] px-3 py-2 text-sm">Refazer busca</button> : null}</div></div><div className="flex flex-wrap gap-2 border-y border-[var(--share-line)] bg-[#fbfdf8] p-4">{(["all", "eligible", "validate", "possible_rejected", "approved", "rejected"] as Filter[]).map((item) => <button key={item} type="button" onClick={() => setFilter(item)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${filter === item ? "bg-[var(--share-green-950)] text-white" : "border border-[var(--share-line)] bg-white text-zinc-600"}`}>{filterLabel(item)} · {counts[item] || 0}</button>)}</div><div className="overflow-x-auto"><table className="w-full min-w-[1180px] text-left text-sm"><thead className="text-xs uppercase text-[var(--share-green-800)]"><tr><th className="p-3">Pessoa</th><th className="p-3">Empresa</th><th className="p-3">Cargo</th><th className="p-3">LinkedIn</th><th className="p-3">Classificação</th><th className="p-3">Motivo</th><th className="p-3">Decisão humana</th><th className="p-3">Ações</th></tr></thead><tbody>{visible.map((item) => <tr key={item.id} className="border-t border-[var(--share-line)] align-top"><td className="p-3"><strong>{item.fullName}</strong><p className="mt-1 text-xs text-zinc-500">{item.email || "E-mail não informado"}</p><p className="mt-1 text-xs text-zinc-500">{item.phone || "Celular não informado"}</p></td><td className="p-3">{item.linkedinCompany || item.company || "Não informada"}{item.companyRestriction ? <p className="mt-1 text-xs font-semibold text-red-700">Restrição identificada</p> : null}</td><td className="p-3">{item.linkedinTitle || item.jobTitle || "Não informado"}{item.roleReference ? <p className="mt-1 text-xs text-zinc-500">Próximo de: {item.roleReference}{item.roleScore != null ? ` · ${item.roleScore}%` : ""}</p> : null}</td><td className="p-3">{item.linkedinUrl ? <div className="grid gap-1"><a href={item.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--share-green-900)]">Abrir perfil <ExternalLink className="h-3.5 w-3.5" /></a>{item.searchStatus === "probable" ? <span className="w-fit rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Correspondência provável · validar</span> : null}{item.linkedinName && item.linkedinName !== item.fullName ? <span className="text-xs text-zinc-500">Encontrado como: {item.linkedinName}</span> : null}</div> : <span className="text-zinc-500">{searchLabel(item.searchStatus)}</span>}</td><td className="p-3"><StatusBadge value={item.classification} /></td><td className="max-w-[320px] p-3 text-xs leading-5 text-zinc-600">{item.classificationReason || "Aguardando análise."}</td><td className="p-3"><DecisionBadge value={item.humanDecision} />{item.decisionByName ? <p className="mt-1 text-xs text-zinc-500">por {item.decisionByName}</p> : null}</td><td className="p-3"><div className="flex flex-wrap gap-1.5"><button type="button" onClick={() => onDecision(item, "approved")} disabled={pending === "decision"} className="rounded-md border border-emerald-300 px-2 py-1 text-xs font-semibold text-emerald-800">Aprovar</button><button type="button" onClick={() => onDecision(item, "review")} disabled={pending === "decision"} className="rounded-md border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-800">Validar</button><button type="button" onClick={() => onDecision(item, "rejected")} disabled={pending === "decision"} className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-800">Reprovar</button><button type="button" onClick={() => onMessages(item)} className="rounded-md bg-[var(--share-green-950)] px-2 py-1 text-xs font-semibold text-white">Mensagens</button></div></td></tr>)}</tbody></table>{!visible.length ? <p className="p-8 text-center text-sm text-zinc-500">Nenhuma pessoa neste filtro.</p> : null}</div></section>;
+  return <section className="mt-5 rounded-lg border border-[var(--share-line)] bg-white">
+    <div className="flex flex-wrap items-end justify-between gap-4 p-5"><div><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Resultado operacional</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Participantes e validação</h2><p className="mt-1 text-sm text-zinc-600">Cargos semelhantes podem ser ensinados ao Humanship: ao aceitar ou reprovar um cargo, essa decisão passa a valer nas próximas análises.</p></div><div className="flex gap-2"><button type="button" onClick={() => onSearch(false)} disabled={pending === "search" || !event.participants.length} className="inline-flex items-center gap-2 rounded-md bg-[var(--share-green-950)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{pending === "search" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{pending === "search" ? "Pesquisando LinkedIn" : "Encontrar no LinkedIn"}</button>{hasSearchResults ? <button type="button" onClick={() => onSearch(true)} disabled={pending === "search"} className="rounded-md border border-[var(--share-line)] px-3 py-2 text-sm">Refazer busca</button> : null}</div></div>
+    <div className="flex flex-wrap gap-2 border-y border-[var(--share-line)] bg-[#fbfdf8] p-4">{(["all", "eligible", "validate", "possible_rejected", "approved", "rejected"] as Filter[]).map((item) => <button key={item} type="button" onClick={() => setFilter(item)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${filter === item ? "bg-[var(--share-green-950)] text-white" : "border border-[var(--share-line)] bg-white text-zinc-600"}`}>{filterLabel(item)} · {counts[item] || 0}</button>)}</div>
+    <div className="overflow-x-auto"><table className="w-full min-w-[1280px] text-left text-sm"><thead className="text-xs uppercase text-[var(--share-green-800)]"><tr><th className="p-3">Pessoa</th><th className="p-3">Empresa</th><th className="p-3">Cargo</th><th className="p-3">LinkedIn</th><th className="p-3">Classificação</th><th className="p-3">Motivo</th><th className="p-3">Decisão humana</th><th className="p-3">Ações</th></tr></thead><tbody>{visible.map((item) => <tr key={item.id} className="border-t border-[var(--share-line)] align-top">
+      <td className="p-3"><strong>{item.fullName}</strong><p className="mt-1 text-xs text-zinc-500">{item.email || "E-mail não informado"}</p><p className="mt-1 text-xs text-zinc-500">{item.phone || "Celular não informado"}</p></td>
+      <td className="p-3">{item.linkedinCompany || item.company || "Não informada"}{item.companyRestriction ? <p className="mt-1 text-xs font-semibold text-red-700">Restrição identificada</p> : null}</td>
+      <RoleCell participant={item} event={event} pending={pending === "role"} onRoleRule={onRoleRule} />
+      <td className="p-3">{item.linkedinUrl ? <div className="grid gap-1"><a href={item.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--share-green-900)]">Abrir perfil <ExternalLink className="h-3.5 w-3.5" /></a>{item.searchStatus === "probable" ? <span className="w-fit rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Correspondência provável · validar</span> : null}{item.linkedinName && item.linkedinName !== item.fullName ? <span className="text-xs text-zinc-500">Encontrado como: {item.linkedinName}</span> : null}</div> : <span className="text-zinc-500">{searchLabel(item.searchStatus)}</span>}</td>
+      <td className="p-3"><StatusBadge value={item.classification} /></td>
+      <td className="max-w-[320px] p-3 text-xs leading-5 text-zinc-600">{item.classificationReason || "Aguardando análise."}</td>
+      <td className="p-3"><DecisionBadge value={item.humanDecision} />{item.decisionByName ? <p className="mt-1 text-xs text-zinc-500">por {item.decisionByName}</p> : null}</td>
+      <td className="p-3"><div className="flex flex-wrap gap-1.5"><button type="button" onClick={() => onDecision(item, "approved")} disabled={pending === "decision"} className="rounded-md border border-emerald-300 px-2 py-1 text-xs font-semibold text-emerald-800">Aprovar</button><button type="button" onClick={() => onDecision(item, "review")} disabled={pending === "decision"} className="rounded-md border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-800">Validar</button><button type="button" onClick={() => onDecision(item, "rejected")} disabled={pending === "decision"} className="rounded-md border border-red-300 px-2 py-1 text-xs font-semibold text-red-800">Reprovar</button><button type="button" onClick={() => onMessages(item)} className="rounded-md bg-[var(--share-green-950)] px-2 py-1 text-xs font-semibold text-white">Mensagens</button></div></td>
+    </tr>)}</tbody></table>{!visible.length ? <p className="p-8 text-center text-sm text-zinc-500">Nenhuma pessoa neste filtro.</p> : null}</div>
+  </section>;
 }
 
-function RestrictionsTab() {
-  return <section className="mt-5 grid gap-5"><div className="rounded-lg border border-[var(--share-line)] bg-white p-5"><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-[var(--share-green-800)]" /><div><h2 className="font-semibold text-[var(--share-green-950)]">Restrições vigentes</h2><p className="text-sm text-zinc-600">Versão {humanshipRestrictionVersion}. Cada evento guarda a versão utilizada para preservar a auditoria.</p></div></div></div><div className="rounded-lg border border-[var(--share-line)] bg-white p-5"><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Restrição 01</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Concorrentes e patrocinadores</h3><div className="mt-4 grid gap-3 md:grid-cols-2">{humanshipCompanyRestrictionGroups.map((group) => <article key={`${group.reference}-${group.category}`} className="rounded-md border border-[var(--share-line)] p-3"><p className="font-semibold">{group.reference}</p><p className="mt-1 text-xs text-zinc-500">{group.category}</p><p className="mt-2 text-sm text-zinc-700">{group.companies.join(" · ")}</p></article>)}</div></div><div className="rounded-lg border border-[var(--share-line)] bg-white p-5"><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Restrição 02</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Cargos executivos de RH e Pessoas</h3><p className="mt-2 text-sm leading-6 text-zinc-600">O motor não exige texto literal: títulos equivalentes entram como elegíveis; cargos de liderança próximos entram para validação; demais permanecem como possível reprovado para decisão humana.</p><div className="mt-4 flex flex-wrap gap-2">{humanshipRoleReferences.map((role) => <span key={role} className="rounded-full border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-1.5 text-xs font-medium text-zinc-700">{role}</span>)}</div></div></section>;
+function RoleCell({ participant, event, pending, onRoleRule }: { participant: HumanshipParticipant; event: HumanshipEvent; pending: boolean; onRoleRule: (p: HumanshipParticipant, d: HumanshipRoleRuleDecision) => void }) {
+  const title = participant.linkedinTitle || participant.jobTitle || "";
+  const rule = findRoleRule(event.roleRules, title);
+  const tone = roleTone(participant, rule);
+  const learnable = Boolean(title) && (Boolean(rule) || participant.roleScore == null || participant.roleScore < 100);
+  return <td className="p-3" data-role-tone={tone}>
+    <div className="font-bold">{title || "Não informado"}</div>
+    {participant.roleReference ? <p className="mt-1 text-xs">Próximo de: {participant.roleReference}{participant.roleScore != null ? ` · ${participant.roleScore}%` : ""}</p> : null}
+    {rule ? <p className={`mt-1 text-[11px] font-semibold ${rule.decision === "accepted" ? "text-emerald-800" : "text-red-800"}`}>{rule.decision === "accepted" ? "Cargo aprendido como aceito" : "Cargo aprendido como reprovado"}</p> : null}
+    {learnable ? <div className="mt-2 flex flex-wrap gap-1.5">
+      <button type="button" disabled={pending} onClick={() => onRoleRule(participant, "accepted")} className={`rounded-md border px-2 py-1 text-[11px] font-semibold disabled:opacity-50 ${rule?.decision === "accepted" ? "border-emerald-800 bg-emerald-800 text-white" : "border-emerald-300 bg-white text-emerald-800"}`}>Aceitar cargo</button>
+      <button type="button" disabled={pending} onClick={() => onRoleRule(participant, "rejected")} className={`rounded-md border px-2 py-1 text-[11px] font-semibold disabled:opacity-50 ${rule?.decision === "rejected" ? "border-red-800 bg-red-800 text-white" : "border-red-300 bg-white text-red-800"}`}>Reprovar cargo</button>
+    </div> : null}
+  </td>;
+}
+
+function RestrictionsTab({ event }: { event: HumanshipEvent }) {
+  const accepted = (event.roleRules ?? []).filter((rule) => rule.decision === "accepted");
+  const rejected = (event.roleRules ?? []).filter((rule) => rule.decision === "rejected");
+  return <section className="mt-5 grid gap-5">
+    <div className="rounded-lg border border-[var(--share-line)] bg-white p-5"><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-[var(--share-green-800)]" /><div><h2 className="font-semibold text-[var(--share-green-950)]">Restrições e regras vigentes</h2><p className="text-sm text-zinc-600">Versão {humanshipRestrictionVersion}. As decisões manuais de cargo ficam salvas e são reutilizadas nas próximas análises.</p></div></div></div>
+    <div className="rounded-lg border border-[var(--share-line)] bg-white p-5"><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Restrição 01</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Concorrentes e patrocinadores</h3><div className="mt-4 grid gap-3 md:grid-cols-2">{humanshipCompanyRestrictionGroups.map((group) => <article key={`${group.reference}-${group.category}`} className="rounded-md border border-[var(--share-line)] p-3"><p className="font-semibold">{group.reference}</p><p className="mt-1 text-xs text-zinc-500">{group.category}</p><p className="mt-2 text-sm text-zinc-700">{group.companies.join(" · ")}</p></article>)}</div></div>
+    <div className="rounded-lg border border-[var(--share-line)] bg-white p-5"><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Restrição 02</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Cargos executivos de RH e Pessoas</h3><p className="mt-2 text-sm leading-6 text-zinc-600">Os títulos abaixo são a referência original. Cargos próximos podem ser ensinados pelo time diretamente na tabela de resultados.</p><div className="mt-4 flex flex-wrap gap-2">{humanshipRoleReferences.map((role) => <span key={role} className="rounded-full border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-1.5 text-xs font-medium text-zinc-700">{role}</span>)}</div></div>
+    <div className="grid gap-5 lg:grid-cols-2">
+      <RoleRuleList title={`Cargos aceitos · ${accepted.length}`} rules={accepted} empty="Nenhum cargo adicional foi aprovado ainda." tone="accepted" />
+      <RoleRuleList title={`Cargos reprovados · ${rejected.length}`} rules={rejected} empty="Nenhum cargo adicional foi reprovado ainda." tone="rejected" />
+    </div>
+  </section>;
+}
+
+function RoleRuleList({ title, rules, empty, tone }: { title: string; rules: HumanshipRoleRule[]; empty: string; tone: HumanshipRoleRuleDecision }) {
+  const style = tone === "accepted" ? "border-emerald-200 bg-emerald-50/50 text-emerald-950" : "border-red-200 bg-red-50/50 text-red-950";
+  return <article className={`rounded-lg border p-5 ${style}`}><h3 className="font-semibold">{title}</h3>{rules.length ? <div className="mt-3 grid gap-2">{rules.map((rule) => <div key={rule.id} className="rounded-md border border-current/15 bg-white/75 px-3 py-2"><p className="text-sm font-semibold">{rule.title}</p><p className="mt-1 text-[11px] opacity-70">Decisão: {rule.decidedByName || "time Humanship"} · {formatDate(rule.updatedAt)}</p></div>)}</div> : <p className="mt-3 text-sm opacity-70">{empty}</p>}</article>;
 }
 
 function MessageDrawer({ participant, event, accountName, pending, onClose, onCopy }: { participant: HumanshipParticipant; event: HumanshipEvent; accountName: string; pending: boolean; onClose: () => void; onCopy: (p: HumanshipParticipant, message: 1 | 2) => void }) {
@@ -259,6 +317,26 @@ function StatusBadge({ value }: { value: HumanshipClassification }) {
 function DecisionBadge({ value }: { value: HumanshipDecision }) {
   const label = value === "approved" ? "Aprovado" : value === "review" ? "Validar" : value === "rejected" ? "Reprovado" : "Sem decisão";
   return <span className="text-xs font-semibold text-zinc-700">{label}</span>;
+}
+
+function findRoleRule(rules: HumanshipRoleRule[] | undefined, title: string) {
+  const normalized = normalizeTitleClient(title);
+  return (rules ?? []).find((rule) => rule.normalizedTitle === normalized);
+}
+
+function roleTone(participant: HumanshipParticipant, rule?: HumanshipRoleRule): HumanshipClassification {
+  if (rule?.decision === "accepted") return "eligible";
+  if (rule?.decision === "rejected") return "possible_rejected";
+  if (participant.roleScore != null) {
+    if (participant.roleScore >= 88) return "eligible";
+    if (participant.roleScore >= 55) return "validate";
+    return "possible_rejected";
+  }
+  return participant.classification;
+}
+
+function normalizeTitleClient(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").replace(/&/g, " e ").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function filterLabel(value: Filter) {
