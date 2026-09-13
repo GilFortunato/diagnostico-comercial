@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { authorityInputSchema } from "@/lib/diagnostics/authority";
+import { upgradeAuthorityAssessmentV2 } from "@/lib/diagnostics/authorityV2";
 import { createAuthorityAssessmentWithProvider } from "@/lib/ai/authorityProvider";
 import { extractLinkedInAuthorityWithApify } from "@/lib/connectors/apifyLinkedIn";
 import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
         }
       },
     });
+    assessment = upgradeAuthorityAssessmentV2(assessment);
   } catch (error) {
     if (error instanceof PlatformResourceUnavailableError) {
       return NextResponse.json({ error: error.publicMessage }, { status: 503 });
