@@ -28,13 +28,14 @@ function toPublicProfile(profile: Awaited<ReturnType<typeof getProfessionalProfi
   if (!profile) return null;
   const parsedSnapshot = normalizedLinkedInSnapshotSchema.safeParse(profile.latestLinkedinSnapshot);
   const importMetadata = readLinkedInImportMetadata(profile.latestLinkedinSnapshot);
+  const importedSummary = parsedSnapshot.success && importMetadata
+    ? { ...summarizeLinkedInSnapshot(parsedSnapshot.data, importMetadata.filesUsed, parsedSnapshot.data.userCommentsAvailable), collectedAt: importMetadata.importedAt }
+    : null;
   return {
     id: profile.id,
     linkedinUrl: profile.linkedinUrl,
     linkedinUpdatedAt: profile.linkedinUpdatedAt,
     lastAuthorityAnalysisAt: profile.lastAuthorityAnalysisAt,
-    linkedinImport: parsedSnapshot.success && importMetadata
-      ? summarizeLinkedInSnapshot(parsedSnapshot.data, importMetadata.filesUsed, parsedSnapshot.data.userCommentsAvailable)
-      : null,
+    linkedinImport: importedSummary,
   };
 }
