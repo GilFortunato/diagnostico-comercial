@@ -4,6 +4,7 @@ import { upgradeAuthorityAssessmentV2 } from "@/lib/diagnostics/authorityV2";
 import { createAuthorityAssessmentWithProvider } from "@/lib/ai/authorityProvider";
 import { extractLinkedInAuthorityWithApify } from "@/lib/connectors/apifyLinkedIn";
 import { PlatformResourceUnavailableError } from "@/lib/connectors/errors";
+import { buildAuthorityInputFromLinkedIn, normalizedLinkedInSnapshotSchema } from "@/lib/connectors/linkedinNormalization";
 import { executeAuthorityPipeline, InsufficientPublicProfileDataError } from "@/lib/diagnostics/authorityPipeline";
 import { saveAuthorityAssessment } from "@/lib/repositories/authorityRepository";
 import { authorizeModule } from "@/lib/auth/moduleRequest";
@@ -34,11 +35,22 @@ export async function POST(request: Request) {
     return internalErrorResponse();
   }
 
+  const importedSnapshotResult = normalizedLinkedInSnapshotSchema.safeParse(savedProfile?.latestLinkedinSnapshot);
+  const importedSnapshot = importedSnapshotResult.success ? importedSnapshotResult.data : undefined;
+  const importedInput = importedSnapshot ? buildAuthorityInputFromLinkedIn(importedSnapshot) : null;
+
   const parsed = authorityInputSchema.safeParse({
     ...body,
     profileUrl: typeof body.profileUrl === "string" && body.profileUrl.trim()
       ? body.profileUrl.trim()
       : savedProfile?.linkedinUrl ?? "",
+    headline: preferText(body.headline, importedInput?.headline),
+    about: preferText(body.about, importedInput?.about),
+    themes: preferText(body.themes, importedInput?.themes),
+    proofPoints: preferText(body.proofPoints, importedInput?.proofPoints),
+    recentContent: preferText(body.recentContent, importedInput?.recentContent),
+    interactionSignals: preferText(body.interactionSignals, importedInput?.interactionSignals),
+    linkedinSnapshot: importedSnapshot ?? body.linkedinSnapshot,
   });
 
   if (!parsed.success) {
@@ -102,6 +114,10 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(assessment);
+}
+
+function preferText(primary: unknown, fallback: string | undefined) {
+  return typeof primary === "string" && primary.trim() ? primary : fallback ?? "";
 }
 
 function internalErrorResponse() {
