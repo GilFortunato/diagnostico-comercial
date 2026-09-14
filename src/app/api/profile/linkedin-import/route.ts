@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     }
 
     const { snapshot, summary } = parseLinkedInArchive(await candidate.arrayBuffer(), filename, linkedinUrl);
-    await saveImportedLinkedInSnapshot(access.user.id, linkedinUrl, snapshot);
+    await saveImportedLinkedInSnapshot(access.user.id, linkedinUrl, snapshot, summary.filesUsed);
 
     return NextResponse.json({ summary });
   } catch (error) {
