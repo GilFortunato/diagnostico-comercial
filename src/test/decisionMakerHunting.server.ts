@@ -398,6 +398,18 @@ test("Corpus: busca complementar consulta funcionários da mesma empresa quando 
   assert.deepEqual(calls, ["linkedinProfileSearch", "linkedinCompanyEmployees"]);
 });
 
+test("B2B e HR preservam cargo e empresa de currentPositions no formato Short", () => {
+  const raw = { firstName: "Pessoa", lastName: "Fixture", linkedinUrl: "https://www.linkedin.com/in/short-fixture", currentPositions: [{ title: "Gerente de Recursos Humanos", companyName: "Grupo Corpus", description: "Gestão de pessoas e treinamento" }], location: { linkedinText: "Indaiatuba, São Paulo, Brazil" } };
+  const b2b = normalizePeople([raw], "Harvest", "Decisor funcional")[0];
+  const hr = normalizeCandidates([raw])[0];
+  assert.equal(b2b.title, "Gerente de Recursos Humanos");
+  assert.equal(b2b.company, "Grupo Corpus");
+  assert.equal(b2b.profileSummary, "Gestão de pessoas e treinamento");
+  assert.equal(hr.currentTitle, b2b.title);
+  assert.equal(hr.currentCompany, b2b.company);
+  assert.equal(hr.professionalSummary, b2b.profileSummary);
+});
+
 test("B2B complementa resultado curto e não duplica pessoas entre Actors", async () => {
   clearDecisionMakerCache();
   const result = await executeDecisionMakerSearch(personInput, dependencies({
