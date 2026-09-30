@@ -38,6 +38,7 @@ export function rankPeople(people: HuntingPerson[], input: PersonSearchInput) {
 
   return people.map((person) => {
     const title = normalizeText(person.title);
+    const hasTitle = Boolean(title && title !== "cargo nao informado");
     const profileEvidence = normalizeText([person.title, person.department, person.profileSummary, ...person.recentSignals].filter(Boolean).join(" "));
     const probableDecisionRole = inferDecisionRole(person.title, input.filters.desiredDecisionRole);
     const reasons: string[] = [];
@@ -49,8 +50,9 @@ export function rankPeople(people: HuntingPerson[], input: PersonSearchInput) {
     if (exactRole) { score += 32; reasons.push("Cargo diretamente aderente aos papéis pesquisados."); }
     else if (relatedRole) { score += 18; reasons.push("Cargo pertence à família de papéis pesquisada."); }
 
-    if (probableDecisionRole === input.filters.desiredDecisionRole) { score += 18; reasons.push(`Papel provável compatível com ${input.filters.desiredDecisionRole.toLocaleLowerCase("pt-BR")}.`); }
-    if (input.filters.seniority.length === 0 || matchesSeniority(person.title, input.filters.seniority)) { score += 14; reasons.push(`Senioridade compatível: ${person.seniority ?? "sinalizada pelo cargo"}.`); }
+    if (hasTitle && probableDecisionRole === input.filters.desiredDecisionRole) { score += 18; reasons.push(`Papel provável compatível com ${input.filters.desiredDecisionRole.toLocaleLowerCase("pt-BR")}.`); }
+    if (hasTitle && (input.filters.seniority.length === 0 || matchesSeniority(person.title, input.filters.seniority))) { score += 14; reasons.push(`Senioridade compatível: ${person.seniority ?? "sinalizada pelo cargo"}.`); }
+    if (!hasTitle) reasons.push("Cargo e senioridade não informados; valide as responsabilidades na fonte.");
     const departmentMatch = departments.find((term) => term.length > 2 && profileEvidence.includes(term));
     if (departmentMatch) { score += 12; reasons.push(`Área relacionada ao contexto comprador: ${departmentMatch}.`); }
     const keywordMatches = keywords.filter((term) => term.length > 3 && profileEvidence.includes(term)).slice(0, 2);

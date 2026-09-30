@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_HUNTING_RESULTS, type CollectionSummary } from "@/lib/hunting/pagination";
 
 export const employeeRanges = ["0-9", "10-19", "20-49", "50-99", "100-249", "250-499", "500-999", "1000-4999", "5000-9999", "10000+"] as const;
 export const revenueRanges = ["< 500K", "500K-10M", "10M-50M", "50M-100M", "100M-500M", "500M-1B", "1B+"] as const;
@@ -38,7 +39,7 @@ export const personSearchSchema = commonSchema.extend({
     locations: z.array(z.string().trim().min(2)).max(10).default([]),
     profileKeywords: z.array(z.string().trim().min(2)).max(15).default([]),
     desiredDecisionRole: z.enum(decisionRoles).default("Decisor funcional"),
-    quantity: z.number().int().min(5).max(50).default(20),
+    quantity: z.number().int().min(5).max(MAX_HUNTING_RESULTS).default(50),
     includeBroadDiscovery: z.boolean().default(false),
   }),
 });
@@ -110,6 +111,7 @@ export type HuntingPerson = {
 };
 
 export type DecisionMakerResult = {
+  collection?: CollectionSummary;
   mode: "companies" | "people";
   queryId: string;
   generatedAt: string;

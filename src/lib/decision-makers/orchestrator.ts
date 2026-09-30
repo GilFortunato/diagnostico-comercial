@@ -13,6 +13,7 @@ import { applyAiRanking, refineDecisionMakerRanking } from "@/lib/decision-maker
 import { mergePeople, normalizeCompanies, normalizePeople, pickString } from "@/lib/decision-makers/normalization";
 import { rankCompanies, rankPeople, targetRolesNotFound } from "@/lib/decision-makers/ranking";
 import { expandRoleFamilies } from "@/lib/decision-makers/roleIntelligence";
+import { collectHuntingPages, collectionMessage, type CollectionSummary } from "@/lib/hunting/pagination";
 import type { DecisionMakerResult, DecisionMakerSearchInput, HuntingPerson, PersonSearchInput } from "@/lib/decision-makers/search";
 import {
   manusCompaniesToRawItems,
@@ -132,14 +133,15 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   const filters = { ...input.filters, roles: expandRoleFamilies(input.filters.roles) };
   const expandedInput: PersonSearchInput = { ...input, filters };
   const warnings: string[] = [];
-  let primaryItems: unknown[] = [];
+  let primaryItems: HuntingPerson[] = [];
   let fallbackItems: unknown[] = [];
   let companyItems: unknown[] = [];
   let primaryFailed = false;
   let fallbackFailed = false;
   let fallbackUsed = false;
   let manusUsed = false;
-  let primarySource = "Funcionários públicos via Dami Studio";
+  let primarySource = "Funcionários públicos via Harvest";
+  let collection: CollectionSummary | undefined;
 
   try {
     companyItems = await deps.researchCompanies(input.filters.companyLinkedinUrls);
@@ -148,16 +150,29 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   }
 
   try {
-    primaryItems = await deps.discoverHarvestPeople(expandedInput);
+    const collected = await collectHuntingPages({
+      target: input.filters.quantity,
+      timeoutMs: 120_000,
+      key: (person: HuntingPerson) => person.linkedinUrl.toLowerCase().replace(/\/$/, ""),
+      fetchPage: async (page) => {
+        const raw = await deps.discoverHarvestPeople(expandedInput, page);
+        const normalized = normalizePeople(raw, primarySource, input.filters.desiredDecisionRole);
+        if (raw.length && !normalized.length) throw new Error("Formato de perfis não reconhecido.");
+        return { items: normalized, exhausted: raw.length === 0 };
+      },
+    });
+    primaryItems = collected.items;
+    collection = collected.summary;
   } catch {
     primaryFailed = true;
     warnings.push("O Actor principal de funcionários não respondeu; a segunda fonte foi acionada automaticamente.");
   }
 
-  if (!primaryItems.length || input.filters.includeBroadDiscovery) {
+  if (primaryItems.length < input.filters.quantity || input.filters.includeBroadDiscovery) {
     try {
       fallbackItems = await deps.discoverBroadPeople(expandedInput);
       fallbackUsed = fallbackItems.length > 0;
+      if (fallbackUsed) warnings.push("A busca complementar ampliou os cargos dentro das empresas informadas. Confira a aderência de cada pessoa no ranking antes de abordar.");
       if (!primaryItems.length && fallbackUsed) warnings.push("A segunda fonte de funcionários assumiu a descoberta porque a principal não trouxe cobertura.");
     } catch {
       fallbackFailed = true;
@@ -169,12 +184,12 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   if (!primaryItems.length && !fallbackItems.length && primaryFailed && fallbackFailed) {
     warnings.push("Os dois Actors diretos falharam; o Manus foi acionado como último fallback.");
     try {
-      const manusResult = await deps.researchManusPeople(expandedInput);
+      const manusResult = await deps.researchManusPeople(expandedInput, { timeoutMs: 30_000 });
       warnings.push(...manusWarnings(manusResult));
       if (manusResult.status === "success_with_results") {
-        primaryItems = manusPeopleToRawItems(manusResult);
+        primarySource = "Manus · fallback de pesquisa de decisores";
+        primaryItems = normalizePeople(manusPeopleToRawItems(manusResult), primarySource, input.filters.desiredDecisionRole);
         manusUsed = primaryItems.length > 0;
-        if (manusUsed) primarySource = "Manus · fallback de pesquisa de decisores";
       }
     } catch {
       warnings.push("O fallback do Manus também ficou indisponível.");
@@ -182,16 +197,21 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
     if (!primaryItems.length) throw new Error("As fontes de descoberta de pessoas estão indisponíveis no momento.");
   }
 
-  const primaryPeople = normalizePeople(primaryItems, primarySource, input.filters.desiredDecisionRole);
-  const fallbackPeople = normalizePeople(fallbackItems, "Funcionários públicos via Apt Marble", input.filters.desiredDecisionRole);
+  const primaryPeople = primaryItems;
+  const fallbackPeople = normalizePeople(fallbackItems, "Descoberta complementar via Apify", input.filters.desiredDecisionRole);
   if ((primaryItems.length > 0 && primaryPeople.length === 0) || (fallbackItems.length > 0 && fallbackPeople.length === 0 && primaryPeople.length === 0)) {
     throw new Error("A fonte retornou perfis, mas o formato recebido não pôde ser normalizado com segurança.");
   }
 
-  let people = mergePeople(primaryPeople, fallbackPeople).slice(0, input.filters.quantity);
-  people = rankPeople(people, expandedInput);
+  let people: HuntingPerson[] = rankPeople(mergePeople(primaryPeople, fallbackPeople), expandedInput).slice(0, input.filters.quantity);
+  if (collection) {
+    collection = { ...collection, unique: people.length, stopReason: people.length >= input.filters.quantity ? "target_reached" : collection.stopReason };
+    warnings.push(collectionMessage(collection));
+  }
+  console.info("[b2b-hunting] collection completed", { requested: input.filters.quantity, primary: primaryPeople.length, complementary: fallbackPeople.length, unique: people.length, requests: collection?.requests ?? 0 });
+  if (people.some((person) => person.title === "Cargo não informado")) warnings.push("Alguns perfis não informam cargo atual; valide as responsabilidades antes de considerar aderência.");
 
-  const profileResults = await Promise.all(people.slice(0, 5).map(async (person) => {
+  const profileResults = await Promise.all(people.slice(0, manusUsed ? 0 : 5).map(async (person) => {
     try {
       const profileItems = await deps.enrichPersonProfile(person.linkedinUrl);
       return applyProfileEvidence(person, profileItems) ? 1 : 0;
@@ -202,7 +222,7 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   }));
   const profileEnrichments = profileResults.reduce<number>((total, current) => total + current, 0);
 
-  const postResults = await Promise.all(people.slice(0, 3).map(async (person) => {
+  const postResults = await Promise.all(people.slice(0, manusUsed ? 0 : 3).map(async (person) => {
     try {
       const postItems = await deps.enrichPersonPosts(person.linkedinUrl);
       const signals = extractPostSignals(postItems);
@@ -219,7 +239,7 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   people = rankPeople(people, expandedInput);
 
   let aiNextAction: DecisionMakerResult["nextBestAction"] | null = null;
-  if (people.length) {
+  if (people.length && !manusUsed) {
     try {
       const refinement = await deps.refineRanking(people, input.objective, unit.name);
       if (refinement) {
@@ -237,13 +257,14 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   const discoveryTitle = manusUsed
     ? "Manus · fallback de decisores"
     : fallbackUsed && !primaryPeople.length
-      ? "Apt Marble · funcionários públicos"
+      ? "Apify · descoberta complementar"
       : fallbackUsed
-        ? "Dami Studio + Apt Marble · funcionários públicos"
-        : "Dami Studio · funcionários públicos";
+        ? "Harvest + Apify complementar · funcionários públicos"
+        : "Harvest · funcionários públicos";
 
   return {
     mode: "people",
+    collection,
     queryId,
     generatedAt: deps.now().toISOString(),
     fromCache: false,
@@ -282,6 +303,8 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
 function applyProfileEvidence(person: HuntingPerson, items: unknown[]) {
   const record = items.find((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)));
   if (!record) return false;
+  const detail = normalizePeople([record], person.source, person.probableDecisionRole).find((item) => item.linkedinUrl === person.linkedinUrl);
+  if (detail && person.title === "Cargo não informado" && detail.title !== "Cargo não informado") person.title = detail.title;
   const summary = pickString(record, ["about", "summary", "description", "headline"]);
   if (summary) person.profileSummary = summary;
   const location = pickString(record, ["location", "locationName", "geo"]);

@@ -62,7 +62,7 @@ export async function researchB2bCompaniesWithManus(input: CompanySearchInput) {
   });
 }
 
-export async function researchB2bPeopleWithManus(input: PersonSearchInput) {
+export async function researchB2bPeopleWithManus(input: PersonSearchInput, options: { timeoutMs?: number } = {}) {
   const discoveryMax = Math.min(50, Math.max(25, input.filters.quantity * 2));
   const fuzzyTerms = uniqueStrings([...input.filters.roles, ...input.filters.profileKeywords]).slice(0, 8);
   const fuzzyQuery = fuzzyTerms.join(" OR ");
@@ -94,6 +94,7 @@ export async function researchB2bPeopleWithManus(input: PersonSearchInput) {
   ].join("\n");
 
   return runManusStructuredTask<PeoplePayload>({
+    timeoutMs: options.timeoutMs,
     prompt,
     schema: peoplePayloadSchema,
     title: "Share AI · B2B Hunting · Pessoas",

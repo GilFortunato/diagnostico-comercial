@@ -60,11 +60,13 @@ export async function runManusStructuredTask<T>({
   schema,
   title,
   countResults,
+  timeoutMs: requestedTimeoutMs,
 }: {
   prompt: string;
   schema: Record<string, unknown>;
   title: string;
   countResults: (value: T) => number;
+  timeoutMs?: number;
 }): Promise<ManusTaskResult<T>> {
   const startedAt = Date.now();
   const resolution = await resolveManusCredential();
@@ -132,7 +134,7 @@ export async function runManusStructuredTask<T>({
     }
 
     console.info("[manus-hunting]", { event: "task_started", taskId, apifyConnectorUsed: true, connectorId });
-    const timeoutMs = manusTimeoutMs();
+    const timeoutMs = requestedTimeoutMs === undefined ? manusTimeoutMs() : Math.max(1_000, Math.min(manusTimeoutMs(), requestedTimeoutMs));
     const seenToolActions = new Set<string>();
     let stoppedAt: number | null = null;
 
