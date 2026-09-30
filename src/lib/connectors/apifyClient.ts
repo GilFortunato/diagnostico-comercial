@@ -11,18 +11,19 @@ export type ApifyRunMetadata = {
   itemCount: number;
 };
 
-export async function runApifyActor(actorKey: ApifyActorKey, input: Record<string, unknown>) {
+export async function runApifyActor(actorKey: ApifyActorKey, input: Record<string, unknown>, options: { timeoutMs?: number; allowFallback?: boolean } = {}) {
   const resolution = await resolveApifyCredential();
   if (!resolution.available || !resolution.credential) throw new PlatformResourceUnavailableError();
 
-  if (actorKey !== "linkedinProfileSearch") {
-    return runActorRequest(actorKey, input, resolution);
+  const deadline = Date.now() + Math.min(130_000, options.timeoutMs ?? 130_000);
+  if (actorKey !== "linkedinProfileSearch" || options.allowFallback === false || Number(input.startPage ?? 1) > 1) {
+    return runActorRequest(actorKey, input, resolution, deadline);
   }
 
   // Harvest continua sendo a fonte principal. Quando ele responde vazio ou falha,
   // a mesma credencial Apify é reaproveitada em uma fonte pública de contingência.
   try {
-    const primaryItems = await runActorRequest(actorKey, input, resolution);
+    const primaryItems = await runActorRequest(actorKey, input, resolution, deadline);
     if (primaryItems.length) return primaryItems;
     console.info("[apify] profile search returned empty; activating public fallback", {
       actorKey,
@@ -36,25 +37,28 @@ export async function runApifyActor(actorKey: ApifyActorKey, input: Record<strin
       masked: resolution.masked,
     });
     try {
-      return await runActorRequest("linkedinProfileSearchFallback", toPublicProfileFallbackInput(input), resolution);
+      return await runActorRequest("linkedinProfileSearchFallback", toPublicProfileFallbackInput(input), resolution, deadline);
     } catch {
       throw error;
     }
   }
 
-  return runActorRequest("linkedinProfileSearchFallback", toPublicProfileFallbackInput(input), resolution);
+  return runActorRequest("linkedinProfileSearchFallback", toPublicProfileFallbackInput(input), resolution, deadline);
 }
 
 async function runActorRequest(
   actorKey: ApifyActorKey,
   input: Record<string, unknown>,
   resolution: PlatformCredentialResolution,
+  deadline: number,
 ) {
   if (!resolution.credential) throw new PlatformResourceUnavailableError();
 
   const configuredId = configuredActorId(actorKey);
   const actorId = configuredId ?? apifyActors[actorKey].actorId;
-  const endpoint = `https://api.apify.com/v2/acts/${encodeActorId(actorId)}/run-sync-get-dataset-items?timeout=120`;
+  const timeoutMs = deadline - Date.now();
+  if (timeoutMs < 1_000) throw new PlatformResourceUnavailableError();
+  const endpoint = `https://api.apify.com/v2/acts/${encodeActorId(actorId)}/run-sync-get-dataset-items?timeout=${Math.min(120, Math.floor(timeoutMs / 1_000))}`;
 
   let response: Response;
   try {
@@ -65,7 +69,7 @@ async function runActorRequest(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(input),
-      signal: AbortSignal.timeout(130_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch {
     console.warn("[apify] actor request failed before response", {
@@ -92,7 +96,8 @@ async function runActorRequest(
   }
 
   const payload = (await response.json()) as unknown;
-  const items = Array.isArray(payload) ? payload : [];
+  if (!Array.isArray(payload)) throw new PlatformResourceUnavailableError();
+  const items = payload;
   console.info("[apify] actor completed", {
     actorKey,
     actorId,
@@ -103,17 +108,16 @@ async function runActorRequest(
   return items;
 }
 
-function toPublicProfileFallbackInput(input: Record<string, unknown>) {
+export function toPublicProfileFallbackInput(input: Record<string, unknown>) {
   const currentJobTitles = stringArray(input.currentJobTitles);
   const currentCompanies = stringArray(input.currentCompanies).map(companySearchName).filter(Boolean);
-  const searchParts = [typeof input.searchQuery === "string" ? input.searchQuery.trim() : "", ...currentJobTitles]
-    .filter(Boolean);
   const maxItems = typeof input.maxItems === "number" && Number.isFinite(input.maxItems)
     ? Math.min(120, Math.max(1, Math.floor(input.maxItems)))
     : 25;
 
   return compactInput({
-    searchQuery: [...new Set(searchParts)].join(" OR ") || undefined,
+    searchQuery: typeof input.searchQuery === "string" ? input.searchQuery.trim().slice(0, 300) || undefined : undefined,
+    currentJobTitles: [...new Set(currentJobTitles)].slice(0, 20),
     locations: stringArray(input.locations).slice(0, 20),
     currentCompanies: currentCompanies.slice(0, 10),
     maxItems,

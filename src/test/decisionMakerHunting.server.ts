@@ -8,6 +8,7 @@ import { clearDecisionMakerCache, executeDecisionMakerSearch } from "@/lib/decis
 import { rankPeople, targetRolesNotFound } from "@/lib/decision-makers/ranking";
 import { addRoleSelection, expandRoleFamilies, removeRoleSelection } from "@/lib/decision-makers/roleIntelligence";
 import { buildBroadPeopleInput, buildCompanyDiscoveryInput, buildHarvestPeopleInput } from "@/lib/connectors/apifyHunting";
+import { toPublicProfileFallbackInput } from "@/lib/connectors/apifyClient";
 import { companySearchSchema, personSearchSchema, type DecisionMakerResult } from "@/lib/decision-makers/search";
 import { conservativeJobDna } from "@/lib/hr-hunting/jobDna";
 import { buildHrHuntingWorkbook } from "@/lib/hr-hunting/exportWorkbook";
@@ -107,13 +108,13 @@ test("7. empresa específica usa detalhes corporativos e employees antes do enri
   assert.deepEqual(calls.slice(0, 2), ["company", "employees"]);
 });
 
-test("8. descoberta complementar não é necessária para o fluxo account-based", async () => {
+test("8. descoberta complementar tenta completar o resultado curto e preserva a fonte principal se falhar", async () => {
   clearDecisionMakerCache();
   let broadCalls = 0;
   const result = await executeDecisionMakerSearch(personInput, dependencies({
     discoverBroadPeople: async () => { broadCalls += 1; throw new Error("indisponível"); },
   }));
-  assert.equal(broadCalls, 0);
+  assert.equal(broadCalls, 1);
   assert.equal(result.people.length, 1);
 });
 
@@ -247,7 +248,7 @@ test("22. repetição imediata usa cache e atualizar resultados ignora cache", a
   assert.equal(first.fromCache, false);
   assert.equal(second.fromCache, true);
   assert.equal(refreshed.fromCache, false);
-  assert.equal(employeeCalls, 2);
+  assert.equal(employeeCalls, 6); // Three pages per run; the cached search makes no calls.
 });
 
 test("23. busca de empresas envia somente campos suportados pelo Harvest Company Search", () => {
@@ -319,6 +320,73 @@ test("28. normalização de empresas entende companySize e headquarters do Harve
   assert.equal(companies[0].name, "Corpus");
   assert.equal(companies[0].employeeRange, "201-500 employees");
   assert.equal(companies[0].location, "São Paulo, Brasil");
+});
+
+test("Corpus: páginas curtas completam 50 e ranking considera todo o último lote", async () => {
+  clearDecisionMakerCache();
+  const pages: number[] = [];
+  const input = personSearchSchema.parse({ ...personInput, filters: { ...personInput.filters, companyLinkedinUrls: ["https://www.linkedin.com/company/grupo-corpus"], companyNames: ["Grupo Corpus"], quantity: 50 } });
+  const result = await executeDecisionMakerSearch(input, dependencies({
+    discoverHarvestPeople: async (actual: typeof input, page: { startPage: number }) => {
+      assert.deepEqual(actual.filters.companyLinkedinUrls, input.filters.companyLinkedinUrls);
+      pages.push(page.startPage);
+      const offset = page.startPage === 1 ? 0 : 30;
+      return Array.from({ length: 30 }, (_, i) => rawPerson({ fullName: `Fixture Corpus ${offset + i}`, companyName: "Grupo Corpus", linkedinUrl: `https://www.linkedin.com/in/corpus-fixture-${offset + i}`, jobTitle: offset + i === 59 ? "Head de T&D" : "Assistente" }));
+    },
+  }));
+  assert.deepEqual(pages, [1, 3]);
+  assert.equal(result.people.length, 50);
+  assert.ok(result.people.some((person) => person.name === "Fixture Corpus 59"));
+  assert.equal(result.collection?.stopReason, "target_reached");
+});
+
+test("B2B preserva perfis com nome e LinkedIn quando a descoberta não informa cargo", async () => {
+  clearDecisionMakerCache();
+  const result = await executeDecisionMakerSearch(personInput, dependencies({
+    discoverHarvestPeople: async () => [rawPerson({ jobTitle: undefined, location: { linkedinText: "Indaiatuba, São Paulo, Brasil" }, about: "Experiência profissional pública" })],
+  }));
+  assert.equal(result.people.length, 1);
+  assert.equal(result.people[0].title, "Cargo não informado");
+  assert.equal(result.people[0].location, "Indaiatuba, São Paulo, Brasil");
+  assert.equal(result.people[0].profileSummary, "Experiência profissional pública");
+  assert.ok(result.warnings.some((message) => message.includes("não informam cargo")));
+});
+
+test("fallback Apify usa campos de cargo e respeita o limite de 300 caracteres", () => {
+  const titles = Array.from({ length: 30 }, (_, index) => `Director of Human Resources ${index}`);
+  const payload = toPublicProfileFallbackInput({ currentJobTitles: titles, currentCompanies: ["https://www.linkedin.com/company/grupo-corpus"], searchQuery: "x".repeat(520), maxItems: 50 });
+  assert.equal((payload.searchQuery as string).length, 300);
+  assert.deepEqual(payload.currentJobTitles, titles.slice(0, 20));
+  assert.deepEqual(payload.currentCompanies, ["grupo corpus"]);
+  assert.equal(payload.maxItems, 50);
+  assert.equal(toPublicProfileFallbackInput({ currentJobTitles: titles }).searchQuery, undefined);
+});
+
+test("B2B limita o último fallback e entrega seus perfis sem outra rodada de enriquecimento", async () => {
+  clearDecisionMakerCache();
+  let enrichmentCalls = 0;
+  const result = await executeDecisionMakerSearch(personInput, dependencies({
+    discoverHarvestPeople: async () => { throw new Error("offline"); },
+    discoverBroadPeople: async () => { throw new Error("offline"); },
+    researchManusPeople: async (_input: unknown, options: { timeoutMs: number }) => {
+      assert.equal(options.timeoutMs, 30_000);
+      return { status: "success_with_results", warnings: [], apifyConnectorUsed: true, value: { people: [{ name: "Pessoa fixture", currentTitle: "Diretor de RH", company: "Acme", location: "Brasil", linkedinUrl: "https://www.linkedin.com/in/manus-fixture", professionalEmail: "", professionalPhone: "", professionalSummary: "Experiência profissional", evidence: [] }], limitations: [] } };
+    },
+    enrichPersonProfile: async () => { enrichmentCalls += 1; return []; },
+    enrichPersonPosts: async () => { enrichmentCalls += 1; return []; },
+    refineRanking: async () => { enrichmentCalls += 1; return null; },
+  }));
+  assert.equal(result.people.length, 1);
+  assert.equal(enrichmentCalls, 0);
+});
+
+test("B2B complementa resultado curto e não duplica pessoas entre Actors", async () => {
+  clearDecisionMakerCache();
+  const result = await executeDecisionMakerSearch(personInput, dependencies({
+    discoverBroadPeople: async () => [rawPerson(), rawPerson({ fullName: "Nova Pessoa", linkedinUrl: "https://www.linkedin.com/in/new-fixture" })],
+  }));
+  assert.equal(result.people.length, 2);
+  assert.equal(new Set(result.people.map((person) => person.linkedinUrl)).size, 2);
 });
 
 function dependencies(overrides: Record<string, unknown> = {}) {

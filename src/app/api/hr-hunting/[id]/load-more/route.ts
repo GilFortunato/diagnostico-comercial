@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authorizeModule } from "@/lib/auth/moduleRequest";
 import { loadMoreHrHuntingCandidates } from "@/lib/hr-hunting/loadMore";
+import { MAX_HUNTING_RESULTS } from "@/lib/hunting/pagination";
 
 export const maxDuration = 300;
 
 const loadMoreSchema = z.object({
   batchSize: z.number().int().min(5).max(25).default(20),
-  quantity: z.number().int().min(5).max(50).default(20),
+  quantity: z.number().int().min(5).max(MAX_HUNTING_RESULTS).default(50),
   currentTitle: z.string().trim().max(180).optional().or(z.literal("")),
   seniority: z.array(z.enum(["manager", "director", "vp", "c_level", "owner"])).max(5).default([]),
   location: z.string().trim().max(180).optional().or(z.literal("")),

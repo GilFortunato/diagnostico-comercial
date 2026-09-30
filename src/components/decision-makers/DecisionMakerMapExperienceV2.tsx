@@ -25,7 +25,7 @@ export function DecisionMakerMapExperienceV2() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
 
-  const [industries, setIndustries] = useState("Recursos Humanos, Educação corporativa");
+  const [industries, setIndustries] = useState("");
   const [country, setCountry] = useState("Brazil");
   const [states, setStates] = useState("");
   const [companyKeywords, setCompanyKeywords] = useState("");
@@ -37,7 +37,7 @@ export function DecisionMakerMapExperienceV2() {
   const [rolesText, setRolesText] = useState(getSuggestedRoles(initialUnit.id).slice(0, 5).join(", "));
   const [locations, setLocations] = useState("Brasil");
   const [profileKeywords, setProfileKeywords] = useState("");
-  const [peopleQuantity, setPeopleQuantity] = useState(20);
+  const [peopleQuantity, setPeopleQuantity] = useState(50);
   const [includeBroadDiscovery, setIncludeBroadDiscovery] = useState(false);
 
   const selectedCompanies = useMemo(
@@ -106,7 +106,7 @@ export function DecisionMakerMapExperienceV2() {
               companyNames: targetCompanyNames,
               roles: splitTerms(rolesText),
               departments: [],
-              seniority: ["manager", "director", "vp", "c_level"],
+              seniority: [],
               locations: splitTerms(locations),
               profileKeywords: splitTerms(profileKeywords),
               desiredDecisionRole: "Decisor funcional",
@@ -237,8 +237,9 @@ export function DecisionMakerMapExperienceV2() {
               <Area label="Cargos e famílias" value={rolesText} setValue={setRolesText} />
               <Field label="Localizações" value={locations} setValue={setLocations} />
               <Area label="Palavras-chave profissionais" value={profileKeywords} setValue={setProfileKeywords} />
-              <NumberField label="Resultados iniciais" value={peopleQuantity} setValue={setPeopleQuantity} />
-              <label className="flex items-start gap-2 text-sm text-zinc-600"><input type="checkbox" checked={includeBroadDiscovery} onChange={(event) => setIncludeBroadDiscovery(event.target.checked)} className="mt-1" />Usar descoberta complementar quando necessário</label>
+              <NumberField label="Pessoas desejadas (até 50)" value={peopleQuantity} setValue={setPeopleQuantity} />
+              <p className="text-xs leading-5 text-zinc-500">Cargos equivalentes ampliam a busca nas empresas e localizações informadas. Palavras-chave priorizam o ranking. A quantidade depende da cobertura da fonte.</p>
+              <label className="flex items-start gap-2 text-sm text-zinc-600"><input type="checkbox" checked={includeBroadDiscovery} onChange={(event) => setIncludeBroadDiscovery(event.target.checked)} className="mt-1" />Consultar fonte complementar mesmo após atingir a meta</label>
             </div>}
             <button type="button" onClick={() => runSearch()} disabled={isSearching || !canSearch} className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[var(--share-green-950)] px-4 text-sm font-semibold text-white disabled:opacity-50">
               {isSearching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}

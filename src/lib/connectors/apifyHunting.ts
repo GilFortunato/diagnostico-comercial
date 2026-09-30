@@ -2,6 +2,7 @@ import "server-only";
 import { apifyActors } from "@/lib/connectors/apifyActors";
 import { runApifyActor } from "@/lib/connectors/apifyClient";
 import type { CompanySearchInput, PersonSearchInput } from "@/lib/decision-makers/search";
+import type { HuntingPage } from "@/lib/hunting/pagination";
 
 const harvestSeniorityIds: Record<PersonSearchInput["filters"]["seniority"][number], string[]> = {
   manager: ["200", "210"],
@@ -59,18 +60,15 @@ export function buildBroadPeopleInput(input: PersonSearchInput) {
   });
 }
 
-export function buildPrimaryPeopleRecallInput(input: PersonSearchInput) {
-  const searchTerms = uniqueStrings([
-    ...input.filters.roles,
-    ...input.filters.profileKeywords,
-  ]).slice(0, 8);
-
+export function buildPrimaryPeopleRecallInput(input: PersonSearchInput, page?: HuntingPage) {
   return compactInput({
     ...apifyActors.linkedinCompanyEmployees.defaultInput,
     companies: input.filters.companyLinkedinUrls,
     profileScraperMode: "Short ($4 per 1k)",
-    maxItems: discoveryLimit(input.filters.quantity),
-    searchQuery: searchTerms.length ? searchTerms.join(" OR ") : undefined,
+    maxItems: page?.maxItems ?? discoveryLimit(input.filters.quantity),
+    ...(page ? { startPage: page.startPage, takePages: page.takePages } : {}),
+    jobTitles: uniqueStrings(input.filters.roles).slice(0, 50),
+    locations: input.filters.locations,
   });
 }
 
@@ -88,11 +86,6 @@ export function buildHarvestPeopleRecallInput(input: PersonSearchInput) {
 }
 
 export function buildBroadPeopleRecallInput(input: PersonSearchInput) {
-  const searchTerms = uniqueStrings([
-    ...input.filters.roles,
-    ...input.filters.profileKeywords,
-  ]).slice(0, 8);
-
   return compactInput({
     ...apifyActors.linkedinProfileSearch.defaultInput,
     profileScraperMode: "Short",
@@ -100,7 +93,6 @@ export function buildBroadPeopleRecallInput(input: PersonSearchInput) {
     currentCompanies: input.filters.companyLinkedinUrls,
     currentJobTitles: uniqueStrings(input.filters.roles).slice(0, 20),
     locations: uniqueStrings(input.filters.locations).slice(0, 20),
-    searchQuery: searchTerms.length ? searchTerms.join(" OR ") : undefined,
   });
 }
 
@@ -108,8 +100,8 @@ export async function discoverCompanies(input: CompanySearchInput) {
   return runApifyActor("linkedinCompanySearch", buildCompanyDiscoveryInput(input));
 }
 
-export async function discoverHarvestPeople(input: PersonSearchInput) {
-  const items = await runApifyActor("linkedinCompanyEmployees", buildPrimaryPeopleRecallInput(input));
+export async function discoverHarvestPeople(input: PersonSearchInput, page?: HuntingPage) {
+  const items = await runApifyActor("linkedinCompanyEmployees", buildPrimaryPeopleRecallInput(input, page), { timeoutMs: page?.timeoutMs });
   return items.filter(isPublicPersonRow);
 }
 
@@ -117,20 +109,26 @@ export async function researchCompanies(companyLinkedinUrls: string[]) {
   return runApifyActor("linkedinCompanyDetails", {
     ...apifyActors.linkedinCompanyDetails.defaultInput,
     companies: companyLinkedinUrls,
-  });
+  }, { timeoutMs: 20_000 });
 }
 
 export async function discoverBroadPeople(input: PersonSearchInput) {
+  let profiles: unknown[] = [];
   try {
-    const profileItems = await runApifyActor("linkedinProfileSearch", buildBroadPeopleRecallInput(input));
-    const profiles = profileItems.filter(isPublicPersonRow);
-    if (profiles.length) return profiles;
+    const profileItems = await runApifyActor("linkedinProfileSearch", buildBroadPeopleRecallInput(input), { timeoutMs: 25_000, allowFallback: false });
+    profiles = profileItems.filter(isPublicPersonRow);
+    if (profiles.length >= input.filters.quantity) return profiles;
   } catch {
     // A fonte alternativa por empresa ainda pode responder.
   }
 
-  const employeeItems = await runApifyActor("linkedinCompanyEmployeesFallback", buildFallbackPeopleRecallInput(input));
-  return employeeItems.filter(isPublicPersonRow);
+  try {
+    const employeeItems = await runApifyActor("linkedinCompanyEmployeesFallback", buildFallbackPeopleRecallInput(input), { timeoutMs: 25_000 });
+    return [...profiles, ...employeeItems.filter(isPublicPersonRow)];
+  } catch (error) {
+    if (profiles.length) return profiles;
+    throw error;
+  }
 }
 
 export async function enrichPersonProfile(linkedinUrl: string) {
@@ -138,7 +136,7 @@ export async function enrichPersonProfile(linkedinUrl: string) {
     ...apifyActors.linkedinProfile.defaultInput,
     urls: [linkedinUrl],
     queries: [linkedinUrl],
-  });
+  }, { timeoutMs: 15_000 });
 }
 
 export async function enrichPersonPosts(linkedinUrl: string) {
@@ -150,7 +148,7 @@ export async function enrichPersonPosts(linkedinUrl: string) {
     includeReposts: true,
     scrapeComments: false,
     scrapeReactions: false,
-  });
+  }, { timeoutMs: 15_000 });
 }
 
 function isPublicPersonRow(value: unknown) {

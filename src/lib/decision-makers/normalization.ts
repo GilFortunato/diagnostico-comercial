@@ -55,7 +55,7 @@ export function normalizePeople(items: unknown[], source: string, desiredRole: D
       || pickString(currentPosition, ["companyName", "company.name"])
       || pickString(currentExperience, ["companyName", "company.name"]);
     const linkedinUrl = normalizeLinkedInUrl(pickString(item, ["linkedinUrl", "linkedin_url", "linkedinProfileUrl", "profileUrl", "navigationUrl", "url", "profile.linkedinUrl"]));
-    if (!fullName || !title || !linkedinUrl || normalizeText(fullName).includes("pessoa a identificar")) return accumulator;
+    if (!fullName || !linkedinUrl || normalizeText(fullName).includes("pessoa a identificar")) return accumulator;
 
     const resolvedCompany = company || "Empresa não informada";
     const location = joinLocation(item) || pickString(currentExperience, ["location"]);
@@ -67,12 +67,12 @@ export function normalizePeople(items: unknown[], source: string, desiredRole: D
     accumulator.push({
       id: stableId(linkedinUrl),
       name: fullName,
-      title,
+      title: title || "Cargo não informado",
       company: resolvedCompany,
       linkedinUrl,
       location: location || undefined,
       department: department || undefined,
-      seniority: inferSeniority(title),
+      seniority: title ? inferSeniority(title) : undefined,
       probableDecisionRole: inferDecisionRole(title, desiredRole),
       fit: "Média" as const,
       fitScore: 0,
@@ -162,7 +162,7 @@ function joinCompanyLocation(record: UnknownRecord) {
 }
 
 function joinLocation(record: UnknownRecord) {
-  const direct = pickString(record, ["location", "locationName", "geo"]);
+  const direct = pickString(record, ["location", "locationName", "geo", "location.linkedinText", "location.parsed.text"]);
   if (direct) return direct;
   return [pickString(record, ["city", "location.city"]), pickString(record, ["state", "location.state"]), pickString(record, ["country", "location.country"])].filter(Boolean).join(", ");
 }

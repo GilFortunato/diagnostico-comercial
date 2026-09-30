@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_HUNTING_RESULTS } from "@/lib/hunting/pagination";
 
 export const criterionKinds = ["obrigatório", "desejável", "não relevante"] as const;
 export const evidenceStates = ["confirmado", "provável", "inferência", "não verificado"] as const;
@@ -42,7 +43,7 @@ export const createJobSchema = z.object({
 
 export const updateJobDnaSchema = z.object({ jobDna: jobDnaSchema });
 export const executeSearchSchema = z.object({
-  quantity: z.number().int().min(5).max(50).default(20),
+  quantity: z.number().int().min(5).max(MAX_HUNTING_RESULTS).default(50),
   currentTitle: z.string().trim().max(180).optional().or(z.literal("")),
   seniority: z.array(z.enum(["manager", "director", "vp", "c_level", "owner"])).max(5).default([]),
   location: z.string().trim().max(180).optional().or(z.literal("")),

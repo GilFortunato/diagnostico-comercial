@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { Prisma, type ConfidenceLevel } from "@prisma/client";
 import { runApifyActor } from "@/lib/connectors/apifyClient";
 import { runManusStructuredTask } from "@/lib/connectors/manusClient";
@@ -8,8 +9,11 @@ import {
   findOwnedHrHuntingSearch,
   normalizeCandidates,
   rankCandidates,
+  buildTitleFamily,
 } from "@/lib/hr-hunting/service";
 import type { EvidenceState, HrCandidate, HrHuntingSearchSnapshot } from "@/lib/hr-hunting/types";
+import { candidateKey, collectHrDiscovery, readDiscoveryState, type HrDiscoveryState } from "@/lib/hr-hunting/pagedDiscovery";
+import { collectionMessage } from "@/lib/hunting/pagination";
 
 type SearchInput = {
   quantity: number;
@@ -38,48 +42,53 @@ type Round = {
   location?: string;
 };
 
-export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: string, input: SearchInput) {
+export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: string, input: SearchInput, options: { append?: boolean } = {}) {
   const search = await findOwnedHrHuntingSearch(id, ownerId);
   if (!search) return null;
 
-  const fallback = fallbackPlan(search, input);
-  const manus = await createPlanWithManus(search, input, fallback);
-  const plan = manus.plan;
-  const warnings = [...manus.warnings];
-  const rounds = buildRounds(search, input, plan);
-  const discovered = new Map<string, HrCandidate>();
-  const rawSnapshot: unknown[] = [];
-  let successfulRounds = 0;
-  let connectorFailed = false;
-
-  for (const round of rounds) {
-    const query = buildQuery(round);
-    if (!query) continue;
+  const fingerprint = createHash("sha256").update(JSON.stringify({ currentTitle: input.currentTitle, seniority: input.seniority, location: input.location, keywords: input.keywords, dna: search.jobDna })).digest("hex");
+  const previous = options.append ? await getPrisma().hrHuntingSearch.findFirst({ where: { id, ownerId }, select: { sourceSnapshot: true } }) : null;
+  let state = readDiscoveryState(previous?.sourceSnapshot, fingerprint);
+  const warnings: string[] = [];
+  if (!state) {
+    const manus = await createPlanWithManus(search, input, fallbackPlan(search, input));
+    warnings.push(...manus.warnings);
+    const rounds = buildRounds(search, input, manus.plan).map((round) => compact({
+      profileScraperMode: "Short", currentJobTitles: round.titles, locations: round.location ? [round.location] : [],
+    }));
+    state = {
+      version: 1, fingerprint, pending: [],
+      rounds: [...new Map(rounds.map((actorInput) => [JSON.stringify(actorInput), actorInput])).values()]
+        .map((actorInput) => ({ input: actorInput, nextPage: 1, exhausted: false })),
+    };
+  }
+  const collected = await collectHrDiscovery({
+    state, target: input.quantity,
+    excludedKeys: options.append ? new Set(search.candidates.map(candidateKey)) : undefined,
+    normalize: normalizeCandidates,
+    fetchPage: (actorInput, page) => runApifyActor("linkedinProfileSearch", {
+      ...actorInput, startPage: page.startPage, takePages: page.takePages, maxItems: page.maxItems,
+    }, { timeoutMs: page.timeoutMs, allowFallback: false }),
+  });
+  let pool = collected.items;
+  if (pool.length < input.quantity && !collected.state.fallbackComplete) {
     try {
-      const items = await runApifyActor("linkedinProfileSearch", compact({
-        profileScraperMode: "Short",
-        maxItems: Math.min(50, Math.max(25, input.quantity * 2)),
-        takePages: 2,
-        searchQuery: query,
-        locations: round.location ? [round.location] : [],
-      }));
-      successfulRounds += 1;
-      rawSnapshot.push(...items);
-      for (const candidate of normalizeCandidates(items)) mergeCandidate(discovered, candidate);
-
-      const strict = applyCandidateQualityGate([...discovered.values()], search.jobDna, evaluationInput(search, input));
-      if (strict.eligible.length >= Math.min(input.quantity, Math.max(5, Math.ceil(input.quantity * 0.6)))) break;
-    } catch (error) {
-      connectorFailed = true;
-      warnings.push(`A rodada ${round.label} ficou indisponível; a busca continuou com as demais rodadas quando possível.`);
-      console.warn("[hr-hunting] safe strategic round failed", {
-        round: round.label,
-        errorName: error instanceof Error ? error.name : "UnknownError",
-      });
+      const raw = await runApifyActor("linkedinProfileSearchFallback", compact({
+        searchQuery: input.currentTitle?.trim() || search.jobDna.title || search.title,
+        locations: (input.location?.trim() || search.jobDna.location) ? [input.location?.trim() || search.jobDna.location] : [],
+        maxItems: 50,
+      }), { timeoutMs: 15_000 });
+      const existing = new Set(options.append ? search.candidates.map(candidateKey) : []);
+      pool = [...new Map([...pool, ...normalizeCandidates(raw)].filter((candidate) => !existing.has(candidateKey(candidate))).map((candidate) => [candidateKey(candidate), candidate])).values()];
+      collected.state.fallbackComplete = true;
+    } catch {
+      warnings.push("A fonte complementar Apify ficou indisponível; os perfis já encontrados foram preservados.");
     }
   }
-
-  let pool = [...discovered.values()];
+  collected.summary.unique = pool.length;
+  if (pool.length >= input.quantity) collected.summary.stopReason = "target_reached";
+  warnings.push(collectionMessage(collected.summary));
+  console.info("[hr-hunting] collection completed", { ...collected.summary });
   if (pool.length) pool = await enrich(pool, input, warnings);
 
   const evalInput = evaluationInput(search, input);
@@ -91,16 +100,16 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
   if (quality.rejected.length) {
     warnings.push(`${quality.rejected.length} perfil(is) vieram da expansão e permaneceram visíveis com aderência calculada contra a vaga original.`);
   }
-  warnings.push(`Estratégia executada em ${successfulRounds} rodada(s), com ${plan.equivalentTitles.length} título(s) equivalente(s) e ${plan.adjacentTitles.length} adjacente(s).`);
-  if (plan.rationale) warnings.push(plan.rationale);
+  const selected = new Set(candidates.map(candidateKey));
+  const nextState = { ...collected.state, pending: pool.filter((candidate) => !selected.has(candidateKey(candidate))) };
 
   await persistResult({
     id,
     ownerId,
     candidates,
-    rawSnapshot,
+    discoveryState: nextState,
     warnings,
-    status: candidates.length ? "results_ready" : connectorFailed && successfulRounds === 0 ? "connector_error" : "no_results",
+    status: candidates.length || search.candidates.length ? "results_ready" : collected.summary.stopReason === "provider_error" ? "connector_error" : "no_results",
   });
 
   return findOwnedHrHuntingSearch(id, ownerId);
@@ -125,6 +134,7 @@ async function createPlanWithManus(search: HrHuntingSearchSnapshot, input: Searc
   ].join("\n");
 
   const result = await runManusStructuredTask<SourcingPlan>({
+    timeoutMs: 30_000,
     prompt,
     schema: sourcingPlanSchema,
     title: "Share AI · HR Hunting · Estratégia de sourcing",
@@ -143,28 +153,22 @@ async function createPlanWithManus(search: HrHuntingSearchSnapshot, input: Searc
 
 function buildRounds(search: HrHuntingSearchSnapshot, input: SearchInput, plan: SourcingPlan): Round[] {
   const original = input.currentTitle?.trim() || search.jobDna.title || search.title;
-  const precise = unique([original, plan.primaryTitle, ...plan.equivalentTitles.slice(0, 2)]).slice(0, 4);
-  const expanded = unique([...precise, ...plan.equivalentTitles, ...plan.adjacentTitles.slice(0, 3)]).slice(0, 8);
-  const discovery = unique([...expanded, ...plan.adjacentTitles]).slice(0, 12);
+  const precise = unique([original, plan.primaryTitle, ...buildTitleFamily(original), ...plan.equivalentTitles]).slice(0, 20);
+  const expanded = unique([...precise, ...plan.adjacentTitles.slice(0, 3)]).slice(0, 30);
+  const discovery = unique([...expanded, ...plan.adjacentTitles]).slice(0, 40);
   const originalLocation = input.location?.trim() || search.jobDna.location || "";
   return [
-    { label: "precisa", titles: precise, keywords: plan.mustHaveKeywords.slice(0, 3), location: plan.preciseLocation || originalLocation || undefined },
-    { label: "ampliada", titles: expanded, keywords: unique([...plan.mustHaveKeywords, ...plan.supportingKeywords]).slice(0, 6), location: plan.expandedLocation || originalLocation || undefined },
-    { label: "descoberta", titles: discovery, keywords: unique([...plan.mustHaveKeywords, ...plan.supportingKeywords]).slice(0, 8), location: plan.discoveryLocation || undefined },
+    { label: "precisa", titles: precise, keywords: [], location: originalLocation || undefined },
+    { label: "ampliada", titles: expanded, keywords: [], location: originalLocation || undefined },
+    { label: "descoberta", titles: discovery, keywords: [], location: originalLocation || undefined },
   ];
-}
-
-function buildQuery(round: Round) {
-  const titles = round.titles.map(quote);
-  const keywords = round.label === "descoberta" ? round.keywords.slice(0, 4).map(quote) : [];
-  return [...titles, ...keywords].filter(Boolean).join(" OR ").slice(0, 520);
 }
 
 async function enrich(candidates: HrCandidate[], input: SearchInput, warnings: string[]) {
   const urls = candidates.map((candidate) => candidate.profileUrl).filter((url): url is string => Boolean(url)).slice(0, Math.min(10, Math.max(5, input.quantity)));
   if (!urls.length) return candidates;
   try {
-    const raw = await runApifyActor("linkedinProfile", { urls });
+    const raw = await runApifyActor("linkedinProfile", { urls }, { timeoutMs: 20_000 });
     const details = normalizeCandidates(raw);
     const byUrl = new Map(details.filter((item) => item.profileUrl).map((item) => [item.profileUrl!, item]));
     warnings.push(`A Share AI enriqueceu ${details.length} perfil(is) prioritário(s) antes do ranking final.`);
@@ -187,20 +191,24 @@ async function enrich(candidates: HrCandidate[], input: SearchInput, warnings: s
   }
 }
 
-async function persistResult({ id, ownerId, candidates, rawSnapshot, warnings, status }: {
+async function persistResult({ id, ownerId, candidates, discoveryState, warnings, status }: {
   id: string;
   ownerId: string;
   candidates: HrCandidate[];
-  rawSnapshot: unknown[];
+  discoveryState: HrDiscoveryState;
   warnings: string[];
   status: string;
 }) {
   await getPrisma().$transaction(async (tx) => {
-    await tx.hrHuntingCandidate.deleteMany({ where: { searchId: id, search: { ownerId } } });
-
-    const persisted = candidates.map((candidate) => ({ candidate, rowId: candidateRecordId(id, candidate.id) }));
+    const existing = await tx.hrHuntingCandidate.findMany({ where: { searchId: id }, select: { id: true, profileUrl: true } });
+    const knownUrls = new Set(existing.map((row) => row.profileUrl?.split("?")[0].replace(/\/$/, "").toLowerCase()).filter(Boolean));
+    const persisted = candidates.filter((candidate) => !knownUrls.has(candidateKey(candidate)))
+      .map((candidate) => ({ candidate, rowId: candidateRecordId(id, candidate.id) }))
+      .filter(({ rowId }) => !existing.some((row) => row.id === rowId));
+    let insertedIds = new Set<string>();
     if (persisted.length) {
-      await tx.hrHuntingCandidate.createMany({
+      const inserted = await tx.hrHuntingCandidate.createManyAndReturn({
+        select: { id: true },
         data: persisted.map(({ candidate, rowId }) => ({
           id: rowId,
           searchId: id,
@@ -221,43 +229,35 @@ async function persistResult({ id, ownerId, candidates, rawSnapshot, warnings, s
         })),
         skipDuplicates: true,
       });
+      insertedIds = new Set(inserted.map((row) => row.id));
     }
 
-    for (const { candidate, rowId } of persisted) {
-      const row = await tx.hrHuntingCandidate.findUnique({ where: { id: rowId }, select: { id: true } });
-      if (!row) continue;
-      if (candidate.evidence.length) {
-        await tx.hrHuntingCandidateEvidence.createMany({
-          data: candidate.evidence.map((evidence) => ({
-            candidateId: row.id,
+    const inserted = persisted.filter(({ rowId }) => insertedIds.has(rowId));
+    const evidenceData = inserted.flatMap(({ candidate, rowId }) => candidate.evidence.map((evidence) => ({
+            candidateId: rowId,
             criterion: evidence.criterion,
             criterionType: evidence.criterionType,
             result: evidence.result,
             evidence: evidence.evidence || null,
             source: evidence.source,
             confidence: toPrismaConfidence(evidence.confidence),
-          })),
-        });
-      }
-      if (candidate.contacts.length) {
-        await tx.hrHuntingCandidateContact.createMany({
-          data: candidate.contacts.map((contact) => ({
-            candidateId: row.id,
+          })));
+    const contactData = inserted.flatMap(({ candidate, rowId }) => candidate.contacts.map((contact) => ({
+            candidateId: rowId,
             value: contact.value,
             type: contact.type,
             source: contact.source,
             confidence: toPrismaConfidence(contact.confidence),
             obtainedAt: contact.obtainedAt ? new Date(contact.obtainedAt) : null,
-          })),
-        });
-      }
-    }
+          })));
+    if (evidenceData.length) await tx.hrHuntingCandidateEvidence.createMany({ data: evidenceData });
+    if (contactData.length) await tx.hrHuntingCandidateContact.createMany({ data: contactData });
 
     await tx.hrHuntingSearch.updateMany({
       where: { id, ownerId },
       data: {
         status,
-        sourceSnapshot: rawSnapshot.slice(0, 150) as Prisma.InputJsonValue,
+        sourceSnapshot: discoveryState as unknown as Prisma.InputJsonValue,
         connectorWarnings: unique(warnings).slice(0, 20),
       },
     });
@@ -301,22 +301,6 @@ function sanitizePlan(value: SourcingPlan, fallback: SourcingPlan): SourcingPlan
     discoveryLocation: clean(value.discoveryLocation),
     rationale: clean(value.rationale) || fallback.rationale,
   };
-}
-
-function mergeCandidate(map: Map<string, HrCandidate>, candidate: HrCandidate) {
-  const key = candidate.profileUrl || `${normalize(candidate.name)}|${normalize(candidate.currentTitle || "")}`;
-  const previous = map.get(key);
-  if (!previous) return void map.set(key, candidate);
-  map.set(key, {
-    ...previous,
-    currentTitle: candidate.currentTitle || previous.currentTitle,
-    currentCompany: candidate.currentCompany || previous.currentCompany,
-    location: candidate.location || previous.location,
-    profileUrl: candidate.profileUrl || previous.profileUrl,
-    professionalSummary: longer(candidate.professionalSummary, previous.professionalSummary),
-    contacts: dedupeContacts([...previous.contacts, ...candidate.contacts]),
-    confidence: stronger(previous.confidence, candidate.confidence),
-  });
 }
 
 function dedupe(candidates: HrCandidate[]) {
@@ -369,11 +353,6 @@ function broaderLocation(location: string) {
   return location;
 }
 
-function quote(value: string) {
-  const cleaned = clean(value).replace(/"/g, "");
-  return cleaned.includes(" ") ? `"${cleaned}"` : cleaned;
-}
-
 function safeList(value: unknown, limit: number) {
   return unique(Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []).slice(0, limit);
 }
@@ -394,12 +373,6 @@ function clean(value: unknown) {
 
 function normalize(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").replace(/\s+/g, " ").trim();
-}
-
-function longer(a?: string, b?: string) {
-  if (!a) return b;
-  if (!b) return a;
-  return a.length >= b.length ? a : b;
 }
 
 function compact(input: Record<string, unknown>) {
