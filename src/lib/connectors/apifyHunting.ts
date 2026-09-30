@@ -112,10 +112,21 @@ export async function researchCompanies(companyLinkedinUrls: string[]) {
   }, { timeoutMs: 20_000 });
 }
 
-export async function discoverBroadPeople(input: PersonSearchInput) {
+export function buildCompanyPeopleRecallInput(input: PersonSearchInput) {
+  return {
+    ...apifyActors.linkedinCompanyEmployees.defaultInput,
+    companies: input.filters.companyLinkedinUrls,
+    profileScraperMode: "Short ($4 per 1k)",
+    maxItems: discoveryLimit(input.filters.quantity),
+    startPage: 1,
+    takePages: 2,
+  };
+}
+
+export async function discoverBroadPeople(input: PersonSearchInput, runActor = runApifyActor) {
   let profiles: unknown[] = [];
   try {
-    const profileItems = await runApifyActor("linkedinProfileSearch", buildBroadPeopleRecallInput(input), { timeoutMs: 25_000, allowFallback: false });
+    const profileItems = await runActor("linkedinProfileSearch", buildBroadPeopleRecallInput(input), { timeoutMs: 20_000, allowFallback: false });
     profiles = profileItems.filter(isPublicPersonRow);
     if (profiles.length >= input.filters.quantity) return profiles;
   } catch {
@@ -123,7 +134,17 @@ export async function discoverBroadPeople(input: PersonSearchInput) {
   }
 
   try {
-    const employeeItems = await runApifyActor("linkedinCompanyEmployeesFallback", buildFallbackPeopleRecallInput(input), { timeoutMs: 25_000 });
+    // The company remains mandatory. Titles and location are evaluated by ranking
+    // when the exact search has insufficient coverage.
+    const companyItems = await runActor("linkedinCompanyEmployees", buildCompanyPeopleRecallInput(input), { timeoutMs: 45_000 });
+    profiles.push(...companyItems.filter(isPublicPersonRow));
+    if (profiles.length >= input.filters.quantity) return profiles;
+  } catch {
+    // Preserve any profiles and try the existing company-scoped alternative.
+  }
+
+  try {
+    const employeeItems = await runActor("linkedinCompanyEmployeesFallback", buildFallbackPeopleRecallInput(input), { timeoutMs: 15_000 });
     return [...profiles, ...employeeItems.filter(isPublicPersonRow)];
   } catch (error) {
     if (profiles.length) return profiles;

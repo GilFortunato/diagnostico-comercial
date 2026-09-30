@@ -238,7 +238,7 @@ export function DecisionMakerMapExperienceV2() {
               <Field label="Localizações" value={locations} setValue={setLocations} />
               <Area label="Palavras-chave profissionais" value={profileKeywords} setValue={setProfileKeywords} />
               <NumberField label="Pessoas desejadas (até 50)" value={peopleQuantity} setValue={setPeopleQuantity} />
-              <p className="text-xs leading-5 text-zinc-500">Cargos equivalentes ampliam a busca nas empresas e localizações informadas. Palavras-chave priorizam o ranking. A quantidade depende da cobertura da fonte.</p>
+              <p className="text-xs leading-5 text-zinc-500">Primeiro buscamos os cargos e locais informados. Se faltarem resultados, consultamos outros funcionários das mesmas empresas e priorizamos a aderência no ranking. A quantidade depende da cobertura da fonte.</p>
               <label className="flex items-start gap-2 text-sm text-zinc-600"><input type="checkbox" checked={includeBroadDiscovery} onChange={(event) => setIncludeBroadDiscovery(event.target.checked)} className="mt-1" />Consultar fonte complementar mesmo após atingir a meta</label>
             </div>}
             <button type="button" onClick={() => runSearch()} disabled={isSearching || !canSearch} className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[var(--share-green-950)] px-4 text-sm font-semibold text-white disabled:opacity-50">
