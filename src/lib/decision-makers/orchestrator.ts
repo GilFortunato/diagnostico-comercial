@@ -152,7 +152,7 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   try {
     const collected = await collectHuntingPages({
       target: input.filters.quantity,
-      timeoutMs: 120_000,
+      timeoutMs: 90_000,
       key: (person: HuntingPerson) => person.linkedinUrl.toLowerCase().replace(/\/$/, ""),
       fetchPage: async (page) => {
         const raw = await deps.discoverHarvestPeople(expandedInput, page);
@@ -172,7 +172,7 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
     try {
       fallbackItems = await deps.discoverBroadPeople(expandedInput);
       fallbackUsed = fallbackItems.length > 0;
-      if (fallbackUsed) warnings.push("A busca complementar ampliou os cargos dentro das empresas informadas. Confira a aderência de cada pessoa no ranking antes de abordar.");
+      if (fallbackUsed) warnings.push("A busca complementar consultou funcionários das empresas informadas sem restringir cargo ou localização. Os critérios originais orientam o ranking; valide a aderência antes de abordar.");
       if (!primaryItems.length && fallbackUsed) warnings.push("A segunda fonte de funcionários assumiu a descoberta porque a principal não trouxe cobertura.");
     } catch {
       fallbackFailed = true;

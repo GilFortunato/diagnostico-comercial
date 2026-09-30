@@ -40,6 +40,12 @@ Testes cobrem lotes curtos, sobreposição, 30 → 50, falha após uma página �
 
 A busca real descrita acima foi executada na versão anterior de produção. Ainda é necessário repetir esse caso na versão corrigida, conferir quantidade única, empresa atual, aderência e erros dos conectores. Cinquenta é uma meta de coleta; a cobertura pública e os cargos escolhidos podem produzir menos pessoas relevantes.
 
+## Validação após publicar o PR #25
+
+O commit `d8807e5` foi publicado em produção em 30/09/2026. A mesma busca da Corpus passou a concluir com HTTP 200, mas os Actors retornaram zero para os filtros exatos. A fonte complementar por perfil repetia esses filtros; a alternativa Apt Marble também retornou zero.
+
+O ajuste seguinte mantém a tentativa exata e acrescenta uma consulta Harvest por funcionários vinculada às mesmas URLs corporativas, sem restringir cargo ou localização nessa etapa. Os filtros originais permanecem no ranking e a interface explica essa ampliação. Isso busca cobertura da empresa, sem afirmar que todos os funcionários encontrados são decisores aderentes.
+
 ## Referências
 
 - [Apollo: filtros de busca](https://knowledge.apollo.io/hc/en-us/articles/4412665755661-Use-Search-Filters-to-Find-Prospects)

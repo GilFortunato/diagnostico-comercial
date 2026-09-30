@@ -7,7 +7,7 @@ import { mergePeople, normalizeCompanies, normalizePeople } from "@/lib/decision
 import { clearDecisionMakerCache, executeDecisionMakerSearch } from "@/lib/decision-makers/orchestrator";
 import { rankPeople, targetRolesNotFound } from "@/lib/decision-makers/ranking";
 import { addRoleSelection, expandRoleFamilies, removeRoleSelection } from "@/lib/decision-makers/roleIntelligence";
-import { buildBroadPeopleInput, buildCompanyDiscoveryInput, buildHarvestPeopleInput } from "@/lib/connectors/apifyHunting";
+import { buildBroadPeopleInput, buildCompanyDiscoveryInput, buildHarvestPeopleInput, discoverBroadPeople } from "@/lib/connectors/apifyHunting";
 import { toPublicProfileFallbackInput } from "@/lib/connectors/apifyClient";
 import { companySearchSchema, personSearchSchema, type DecisionMakerResult } from "@/lib/decision-makers/search";
 import { conservativeJobDna } from "@/lib/hr-hunting/jobDna";
@@ -378,6 +378,24 @@ test("B2B limita o último fallback e entrega seus perfis sem outra rodada de en
   }));
   assert.equal(result.people.length, 1);
   assert.equal(enrichmentCalls, 0);
+});
+
+test("Corpus: busca complementar consulta funcionários da mesma empresa quando os filtros exatos retornam zero", async () => {
+  const input = personSearchSchema.parse({ ...personInput, filters: { ...personInput.filters, quantity: 50, companyLinkedinUrls: ["https://www.linkedin.com/company/grupo-corpus"] } });
+  const calls: string[] = [];
+  const rows = await discoverBroadPeople(input, async (actor, payload) => {
+    calls.push(actor);
+    if (actor === "linkedinProfileSearch") return [];
+    assert.equal(actor, "linkedinCompanyEmployees");
+    assert.deepEqual(payload.companies, input.filters.companyLinkedinUrls);
+    assert.equal(payload.jobTitles, undefined);
+    assert.equal(payload.searchQuery, undefined);
+    assert.equal(payload.locations, undefined);
+    assert.equal(payload.maxItems, 50);
+    return Array.from({ length: 50 }, (_, i) => rawPerson({ linkedinUrl: `https://www.linkedin.com/in/company-fixture-${i}` }));
+  });
+  assert.equal(rows.length, 50);
+  assert.deepEqual(calls, ["linkedinProfileSearch", "linkedinCompanyEmployees"]);
 });
 
 test("B2B complementa resultado curto e não duplica pessoas entre Actors", async () => {
