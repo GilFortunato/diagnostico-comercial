@@ -192,7 +192,7 @@ export function normalizeCandidates(items: unknown[]): HrCandidate[] {
     const firstName = pick(item, ["firstName", "profile.firstName", "person.firstName"]);
     const lastName = pick(item, ["lastName", "profile.lastName", "person.lastName"]);
     const name = cleanName(explicitName || [firstName, lastName].filter(Boolean).join(" "));
-    const currentPosition = firstRecord(item.currentPosition ?? getPath(item, "profile.currentPosition"));
+    const currentPosition = firstRecord(item.currentPositions ?? item.currentPosition ?? getPath(item, "profile.currentPositions") ?? getPath(item, "profile.currentPosition"));
     const currentExperience = firstRecord(item.experience ?? getPath(item, "profile.experience"));
     const title = pick(item, ["jobTitle", "title", "position", "employment.title", "profile.position", "profile.headline"])
       || pick(currentPosition, ["title", "position", "jobTitle"])
@@ -201,7 +201,7 @@ export function normalizeCandidates(items: unknown[]): HrCandidate[] {
     const profileUrl = normalizeLinkedIn(pick(item, ["linkedinUrl", "linkedin_url", "linkedinProfileUrl", "profileUrl", "url", "navigationUrl", "profile.linkedinUrl", "profile.url"]));
     if (!name || /pessoa a identificar/i.test(name)) return [];
     const company = pick(item, ["companyName", "company", "organization.name", "employment.companyName", "profile.companyName"])
-      || pick(currentPosition, ["companyName", "company.name"])
+      || pick(currentPosition, ["companyName", "company.name", "company"])
       || pick(currentExperience, ["companyName", "company.name"]);
     const key = profileUrl || `${normal(name)}|${normal(company)}|${normal(title)}`;
     if (!profileUrl && !title) return [];
@@ -211,7 +211,8 @@ export function normalizeCandidates(items: unknown[]): HrCandidate[] {
     const phone = pick(item, ["workPhone", "businessPhone", "professionalPhone", "profile.workPhone"]);
     const sourceName = pick(item, ["sourceName", "_sourceName"]) || "LinkedIn Profile Search via Harvest";
     const location = pickLocation(item) || pickLocation(currentExperience);
-    const professionalSummary = pick(item, ["about", "summary", "description", "profile.summary", "headline", "position"]);
+    const professionalSummary = pick(item, ["about", "summary", "description", "profile.summary", "headline", "position"])
+      || pick(currentPosition, ["description"]);
     return [{
       id: `hr_${stableId(key || String(index))}`,
       name,

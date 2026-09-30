@@ -102,6 +102,8 @@ async function runActorRequest(
     actorKey,
     actorId,
     itemCount: items.length,
+    // Schema keys only: diagnose Actor format changes without logging profile values.
+    fields: items[0] && typeof items[0] === "object" ? Object.keys(items[0]).slice(0, 30) : [],
     source: resolution.source,
     masked: resolution.masked,
   });

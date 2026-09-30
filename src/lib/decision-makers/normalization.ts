@@ -45,14 +45,14 @@ export function normalizePeople(items: unknown[], source: string, desiredRole: D
     const lastName = pickString(item, ["lastName"]);
     const explicitName = pickString(item, ["fullName", "name", "profile.fullName", "person.name"]);
     const fullName = explicitName || [firstName, lastName].filter(Boolean).join(" ");
-    const currentPosition = firstRecord(item.currentPosition);
+    const currentPosition = firstRecord(item.currentPositions ?? item.currentPosition);
     const currentExperience = firstRecord(item.experience);
     const title = pickString(item, ["jobTitle", "title", "position", "currentPosition", "employment.title"])
       || pickString(currentPosition, ["title", "position", "jobTitle"])
       || pickString(currentExperience, ["position", "title", "jobTitle"])
       || pickString(item, ["headline"]);
     const company = pickString(item, ["companyName", "company", "currentCompany", "organization.name", "employment.companyName"])
-      || pickString(currentPosition, ["companyName", "company.name"])
+      || pickString(currentPosition, ["companyName", "company.name", "company"])
       || pickString(currentExperience, ["companyName", "company.name"]);
     const linkedinUrl = normalizeLinkedInUrl(pickString(item, ["linkedinUrl", "linkedin_url", "linkedinProfileUrl", "profileUrl", "navigationUrl", "url", "profile.linkedinUrl"]));
     if (!fullName || !linkedinUrl || normalizeText(fullName).includes("pessoa a identificar")) return accumulator;
@@ -62,7 +62,8 @@ export function normalizePeople(items: unknown[], source: string, desiredRole: D
     const department = pickString(item, ["department", "function", "jobFunction", "employment.department"]);
     const professionalEmail = pickProfessionalContact(item, ["workEmail", "businessEmail", "professionalEmail", "email"]);
     const professionalPhone = pickProfessionalContact(item, ["workPhone", "businessPhone", "professionalPhone", "phone"]);
-    const profileSummary = pickString(item, ["about", "summary", "description", "profile.summary", "snippet", "headline"]);
+    const profileSummary = pickString(item, ["about", "summary", "description", "profile.summary", "snippet", "headline"])
+      || pickString(currentPosition, ["description"]);
 
     accumulator.push({
       id: stableId(linkedinUrl),
