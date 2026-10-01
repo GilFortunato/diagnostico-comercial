@@ -116,7 +116,7 @@ export async function enhanceHumanshipEventWithDeepSearch(ownerId: string, event
           "roleScore" = ${classification.roleAssessment.score},
           "companyRestriction" = ${classification.companyAssessment.restricted ? classification.companyAssessment.reason : null},
           "updatedAt" = CURRENT_TIMESTAMP
-        WHERE "id" = ${participant.id}
+        WHERE "id" = ${participant.id} AND "searchStatus" <> 'manual'
           AND EXISTS (SELECT 1 FROM "HumanshipEvent" e WHERE e."id" = "HumanshipParticipant"."eventId" AND e."ownerId" = ${ownerId})
       `);
       improved += 1;
@@ -140,7 +140,7 @@ async function markDeepSearchMiss(participant: HumanshipParticipant) {
       "searchStatus" = 'not_found',
       "classificationReason" = ${reason},
       "updatedAt" = CURRENT_TIMESTAMP
-    WHERE "id" = ${participant.id}
+    WHERE "id" = ${participant.id} AND "searchStatus" <> 'manual'
   `);
 }
 
