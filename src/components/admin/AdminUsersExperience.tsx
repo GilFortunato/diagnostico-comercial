@@ -23,6 +23,7 @@ const moduleLabels: Record<PlatformModule, string> = {
   "content.intelligence": "Inteligência de conteúdo",
   "creative.visual-scout": "Share Visual Scout",
   "creative.trend-intelligence": "MKT Scout",
+  "communication.whats-generator": "Gerador Whats",
   "decision.makers": "Mapa de decisores",
   "hr.hunting": "HR Hunting",
   "humanship.r1ship": "Humanship · R1 Ship",
