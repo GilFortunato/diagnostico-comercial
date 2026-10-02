@@ -96,7 +96,7 @@ const workspaces: Workspace[] = [
     title: "Eventos & Comunidade",
     shortTitle: "Eventos\n& Comunidade",
     category: "Pessoas",
-    href: "/humanship",
+    href: "/humanship/eventos",
     module: "humanship.r1ship",
     icon: CalendarDays,
     description: "Agenda, comunidade e jornadas conectadas ao ecossistema Humanship.",
@@ -182,11 +182,13 @@ export function HomeExperience({
   access = {},
   userName,
   authenticated = false,
+  nextEvent = null,
 }: {
   isAdmin?: boolean;
   access?: AccessMap;
   userName?: string | null;
   authenticated?: boolean;
+  nextEvent?: { title: string; startAt: string; endAt?: string } | null;
 }) {
   const available = useMemo(
     () => workspaces.map((workspace) => ({
@@ -312,7 +314,6 @@ export function HomeExperience({
             </div>
 
             <div className="share-hub-detail-body">
-              <h2>{selected.title}</h2>
               <p className="share-hub-detail-lead">{selected.description}</p>
               <p className="share-hub-detail-copy">{selected.summary}</p>
               <div className="share-hub-detail-divider" />
@@ -347,12 +348,12 @@ export function HomeExperience({
         </div>
 
         <section className="share-hub-bottom-cards">
-          <Link href="/humanship" className="share-hub-bottom-card">
+          <Link href="/humanship/eventos" className="share-hub-bottom-card">
             <span className="share-hub-bottom-icon"><CalendarDays /></span>
             <span className="share-hub-bottom-content">
               <small>Próximo evento</small>
-              <strong>Humanship Festival</strong>
-              <span>16 e 17 de outubro</span>
+              <strong>{nextEvent?.title || "Agenda Humanship"}</strong>
+              <span>{nextEvent ? formatHomeEventDate(nextEvent.startAt, nextEvent.endAt) : "Cadastre os próximos eventos"}</span>
             </span>
             <ArrowRight className="share-hub-bottom-arrow" />
           </Link>
@@ -388,4 +389,38 @@ export function HomeExperience({
 
 function firstName(value:string) {
   return value.trim().split(/\s+/)[0] || value;
+}
+
+
+function formatHomeEventDate(startAt: string, endAt?: string) {
+  const start = new Date(startAt);
+  const end = endAt ? new Date(endAt) : null;
+  const day = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    timeZone: "America/Sao_Paulo",
+  }).format(start);
+
+  if (!end) return day;
+
+  const sameMonth = new Intl.DateTimeFormat("pt-BR", {
+    month: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }).format(start) === new Intl.DateTimeFormat("pt-BR", {
+    month: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }).format(end);
+
+  if (sameMonth) {
+    const startDay = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", timeZone: "America/Sao_Paulo" }).format(start);
+    const endDay = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", timeZone: "America/Sao_Paulo" }).format(end);
+    const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "America/Sao_Paulo" }).format(start);
+    return `${startDay} e ${endDay} de ${month}`;
+  }
+
+  return `${day} → ${new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    timeZone: "America/Sao_Paulo",
+  }).format(end)}`;
 }
