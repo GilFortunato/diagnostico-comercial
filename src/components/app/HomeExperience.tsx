@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { signIn, signOut } from "next-auth/react";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { NexusBackground } from "@/components/app/NexusBackground";
 import { NexusCore } from "@/components/app/NexusCore";
 import type { PlatformModule } from "@/lib/auth/moduleAccessPolicy";
@@ -39,6 +40,7 @@ type Workspace = {
   features: string[];
   brand?: "humanship";
   new?: boolean;
+  status?: "construction";
 };
 
 const workspaces: Workspace[] = [
@@ -115,6 +117,18 @@ const workspaces: Workspace[] = [
     features: ["Contexto da pessoa", "Pontos de conexão", "Preparação de conversa", "Recomendações"],
   },
   {
+    key: "meetings",
+    title: "Inteligência de Reuniões",
+    shortTitle: "Inteligência\nde Reuniões",
+    category: "Relacionamento",
+    module: "meeting.intelligence",
+    icon: Camera,
+    description: "Contexto, preparação e próximos passos para reuniões.",
+    summary: "Reúna sinais, contexto e inteligência para chegar melhor preparado às conversas.",
+    features: ["Briefing pré-reunião", "Contexto", "Pontos de atenção", "Próximos passos"],
+    status: "construction",
+  },
+  {
     key: "trends",
     title: "Share Trend Intelligence",
     shortTitle: "Trend\nIntelligence",
@@ -126,17 +140,6 @@ const workspaces: Workspace[] = [
     summary: "Transforme sinais recentes em pauta, contexto, oportunidades de publicação e briefing visual.",
     features: ["Assuntos em alta", "Palavras relacionadas", "Ideias de conteúdo", "Briefing para o Scout"],
     new: true,
-  },
-  {
-    key: "meetings",
-    title: "Inteligência de Reuniões",
-    shortTitle: "Inteligência\nde Reuniões",
-    category: "Relacionamento",
-    module: "meeting.intelligence",
-    icon: Camera,
-    description: "Contexto, preparação e próximos passos para reuniões.",
-    summary: "Reúna sinais, contexto e inteligência para chegar melhor preparado às conversas.",
-    features: ["Briefing pré-reunião", "Contexto", "Pontos de atenção", "Próximos passos"],
   },
   {
     key: "visual",
@@ -152,6 +155,7 @@ const workspaces: Workspace[] = [
     new: true,
   },
 ];
+const NEXUS_ROTATION = -80;
 
 function polar(cx:number, cy:number, radius:number, angle:number) {
   const rad = (angle - 90) * Math.PI / 180;
@@ -161,8 +165,8 @@ function polar(cx:number, cy:number, radius:number, angle:number) {
 function annularSectorPath(index:number, total:number, inner=31, outer=47) {
   const gap = 2.4;
   const step = 360 / total;
-  const start = index * step + gap;
-  const end = (index + 1) * step - gap;
+  const start = NEXUS_ROTATION + index * step + gap;
+  const end = NEXUS_ROTATION + (index + 1) * step - gap;
   const o1 = polar(50,50,outer,start);
   const o2 = polar(50,50,outer,end);
   const i2 = polar(50,50,inner,end);
@@ -190,6 +194,7 @@ export function HomeExperience({
   authenticated?: boolean;
   nextEvent?: { title: string; startAt: string; endAt?: string } | null;
 }) {
+  const router = useRouter();
   const available = useMemo(
     () => workspaces.map((workspace) => ({
       ...workspace,
@@ -271,7 +276,8 @@ export function HomeExperience({
               </svg>
 
               {available.map((workspace,index) => {
-                const angle = -90 + index * (360 / available.length) + (180 / available.length);
+                const step = 360 / available.length;
+                const angle = NEXUS_ROTATION + index * step + step / 2;
                 const p = polar(50,50,39,angle);
                 const Icon = workspace.icon;
                 const selectedNow = workspace.key === selected.key;
@@ -281,6 +287,14 @@ export function HomeExperience({
                     type="button"
                     disabled={!workspace.allowed && authenticated}
                     onClick={() => setSelectedKey(workspace.key)}
+                    onDoubleClick={() => {
+                      if (!workspace.href) return;
+                      if (!authenticated) {
+                        void signIn("google", { callbackUrl: workspace.href });
+                        return;
+                      }
+                      if (workspace.allowed) router.push(workspace.href);
+                    }}
                     className={`share-hub-sector-label ${selectedNow ? "is-selected" : ""} ${workspace.allowed ? "" : "is-locked"}`}
                     style={{ left:`${p.x}%`, top:`${p.y}%` }}
                     aria-label={workspace.allowed ? `Selecionar ${workspace.title}` : `${workspace.title} bloqueado`}
@@ -314,6 +328,9 @@ export function HomeExperience({
             </div>
 
             <div className="share-hub-detail-body">
+              {selected.status === "construction" ? (
+                <span className="share-hub-status-badge">Em construção</span>
+              ) : null}
               <p className="share-hub-detail-lead">{selected.description}</p>
               <p className="share-hub-detail-copy">{selected.summary}</p>
               <div className="share-hub-detail-divider" />
@@ -325,7 +342,7 @@ export function HomeExperience({
 
               {!selected.href ? (
                 <button type="button" className="share-hub-open is-disabled" disabled>
-                  Workspace em preparação
+                  {selected.status === "construction" ? "Em construção" : "Workspace em preparação"}
                 </button>
               ) : selected.allowed || !authenticated ? (
                 <Link
