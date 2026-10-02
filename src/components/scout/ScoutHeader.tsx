@@ -30,7 +30,8 @@ export function ScoutHeader({ active }: { active: "visual" | "trend" }) {
           <span className="pb-1 text-xs font-semibold uppercase text-[var(--share-green-800)]">AI</span>
         </Link>
         <nav className="flex items-center gap-5">
-          {item("/sharetrendintelligence", "MKT Scout", "trend")}
+          {item("/sharetrendintelligence", "Trend Intelligence", "trend")}
+          {item("/sharevisualscout", "Visual Scout", "visual")}
         </nav>
         <LoginButton variant="light" label="Entrar" />
       </div>
