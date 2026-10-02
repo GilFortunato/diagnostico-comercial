@@ -33,7 +33,7 @@ export function ScoutHeader({ active }: { active: "visual" | "trend" | "moodboar
         <nav aria-label="MKT Scout" className="flex items-center gap-5">
           {item("/sharetrendintelligence", "Trend Intelligence", "trend")}
           {item("/sharevisualscout", "Visual Scout", "visual")}
-          {item("/sharemoodboard", "Briefing → Moodboard", "moodboard")}
+          {item("/sharemoodboard", "Moodboard", "moodboard")}
         </nav>
         <LoginButton variant="light" label="Entrar" />
       </div>
