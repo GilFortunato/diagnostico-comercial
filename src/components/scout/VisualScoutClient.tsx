@@ -5,7 +5,7 @@ import { Bookmark, Check, ExternalLink, LoaderCircle, Search } from "lucide-reac
 
 type ScoutImage = {
   id: string;
-  provider: "unsplash" | "pexels" | "pixabay";
+  provider: "unsplash" | "pexels" | "pixabay" | "openverse";
   providerLabel: string;
   title: string;
   previewUrl: string;
@@ -35,6 +35,9 @@ type SearchResponse = {
   prefilteredCount: number;
   batchSize: number;
   providers: ProviderState[];
+  searchQueries: string[];
+  searchKeywords: string[];
+  queryGeneratedBy: "gemini" | "rules";
   results: ScoutImage[];
   error?: string;
 };
@@ -43,6 +46,7 @@ const providerNames = {
   unsplash: "Unsplash",
   pexels: "Pexels",
   pixabay: "Pixabay",
+  openverse: "Openverse",
 } as const;
 
 export function VisualScoutClient({
@@ -135,7 +139,7 @@ export function VisualScoutClient({
           </button>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
-          <span>Até 20 por banco → até 60 brutas → 24 pré-selecionadas → 12 por rodada.</span>
+          <span>O briefing é convertido em buscas visuais e consultado em Unsplash, Pexels, Pixabay e Openverse.</span>
           <span>{query.length}/500</span>
         </div>
       </form>
@@ -146,12 +150,21 @@ export function VisualScoutClient({
 
       {data ? (
         <section className="mt-8">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold text-[var(--share-green-950)]">Resultados recomendados</h2>
               <p className="mt-1 text-sm text-zinc-500">
                 {data.rawCount} encontradas nos providers · {data.prefilteredCount} passaram pelo pré-filtro · mostrando {Math.min(visible.length, data.prefilteredCount)}.
               </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-400">Buscas usadas</span>
+                {data.searchQueries.map((term) => (
+                  <span key={term} className="rounded-full bg-[#eef5ec] px-2.5 py-1 text-[10px] font-semibold text-[var(--share-green-900)]">{term}</span>
+                ))}
+                <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[10px] font-semibold text-zinc-500">
+                  {data.queryGeneratedBy === "gemini" ? "otimizado pelo Gemini" : "fallback por regras"}
+                </span>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               {data.providers.map((provider) => (
