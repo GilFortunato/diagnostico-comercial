@@ -322,7 +322,7 @@ export function HomeExperience({
               <div className="share-hub-core">
                 <NexusCore />
                 <div className="share-hub-core-brand">
-                  <Image src="/brand/share-wordmark-white.svg" alt="share" width={200} height={62} priority />
+                  <strong className="share-hub-core-wordmark" aria-label="share">share</strong>
                   <span>hub</span>
                 </div>
               </div>
