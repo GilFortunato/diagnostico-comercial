@@ -10,7 +10,7 @@ type GeminiMessagePayload = {
   messages: Array<{ recipientId: string; message: string }>;
 };
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-3.6-flash";
 
 export async function generateIndividualWhatsMessages(input: {
   baseText: string;
@@ -29,6 +29,8 @@ export async function generateIndividualWhatsMessages(input: {
     "Cada mensagem deve comunicar exatamente a intenção e os fatos do texto-base, mas com redação natural e individual.",
     "Não invente fatos sobre a pessoa, vaga, empresa, datas, links, benefícios ou processo.",
     "Use somente o nome e a vaga fornecidos para personalização factual.",
+    "Corrija ortografia, clareza, fluidez e adequação ao WhatsApp sem alterar os fatos.",
+    "Se o texto-base tiver {nome} ou {vaga}, substitua pelos valores do contato e nunca deixe esses placeholders na mensagem final.",
     "Não inclua o telefone na mensagem.",
     "Preserve integralmente links, datas, horários, instruções, valores e informações obrigatórias presentes no texto-base.",
     "Não escreva sobre filtros antispam, bloqueios, detecção ou formas de contornar controles de plataforma.",
