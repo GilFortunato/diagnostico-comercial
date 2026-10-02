@@ -15,10 +15,13 @@ export function NexusBackground() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
-    const canvasElement = canvasRef.current;
-    if (!canvasElement) return;
-    const context = canvasElement.getContext("2d");
-    if (!context) return;
+    const element = canvasRef.current;
+    if (!element) return;
+    const drawingContext = element.getContext("2d");
+    if (!drawingContext) return;
+
+    const canvasElement: HTMLCanvasElement = element;
+    const context: CanvasRenderingContext2D = drawingContext;
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let width = 0;
