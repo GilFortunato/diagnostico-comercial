@@ -163,6 +163,7 @@ export async function listB2BWorkspace(actorId: string) {
       website: lead.website,
       location: lead.location,
       firstSeenByName: lead.firstSeenByName,
+      mine: lead.firstSeenById === actorId,
       updatedAt: lead.updatedAt.toISOString(),
       payload: lead.payload,
     })),
