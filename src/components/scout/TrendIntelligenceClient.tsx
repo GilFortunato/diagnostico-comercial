@@ -192,7 +192,7 @@ export function TrendIntelligenceClient() {
                 ))}
               </div>
               <Link
-                href={`/sharevisualscout?q=${encodeURIComponent([data.visualBrief, ...data.searchTerms.slice(0, 4)].join(" | "))}`}
+                href={`/sharevisualscout?q=${encodeURIComponent([data.visualBrief, ...data.searchTerms.slice(0, 4)].join(" | ").slice(0, 480))}`}
                 className="mt-6 block rounded-xl bg-[var(--share-lime)] px-4 py-3 text-center text-sm font-bold text-[var(--share-green-950)]"
               >
                 Buscar imagens no Visual Scout
