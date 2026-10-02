@@ -1,6 +1,6 @@
 "use client";
 
-// deploy-refresh: nexus-label-geometry
+// deploy-refresh: nexus-orbit
 
 import Link from "next/link";
 import Image from "next/image";
