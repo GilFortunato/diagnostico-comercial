@@ -19,11 +19,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await executeDecisionMakerSearch(parsed.data);
-    const resultCount = Array.isArray((result as { rows?: unknown[] }).rows)
-      ? (result as { rows: unknown[] }).rows.length
-      : Array.isArray((result as { people?: unknown[] }).people)
-        ? (result as { people: unknown[] }).people.length
-        : undefined;
+    const resultCount = result.mode === "companies" ? result.companies.length : result.people.length;
     await writeAppAuditLog({
       actor: access.user,
       moduleKey: "b2b.hunting",
