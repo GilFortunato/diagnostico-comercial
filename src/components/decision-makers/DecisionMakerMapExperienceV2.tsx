@@ -621,6 +621,10 @@ function CompanyTable({
   onContinue,
   onSearchCompany,
   isSearching,
+  selectedListId,
+  lists,
+  onSelectList,
+  onSaveLead,
 }: {
   companies: HuntingCompany[];
   selected: string[];
@@ -628,12 +632,17 @@ function CompanyTable({
   onContinue: () => void;
   onSearchCompany: (company: HuntingCompany) => void;
   isSearching: boolean;
+  selectedListId: string;
+  lists: WorkspaceList[];
+  onSelectList: (id: string) => void;
+  onSaveLead: (leadId?: string) => void;
 }) {
   return <div className="mt-4">
+    <div className="mb-3 flex justify-end"><LeadListSelector lists={lists} selectedListId={selectedListId} onSelectList={onSelectList} /></div>
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[920px] text-left text-sm">
+      <table className="w-full min-w-[1040px] text-left text-sm">
         <thead className="text-xs uppercase text-[var(--share-green-800)]">
-          <tr><th className="border-b p-3">Conta</th><th className="border-b p-3">Setor</th><th className="border-b p-3">Localização</th><th className="border-b p-3">Fit</th><th className="border-b p-3">Fonte</th><th className="border-b p-3">Ação</th></tr>
+          <tr><th className="border-b p-3">Conta</th><th className="border-b p-3">Setor</th><th className="border-b p-3">Localização</th><th className="border-b p-3">Fit</th><th className="border-b p-3">Fonte</th><th className="border-b p-3">Workspace</th><th className="border-b p-3">Ação</th></tr>
         </thead>
         <tbody>{companies.map((company) => <tr key={company.id} className="border-b border-[var(--share-line)]">
           <td className="p-3"><label className="flex items-start gap-3"><input type="checkbox" checked={selected.includes(company.id)} onChange={(event) => setSelected(event.target.checked ? [...selected, company.id] : selected.filter((id) => id !== company.id))} className="mt-1" /><span><strong>{company.name}</strong>{company.domain ? <span className="block text-xs text-zinc-500">{company.domain}</span> : null}</span></label></td>
@@ -641,7 +650,8 @@ function CompanyTable({
           <td className="p-3">{company.location || "Não informada"}</td>
           <td className="p-3 font-semibold">{company.fit}</td>
           <td className="p-3">{company.linkedinUrl ? <a href={company.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[var(--share-green-800)]">LinkedIn <ExternalLink className="h-3.5 w-3.5" /></a> : company.source}</td>
-          <td className="p-3"><button type="button" onClick={() => onSearchCompany(company)} disabled={!company.linkedinUrl || isSearching} className="whitespace-nowrap rounded-md bg-[var(--share-green-950)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{company.linkedinUrl ? "Buscar decisores" : "Sem LinkedIn"}</button></td>
+          <td className="p-3">{company.firstSeenByName ? <span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(company.firstSeenByName)}</span> : <span className="text-xs text-zinc-400">Novo lead</span>}</td>
+          <td className="p-3"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => onSearchCompany(company)} disabled={!company.linkedinUrl || isSearching} className="whitespace-nowrap rounded-md bg-[var(--share-green-950)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{company.linkedinUrl ? "Buscar decisores" : "Sem LinkedIn"}</button><button type="button" onClick={() => onSaveLead(company.workspaceLeadId)} disabled={!company.workspaceLeadId || !selectedListId} className="inline-flex items-center gap-1 rounded-md border border-[var(--share-line)] px-3 py-2 text-xs font-semibold text-[var(--share-green-800)] disabled:opacity-40"><BookmarkPlus className="h-3.5 w-3.5" /> Lista</button></div></td>
         </tr>)}</tbody>
       </table>
     </div>
@@ -649,8 +659,11 @@ function CompanyTable({
   </div>;
 }
 
-function PeopleTable({ people }: { people: HuntingPerson[] }) {
-  return <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className="text-xs uppercase text-[var(--share-green-800)]"><tr><th className="border-b p-3">Pessoa</th><th className="border-b p-3">Cargo</th><th className="border-b p-3">Empresa</th><th className="border-b p-3">Fit</th><th className="border-b p-3">Próxima ação</th></tr></thead><tbody>{people.map((person) => <tr key={person.id} className="border-b border-[var(--share-line)]"><td className="p-3"><a href={person.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--share-green-950)] hover:underline">{person.name}<ExternalLink className="h-3.5 w-3.5" /></a><span className="mt-1 block text-xs text-zinc-500">{person.location || "Localização não informada"}</span></td><td className="p-3">{person.title}</td><td className="p-3">{person.company}</td><td className="p-3"><strong>{person.fitScore}%</strong><span className="ml-2 text-xs text-zinc-500">{person.fit}</span></td><td className="p-3 text-zinc-600">{person.nextBestAction}</td></tr>)}</tbody></table></div>;
+function PeopleTable({ people, selectedListId, lists, onSelectList, onSaveLead }: { people: HuntingPerson[]; selectedListId: string; lists: WorkspaceList[]; onSelectList: (id: string) => void; onSaveLead: (leadId?: string) => void }) {
+  return <div className="mt-4">
+    <div className="mb-3 flex justify-end"><LeadListSelector lists={lists} selectedListId={selectedListId} onSelectList={onSelectList} /></div>
+    <div className="overflow-x-auto"><table className="w-full min-w-[1040px] text-left text-sm"><thead className="text-xs uppercase text-[var(--share-green-800)]"><tr><th className="border-b p-3">Pessoa</th><th className="border-b p-3">Cargo</th><th className="border-b p-3">Empresa</th><th className="border-b p-3">Fit</th><th className="border-b p-3">Workspace</th><th className="border-b p-3">Próxima ação</th></tr></thead><tbody>{people.map((person) => <tr key={person.id} className="border-b border-[var(--share-line)]"><td className="p-3"><a href={person.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--share-green-950)] hover:underline">{person.name}<ExternalLink className="h-3.5 w-3.5" /></a><span className="mt-1 block text-xs text-zinc-500">{person.location || "Localização não informada"}</span></td><td className="p-3">{person.title}</td><td className="p-3">{person.company}</td><td className="p-3"><strong>{person.fitScore}%</strong><span className="ml-2 text-xs text-zinc-500">{person.fit}</span></td><td className="p-3"><div className="flex flex-col items-start gap-2">{person.firstSeenByName ? <span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(person.firstSeenByName)}</span> : <span className="text-xs text-zinc-400">Novo lead</span>}<button type="button" onClick={() => onSaveLead(person.workspaceLeadId)} disabled={!person.workspaceLeadId || !selectedListId} className="inline-flex items-center gap-1 rounded-md border border-[var(--share-line)] px-2 py-1 text-[10px] font-semibold text-[var(--share-green-800)] disabled:opacity-40"><BookmarkPlus className="h-3 w-3" /> Salvar na lista</button></div></td><td className="p-3 text-zinc-600">{person.nextBestAction}</td></tr>)}</tbody></table></div>
+  </div>;
 }
 
 function Empty({ mode }: { mode: SearchMode }) {
