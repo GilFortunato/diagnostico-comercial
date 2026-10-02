@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { Bookmark, Check, ExternalLink, LoaderCircle, Search } from "lucide-react";
 
 type ScoutImage = {
@@ -46,9 +45,8 @@ const providerNames = {
   pixabay: "Pixabay",
 } as const;
 
-export function VisualScoutClient() {
-  const params = useSearchParams();
-  const initial = params.get("q") || "";
+export function VisualScoutClient({ initialQuery = "" }: { initialQuery?: string }) {
+  const initial = initialQuery;
   const [query, setQuery] = useState(initial);
   const [data, setData] = useState<SearchResponse | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
