@@ -345,14 +345,28 @@ export function DecisionMakerMapExperienceV2() {
   }
 
   return <main className="share-shell min-h-screen text-[var(--share-ink)]">
-    <div className="mx-auto grid max-w-[1440px] gap-5 px-5 py-7">
+    <div className="mx-auto max-w-[1600px] px-5 py-7">
+      <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
+        <B2BWorkspaceSidebar
+          view={workspaceView}
+          searches={savedSearches}
+          leads={workspaceLeads}
+          lists={workspaceLists}
+          newListName={newListName}
+          setNewListName={setNewListName}
+          onNew={() => { setWorkspaceView("search"); setResult(null); }}
+          onView={setWorkspaceView}
+          onOpenList={(id) => void openSharedList(id)}
+          onCreateList={() => void createSharedList()}
+        />
+        <div className="min-w-0 grid gap-5">
       <section className="rounded-lg bg-[var(--share-green-950)] p-6 text-white">
         <p className="text-xs font-semibold uppercase text-[var(--share-lime)]">B2B Hunting</p>
         <h1 className="mt-2 text-3xl font-semibold">Encontre contas e decisores sem repetir resultados.</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/75">Cada nova rodada amplia a cobertura e deduplica por LinkedIn, domínio e identificadores confiáveis antes de exibir.</p>
       </section>
 
-      <section className="rounded-lg border border-[var(--share-line)] bg-white">
+      {workspaceView === "search" ? <section className="rounded-lg border border-[var(--share-line)] bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--share-line)] p-3">
           <div className="flex gap-2">
             <Mode active={mode === "companies"} icon={Building2} label="Encontrar empresas" onClick={() => { setWorkspaceView("search"); setMode("companies"); setResult(null); }} />
@@ -432,9 +446,136 @@ export function DecisionMakerMapExperienceV2() {
             </>}
           </div>
         </div>
-      </section>
+      </section> : null}
+
+      {workspaceLoading ? <div className="rounded-2xl border border-[var(--share-line)] bg-white p-5 text-sm text-zinc-500"><LoaderCircle className="mr-2 inline h-4 w-4 animate-spin" />Atualizando workspace...</div> : null}
+
+      {!workspaceLoading && (workspaceView === "all" || workspaceView === "mine") ? (
+        <SavedSearchPanel
+          title={workspaceView === "mine" ? "Minhas pesquisas" : "Pesquisas da equipe"}
+          searches={workspaceView === "mine" ? savedSearches.filter((item) => item.mine) : savedSearches}
+          onOpen={(id) => void openSavedSearch(id)}
+          onDelete={(item) => void deleteSavedSearch(item)}
+        />
+      ) : null}
+
+      {!workspaceLoading && workspaceView === "leads" ? (
+        <WorkspaceLeadsPanel
+          leads={workspaceLeads}
+          lists={workspaceLists}
+          selectedListId={selectedListId}
+          onSelectList={setSelectedListId}
+          onSaveLead={(leadId) => void saveLeadToList(leadId)}
+        />
+      ) : null}
+
+      {!workspaceLoading && workspaceView === "list" ? (
+        <LeadListPanel list={activeList} />
+      ) : null}
+        </div>
+      </div>
     </div>
   </main>;
+}
+
+function B2BWorkspaceSidebar({
+  view, searches, leads, lists, newListName, setNewListName, onNew, onView, onOpenList, onCreateList,
+}: {
+  view: WorkspaceView;
+  searches: SavedB2BSearch[];
+  leads: WorkspaceLead[];
+  lists: WorkspaceList[];
+  newListName: string;
+  setNewListName: (value: string) => void;
+  onNew: () => void;
+  onView: (view: WorkspaceView) => void;
+  onOpenList: (id: string) => void;
+  onCreateList: () => void;
+}) {
+  const mine = searches.filter((item) => item.mine).length;
+  return <aside className="self-start rounded-2xl bg-[var(--share-green-950)] p-4 text-white shadow-sm lg:sticky lg:top-24">
+    <p className="px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--share-lime)]">B2B Workspace</p>
+    <button type="button" onClick={onNew} className={`mt-3 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${view === "search" ? "bg-[var(--share-lime)] text-[var(--share-green-950)]" : "bg-white text-[var(--share-green-950)]"}`}><Plus className="h-4 w-4" /> Nova busca</button>
+    <nav className="mt-4 space-y-1">
+      <button type="button" onClick={() => onView("all")} className={workspaceNav(view === "all")}><FolderSearch className="h-4 w-4" /><span className="flex-1">Pesquisas da equipe</span><span className="text-xs opacity-50">{searches.length}</span></button>
+      <button type="button" onClick={() => onView("mine")} className={workspaceNav(view === "mine")}><Search className="h-4 w-4" /><span className="flex-1">Minhas pesquisas</span><span className="text-xs opacity-50">{mine}</span></button>
+      <button type="button" onClick={() => onView("leads")} className={workspaceNav(view === "leads")}><Database className="h-4 w-4" /><span className="flex-1">Leads da equipe</span><span className="text-xs opacity-50">{leads.length}</span></button>
+    </nav>
+    <div className="my-4 h-px bg-white/10" />
+    <div className="px-2">
+      <div className="flex items-center gap-2"><ListChecks className="h-4 w-4 text-[var(--share-lime)]" /><p className="text-xs font-bold uppercase tracking-[0.12em] text-white/65">Listas compartilhadas</p></div>
+      <div className="mt-2 space-y-1">
+        {lists.map((list) => <button key={list.id} type="button" onClick={() => onOpenList(list.id)} className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-xs text-white/75 hover:bg-white/10 hover:text-white"><span className="truncate">{list.name}</span><span className="opacity-45">{list.itemCount}</span></button>)}
+      </div>
+      <input value={newListName} onChange={(event) => setNewListName(event.target.value)} placeholder="Nova lista" className="mt-3 h-9 w-full rounded-lg border border-white/15 bg-white/10 px-3 text-xs text-white placeholder:text-white/35" />
+      <button type="button" onClick={onCreateList} disabled={newListName.trim().length < 2} className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-white px-3 text-xs font-bold text-[var(--share-green-950)] disabled:opacity-40"><Plus className="h-3.5 w-3.5" /> Criar lista</button>
+    </div>
+    <div className="mt-5 border-t border-white/10 px-2 pt-4"><p className="text-[10px] uppercase tracking-[0.12em] text-white/40">Cache Share</p><p className="mt-1 text-xs leading-5 text-white/55">Buscas idênticas recentes são reaproveitadas antes de chamar fontes externas.</p></div>
+  </aside>;
+}
+
+function workspaceNav(active: boolean) {
+  return `flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold ${active ? "bg-white/15 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"}`;
+}
+
+function SavedSearchPanel({ title, searches, onOpen, onDelete }: { title: string; searches: SavedB2BSearch[]; onOpen: (id: string) => void; onDelete: (item: SavedB2BSearch) => void }) {
+  return <section className="rounded-2xl border border-[var(--share-line)] bg-white p-6">
+    <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--share-green-800)]">Workspace compartilhado</p>
+    <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{title}</h2>
+    <div className="mt-5 grid gap-3 md:grid-cols-2">
+      {searches.map((item) => <article key={item.id} className="rounded-2xl border border-[var(--share-line)] bg-[#fbfdf9] p-5">
+        <div className="flex items-start justify-between gap-3">
+          <button type="button" onClick={() => onOpen(item.id)} className="min-w-0 flex-1 text-left">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--share-green-800)]">{huntingOwnerLabel(item.ownerName)}</p>
+            <h3 className="mt-1 text-lg font-semibold text-[var(--share-green-950)]">{item.title}</h3>
+            <p className="mt-3 text-xs text-zinc-500">{item.resultCount} resultado(s){item.reused ? " · reaproveitada do banco Share" : ""}</p>
+          </button>
+          {item.mine ? <button type="button" onClick={() => onDelete(item)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" aria-label="Excluir pesquisa"><Trash2 className="h-4 w-4" /></button> : null}
+        </div>
+      </article>)}
+      {!searches.length ? <p className="col-span-full py-10 text-center text-sm text-zinc-500">Nenhuma pesquisa salva nesta área.</p> : null}
+    </div>
+  </section>;
+}
+
+function WorkspaceLeadsPanel({ leads, lists, selectedListId, onSelectList, onSaveLead }: { leads: WorkspaceLead[]; lists: WorkspaceList[]; selectedListId: string; onSelectList: (id: string) => void; onSaveLead: (id: string) => void }) {
+  return <section className="rounded-2xl border border-[var(--share-line)] bg-white p-6">
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--share-green-800)]">Banco Share</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Leads da equipe</h2><p className="mt-2 text-sm text-zinc-500">Empresas e pessoas já encontradas pelo comercial, preservando quem trouxe o lead primeiro.</p></div>
+      <LeadListSelector lists={lists} selectedListId={selectedListId} onSelectList={onSelectList} />
+    </div>
+    <div className="mt-5 divide-y divide-[var(--share-line)]">
+      {leads.map((lead) => <div key={lead.id} className="flex flex-wrap items-center justify-between gap-4 py-4">
+        <div><div className="flex flex-wrap items-center gap-2"><strong className="text-[var(--share-green-950)]">{lead.name}</strong><span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(lead.firstSeenByName)}</span></div><p className="mt-1 text-sm text-zinc-500">{lead.title || lead.companyName || lead.domain || "Informações comerciais preservadas no banco Share"}{lead.location ? ` · ${lead.location}` : ""}</p></div>
+        <div className="flex gap-2">{lead.linkedinUrl ? <a href={lead.linkedinUrl} target="_blank" rel="noreferrer" className="rounded-lg border border-[var(--share-line)] px-3 py-2 text-xs font-semibold text-[var(--share-green-800)]">LinkedIn</a> : null}<button type="button" onClick={() => onSaveLead(lead.id)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--share-green-950)] px-3 py-2 text-xs font-semibold text-white"><BookmarkPlus className="h-3.5 w-3.5" /> Salvar na lista</button></div>
+      </div>)}
+      {!leads.length ? <p className="py-10 text-center text-sm text-zinc-500">O banco comercial ainda está vazio.</p> : null}
+    </div>
+  </section>;
+}
+
+function LeadListPanel({ list }: { list: WorkspaceListDetail | null }) {
+  if (!list) return <section className="rounded-2xl border border-[var(--share-line)] bg-white p-8 text-center text-sm text-zinc-500">Selecione uma lista compartilhada.</section>;
+  return <section className="rounded-2xl border border-[var(--share-line)] bg-white p-6">
+    <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--share-green-800)]">Lista compartilhada</p>
+    <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{list.name}</h2>
+    <p className="mt-1 text-sm text-zinc-500">Criada por {list.ownerName}</p>
+    <div className="mt-5 divide-y divide-[var(--share-line)]">{list.items.map((item) => <div key={item.id} className="py-4"><div className="flex flex-wrap items-center gap-2"><strong>{item.lead.name}</strong><span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(item.lead.firstSeenByName)}</span></div><p className="mt-1 text-sm text-zinc-500">{item.lead.title || item.lead.companyName || item.lead.domain || ""}</p><p className="mt-1 text-xs text-zinc-400">Adicionado por {item.addedByName}</p></div>)}</div>
+  </section>;
+}
+
+function LeadListSelector({ lists, selectedListId, onSelectList }: { lists: WorkspaceList[]; selectedListId: string; onSelectList: (id: string) => void }) {
+  return <label className="grid gap-1 text-xs font-semibold text-zinc-600">Salvar em lista<select value={selectedListId} onChange={(event) => onSelectList(event.target.value)} className="h-9 min-w-[180px] rounded-lg border border-[var(--share-line)] bg-white px-2 text-xs"><option value="">Selecione</option>{lists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}</select></label>;
+}
+
+function huntingOwnerLabel(ownerName: string) {
+  const first = ownerName.trim().split(/\s+/)[0] || "Equipe";
+  return first.toLocaleLowerCase("pt-BR") === "gil" ? "Pesquisa da Gil" : `Pesquisa de ${first}`;
+}
+
+function leadOwnerLabel(ownerName: string) {
+  const first = ownerName.trim().split(/\s+/)[0] || "Equipe";
+  return first.toLocaleLowerCase("pt-BR") === "gil" ? "Lead da Gil" : `Lead de ${first}`;
 }
 
 function mergeResults(current: DecisionMakerResult, incoming: DecisionMakerResult): DecisionMakerResult {
