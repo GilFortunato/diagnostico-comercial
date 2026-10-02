@@ -296,14 +296,88 @@ textarea {
 
 .share-hub-sector-label {
   position:absolute; z-index:5; transform:translate(-50%,-50%);
-  width:116px; min-height:76px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
-  color:rgb(255 255 255 / .92); border:0; background:transparent; text-align:center; cursor:pointer; font-weight:650; font-size:12px; line-height:1.08;
+  width:146px; min-height:108px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  color:rgb(255 255 255 / .95); border:0; background:transparent; text-align:center; cursor:pointer; line-height:1.08;
 }
-.share-hub-sector-label > span:last-child { display:flex; flex-direction:column; }
 .share-hub-sector-label.is-selected { color:white; }
 .share-hub-sector-label.is-locked { opacity:.34; cursor:not-allowed; }
-.share-hub-sector-icon svg { width:24px; height:24px; stroke-width:1.7; }
-.share-hub-sector-label.is-selected .share-hub-sector-icon { color:var(--hub-yellow); filter:drop-shadow(0 0 8px rgb(232 239 84 / .35)); }
+
+.share-hub-sector-icon {
+  width:44px;
+  height:44px;
+  margin-bottom:3px;
+  display:grid;
+  place-items:center;
+  border:1px solid rgb(111 232 157 / .38);
+  border-radius:12px;
+  color:rgb(255 255 255 / .96);
+  background:
+    radial-gradient(circle at 35% 20%, rgb(142 255 150 / .18), transparent 45%),
+    linear-gradient(145deg, rgb(18 112 78 / .92), rgb(3 59 44 / .96));
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / .05),
+    inset 0 7px 16px rgb(125 255 171 / .06),
+    0 4px 10px rgb(0 0 0 / .28),
+    0 0 13px rgb(44 219 124 / .14);
+  transition:transform .2s ease,border-color .2s ease,background .2s ease,box-shadow .2s ease,color .2s ease;
+}
+.share-hub-sector-icon svg { width:25px; height:25px; stroke-width:1.75; }
+.share-hub-sector-label:hover:not(.is-locked) .share-hub-sector-icon {
+  transform:translateY(-1px);
+  border-color:rgb(147 255 179 / .58);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / .07),
+    0 5px 12px rgb(0 0 0 / .28),
+    0 0 18px rgb(61 230 131 / .24);
+}
+.share-hub-sector-label.is-selected .share-hub-sector-icon {
+  color:var(--hub-yellow);
+  border-color:rgb(205 244 67 / .72);
+  background:
+    radial-gradient(circle at 50% 35%, rgb(205 244 67 / .18), transparent 52%),
+    linear-gradient(145deg, rgb(16 119 55 / .98), rgb(5 77 39 / .98));
+  box-shadow:
+    inset 0 0 0 1px rgb(232 239 84 / .10),
+    0 4px 12px rgb(0 0 0 / .30),
+    0 0 18px rgb(200 242 60 / .28);
+  filter:none;
+}
+.share-hub-sector-title {
+  display:flex;
+  flex-direction:column;
+  font-size:12px;
+  font-weight:800;
+  line-height:1.05;
+  letter-spacing:-.01em;
+}
+.share-hub-sector-description {
+  display:flex;
+  flex-direction:column;
+  margin-top:2px;
+  font-size:9px;
+  font-weight:500;
+  line-height:1.18;
+  color:rgb(255 255 255 / .58);
+}
+.share-hub-sector-label.is-selected .share-hub-sector-description {
+  color:rgb(255 255 255 / .72);
+}
+.share-hub-sector-badge {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  margin:-1px 0 1px;
+  padding:3px 7px;
+  border-radius:5px;
+  background:linear-gradient(180deg,#f9dc4e,#e9c631);
+  color:#17311f;
+  box-shadow:0 2px 8px rgb(0 0 0 / .22);
+  font-size:7px;
+  line-height:1;
+  font-weight:900;
+  letter-spacing:.01em;
+  white-space:nowrap;
+}
 
 .share-hub-core {
   position:absolute; left:50%; top:50%; width:55%; aspect-ratio:1; transform:translate(-50%,-50%);
@@ -386,8 +460,12 @@ textarea {
   .share-hub-userbar { gap:3px; }
   .share-hub-intro h1 { font-size:42px; }
   .share-hub-nexus { width:108vw; margin-left:-4vw; }
-  .share-hub-sector-label { width:84px; min-height:62px; font-size:9px; }
-  .share-hub-sector-icon svg { width:20px; height:20px; }
+  .share-hub-sector-label { width:94px; min-height:76px; gap:2px; }
+  .share-hub-sector-icon { width:34px; height:34px; border-radius:9px; margin-bottom:2px; }
+  .share-hub-sector-icon svg { width:19px; height:19px; }
+  .share-hub-sector-title { font-size:9px; }
+  .share-hub-sector-description { display:none; }
+  .share-hub-sector-badge { padding:2px 5px; font-size:6px; }
   .share-hub-detail-body { padding:22px; }
 }
 @media (prefers-reduced-motion: reduce) {
