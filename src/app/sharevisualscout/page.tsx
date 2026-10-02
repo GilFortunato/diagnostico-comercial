@@ -3,6 +3,7 @@ import { ScoutHeader } from "@/components/scout/ScoutHeader";
 import { VisualScoutClient } from "@/components/scout/VisualScoutClient";
 import { getSessionUser } from "@/lib/auth/sessionUser";
 import { getUserModuleAccess } from "@/lib/auth/modulePermissions";
+import { searchVisualScoutImages } from "@/lib/scout/imageSearch";
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -18,6 +19,9 @@ export default async function ShareVisualScoutPage({ searchParams }: PageProps) 
   const params = await searchParams;
   const queryValue = params.q;
   const initialQuery = Array.isArray(queryValue) ? queryValue[0] ?? "" : queryValue ?? "";
+  const initialData = initialQuery.trim().length >= 3
+    ? await searchVisualScoutImages(initialQuery).catch(() => null)
+    : null;
 
   return (
     <main className="share-shell min-h-screen text-[var(--share-ink)]">
@@ -31,7 +35,7 @@ export default async function ShareVisualScoutPage({ searchParams }: PageProps) 
           </div>
           <span className="rounded-full border border-[var(--share-line)] bg-white px-4 py-2 text-xs font-semibold text-[var(--share-green-800)]">/sharevisualscout</span>
         </div>
-        <div className="mt-8"><VisualScoutClient initialQuery={initialQuery} /></div>
+        <div className="mt-8"><VisualScoutClient initialQuery={initialQuery} initialData={initialData} /></div>
       </div>
     </main>
   );
