@@ -162,6 +162,17 @@ export async function findOwnedHrHuntingSearch(id: string, actorId: string): Pro
   return attachCandidateMemory(snapshot);
 }
 
+export async function deleteOwnedHrHuntingSearch(id: string, ownerId: string) {
+  const search = await getPrisma().hrHuntingSearch.findFirst({
+    where: { id, ownerId },
+    select: { id: true, title: true, companyName: true },
+  });
+  if (!search) return null;
+
+  await getPrisma().hrHuntingSearch.delete({ where: { id: search.id } });
+  return search;
+}
+
 export async function listHrHuntingSearches(actorId: string) {
   const rows = await getPrisma().hrHuntingSearch.findMany({
     orderBy: { updatedAt: "desc" },

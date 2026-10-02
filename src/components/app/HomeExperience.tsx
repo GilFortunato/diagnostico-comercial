@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Camera,
   ChevronDown,
+  Lightbulb,
   LineChart,
   Megaphone,
   MessageCircleMore,
@@ -16,7 +17,6 @@ import {
   MessageSquareText,
   Search,
   Sparkles,
-  TrendingUp,
   UsersRound,
 } from "lucide-react";
 import { signIn, signOut } from "next-auth/react";
@@ -32,6 +32,7 @@ type Workspace = {
   key: string;
   title: string;
   shortTitle: string;
+  ringDescription: string;
   category: string;
   href?: string;
   module: PlatformModule;
@@ -49,6 +50,7 @@ const workspaces: Workspace[] = [
     key: "diagnostico",
     title: "Diagnóstico Comercial",
     shortTitle: "Diagnóstico\nComercial",
+    ringDescription: "Análises e insights\nde mercado",
     category: "Autoridade",
     href: "/diagnostico",
     module: "authority.personal",
@@ -58,21 +60,10 @@ const workspaces: Workspace[] = [
     features: ["Diagnóstico de autoridade", "Leitura de posicionamento", "Plano de ação", "Evidências e fontes"],
   },
   {
-    key: "b2b",
-    title: "B2B Hunting",
-    shortTitle: "B2B\nHunting",
-    category: "Comercial",
-    href: "/mapa-decisores",
-    module: "decision.makers",
-    icon: LineChart,
-    description: "Empresas, decisores e oportunidades comerciais em um só fluxo.",
-    summary: "Mapeie empresas e pessoas-chave para transformar inteligência comercial em prospecção.",
-    features: ["Mapa de decisores", "Sinais de oportunidade", "Empresas-alvo", "Próximos passos"],
-  },
-  {
     key: "hr",
     title: "HR Hunting",
     shortTitle: "HR\nHunting",
+    ringDescription: "Talentos para\no seu time",
     category: "Pessoas",
     href: "/hr-hunting",
     module: "hr.hunting",
@@ -82,57 +73,23 @@ const workspaces: Workspace[] = [
     features: ["Job DNA", "Busca de perfis", "Fit de candidatos", "Shortlist"],
   },
   {
-    key: "humanship",
-    title: "Humanship",
-    shortTitle: "Humanship",
-    category: "Pessoas",
-    href: "/humanship",
-    module: "humanship.r1ship",
-    icon: UsersRound,
-    description: "Pessoas, cultura e liderança com apoio da IA.",
-    summary: "Desenvolva líderes, conecte pessoas e fortaleça uma cultura mais humana e estratégica.",
-    features: ["Diagnósticos de liderança", "Desenvolvimento de pessoas", "Jornadas e programas", "Eventos e comunidade"],
-    brand: "humanship",
-  },
-  {
-    key: "events",
-    title: "Eventos & Comunidade",
-    shortTitle: "Eventos\n& Comunidade",
-    category: "Pessoas",
-    href: "/humanship/eventos",
-    module: "humanship.r1ship",
-    icon: CalendarDays,
-    description: "Agenda, comunidade e jornadas conectadas ao ecossistema Humanship.",
-    summary: "Organize experiências, acompanhe eventos e conecte os próximos movimentos da comunidade.",
-    features: ["Próximos eventos", "Jornadas", "Participantes", "Comunidade"],
-  },
-  {
-    key: "rapport",
-    title: "Rapport",
-    shortTitle: "Rapport",
-    category: "Relacionamento",
-    module: "rapport",
-    icon: MessageSquareText,
-    description: "Contexto e inteligência para conversas mais relevantes.",
-    summary: "Chegue às interações com contexto, sinais e pontos de conexão preparados.",
-    features: ["Contexto da pessoa", "Pontos de conexão", "Preparação de conversa", "Recomendações"],
-  },
-  {
-    key: "meetings",
-    title: "Inteligência de Reuniões",
-    shortTitle: "Inteligência\nde Reuniões",
-    category: "Relacionamento",
-    module: "meeting.intelligence",
-    icon: Camera,
-    description: "Contexto, preparação e próximos passos para reuniões.",
-    summary: "Reúna sinais, contexto e inteligência para chegar melhor preparado às conversas.",
-    features: ["Briefing pré-reunião", "Contexto", "Pontos de atenção", "Próximos passos"],
-    status: "construction",
+    key: "b2b",
+    title: "B2B Hunting",
+    shortTitle: "B2B\nHunting",
+    ringDescription: "Empresas e decisores\npara novos negócios",
+    category: "Comercial",
+    href: "/mapa-decisores",
+    module: "decision.makers",
+    icon: LineChart,
+    description: "Empresas, decisores e oportunidades comerciais em um só fluxo.",
+    summary: "Mapeie empresas e pessoas-chave para transformar inteligência comercial em prospecção.",
+    features: ["Mapa de decisores", "Sinais de oportunidade", "Empresas-alvo", "Próximos passos"],
   },
   {
     key: "mkt-scout",
     title: "MKT Scout",
-    shortTitle: "MKT\nScout",
+    shortTitle: "MKT Scout",
+    ringDescription: "Tendências e\ninspiração",
     category: "Marketing",
     href: "/sharetrendintelligence",
     module: "creative.trend-intelligence",
@@ -145,7 +102,8 @@ const workspaces: Workspace[] = [
   {
     key: "whats-generator",
     title: "Gerador Whats",
-    shortTitle: "Gerador\nWhats",
+    shortTitle: "Gerador Whats",
+    ringDescription: "Variações de mensagens\npara WhatsApp",
     category: "Marketing",
     module: "creative.trend-intelligence",
     icon: MessageCircleMore,
@@ -154,7 +112,58 @@ const workspaces: Workspace[] = [
     features: ["Variações de mensagem", "Tom e objetivo", "Campanhas", "Biblioteca de versões"],
     status: "construction",
   },
-];
+  {
+    key: "events",
+    title: "Eventos & Comunidade",
+    shortTitle: "Eventos\ne Comunidade",
+    ringDescription: "Agenda, encontros\ne networking",
+    category: "Pessoas",
+    href: "/humanship/eventos",
+    module: "humanship.r1ship",
+    icon: CalendarDays,
+    description: "Agenda, comunidade e jornadas conectadas ao ecossistema Humanship.",
+    summary: "Organize experiências, acompanhe eventos e conecte os próximos movimentos da comunidade.",
+    features: ["Próximos eventos", "Jornadas", "Participantes", "Comunidade"],
+  },
+  {
+    key: "meetings",
+    title: "Inteligência de Reuniões",
+    shortTitle: "Inteligência\nde Reuniões",
+    ringDescription: "Transcrições e insights\nautomáticos",
+    category: "Relacionamento",
+    module: "meeting.intelligence",
+    icon: Camera,
+    description: "Contexto, preparação e próximos passos para reuniões.",
+    summary: "Reúna sinais, contexto e inteligência para chegar melhor preparado às conversas.",
+    features: ["Briefing pré-reunião", "Contexto", "Pontos de atenção", "Próximos passos"],
+    status: "construction",
+  },
+  {
+    key: "rapport",
+    title: "Rapport",
+    shortTitle: "Rapport",
+    ringDescription: "Relatórios e\napresentações",
+    category: "Relacionamento",
+    module: "rapport",
+    icon: MessageSquareText,
+    description: "Contexto e inteligência para conversas mais relevantes.",
+    summary: "Chegue às interações com contexto, sinais e pontos de conexão preparados.",
+    features: ["Contexto da pessoa", "Pontos de conexão", "Preparação de conversa", "Recomendações"],
+  },
+  {
+    key: "humanship",
+    title: "Humanship",
+    shortTitle: "Humanship",
+    ringDescription: "Pessoas, cultura\ne desenvolvimento",
+    category: "Pessoas",
+    href: "/humanship",
+    module: "humanship.r1ship",
+    icon: Lightbulb,
+    description: "Pessoas, cultura e liderança com apoio da IA.",
+    summary: "Desenvolva líderes, conecte pessoas e fortaleça uma cultura mais humana e estratégica.",
+    features: ["Diagnósticos de liderança", "Desenvolvimento de pessoas", "Jornadas e programas", "Eventos e comunidade"],
+    brand: "humanship",
+  },
 const NEXUS_ROTATION = -80;
 
 function polar(cx:number, cy:number, radius:number, angle:number) {
@@ -300,7 +309,9 @@ export function HomeExperience({
                     aria-label={workspace.allowed ? `Selecionar ${workspace.title}` : `${workspace.title} bloqueado`}
                   >
                     <span className="share-hub-sector-icon">{workspace.allowed ? <Icon /> : <LockKeyhole />}</span>
-                    <span>{workspace.shortTitle.split("\n").map((line,i)=><span key={i}>{line}</span>)}</span>
+                    {workspace.status === "construction" ? <span className="share-hub-sector-badge">Em construção</span> : null}
+                    <span className="share-hub-sector-title">{workspace.shortTitle.split("\n").map((line,i)=><span key={i}>{line}</span>)}</span>
+                    <span className="share-hub-sector-description">{workspace.ringDescription.split("\n").map((line,i)=><span key={i}>{line}</span>)}</span>
                   </button>
                 );
               })}

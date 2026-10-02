@@ -62,6 +62,8 @@ export type HuntingSource = {
 
 export type HuntingCompany = {
   id: string;
+  workspaceLeadId?: string;
+  firstSeenByName?: string;
   name: string;
   domain?: string;
   website?: string;
@@ -80,6 +82,8 @@ export type HuntingCompany = {
 
 export type HuntingPerson = {
   id: string;
+  workspaceLeadId?: string;
+  firstSeenByName?: string;
   name: string;
   title: string;
   company: string;
@@ -112,6 +116,10 @@ export type HuntingPerson = {
 
 export type DecisionMakerResult = {
   collection?: CollectionSummary;
+  workspaceSearchId?: string;
+  workspaceOwnerName?: string;
+  persistentCache?: boolean;
+  reusedFromSearchId?: string;
   mode: "companies" | "people";
   queryId: string;
   generatedAt: string;

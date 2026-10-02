@@ -3,6 +3,7 @@ import { decisionMakerSearchSchema } from "@/lib/decision-makers/search";
 import { executeDecisionMakerSearch } from "@/lib/decision-makers/orchestrator";
 import { authorizeModule } from "@/lib/auth/moduleRequest";
 import { writeAppAuditLog } from "@/lib/audit/appAudit";
+import { findReusableB2BSearch, persistB2BWorkspaceSearch } from "@/lib/decision-makers/workspace";
 
 export const maxDuration = 300;
 
@@ -18,18 +19,49 @@ export async function POST(request: Request) {
   }
 
   try {
+    const reusable = parsed.data.forceRefresh ? null : await findReusableB2BSearch(parsed.data);
+    if (reusable) {
+      const reused = reusable.resultSnapshot as unknown as import("@/lib/decision-makers/search").DecisionMakerResult;
+      const persisted = await persistB2BWorkspaceSearch({
+        actor: access.user,
+        searchInput: parsed.data,
+        result: { ...reused, fromCache: true, persistentCache: true },
+        reusedFromSearchId: reusable.id,
+      });
+      await writeAppAuditLog({
+        actor: access.user,
+        moduleKey: "b2b.hunting",
+        action: "decision-maker.search.reused",
+        entityType: "search",
+        entityId: persisted.workspaceSearchId,
+        severity: "info",
+        retentionDays: 7,
+        metadata: {
+          resultCount: persisted.mode === "companies" ? persisted.companies.length : persisted.people.length,
+          reusedFromSearchId: reusable.id,
+        },
+      });
+      return NextResponse.json(persisted);
+    }
+
     const result = await executeDecisionMakerSearch(parsed.data);
-    const resultCount = result.mode === "companies" ? result.companies.length : result.people.length;
+    const persisted = await persistB2BWorkspaceSearch({
+      actor: access.user,
+      searchInput: parsed.data,
+      result,
+    });
+    const resultCount = persisted.mode === "companies" ? persisted.companies.length : persisted.people.length;
     await writeAppAuditLog({
       actor: access.user,
       moduleKey: "b2b.hunting",
       action: "decision-maker.search.executed",
       entityType: "search",
+      entityId: persisted.workspaceSearchId,
       severity: "info",
       retentionDays: 7,
-      metadata: { resultCount },
+      metadata: { resultCount, persistentCache: false },
     });
-    return NextResponse.json(result);
+    return NextResponse.json(persisted);
   } catch {
     await writeAppAuditLog({
       actor: access.user,

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Building2, Download, ExternalLink, LoaderCircle, Plus, Search, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { BookmarkPlus, Building2, Database, Download, ExternalLink, FolderSearch, ListChecks, LoaderCircle, Plus, Search, Trash2, Users } from "lucide-react";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
 import { defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
 import { getSuggestedRoles } from "@/lib/decision-makers/roleIntelligence";
@@ -9,6 +9,23 @@ import { splitTerms, type DecisionMakerResult, type HuntingCompany, type Hunting
 
 type SearchMode = "companies" | "people";
 type PeopleSearchTarget = { companyLinkedinUrls: string[]; companyNames: string[] };
+type WorkspaceView = "search" | "all" | "mine" | "leads" | "my-leads" | "list";
+type SavedB2BSearch = {
+  id: string; title: string; mode: string; ownerId: string; ownerName: string; mine: boolean;
+  resultCount: number; reused: boolean; updatedAt: string;
+};
+type WorkspaceLead = {
+  id: string; kind: string; name: string; companyName?: string | null; title?: string | null;
+  linkedinUrl?: string | null; domain?: string | null; website?: string | null; location?: string | null;
+  firstSeenByName: string; mine: boolean; updatedAt: string; payload: unknown;
+};
+type WorkspaceList = {
+  id: string; name: string; ownerId: string; ownerName: string; mine: boolean; shared: boolean; itemCount: number; updatedAt: string;
+};
+type WorkspaceListDetail = {
+  id: string; name: string; ownerId: string; ownerName: string;
+  items: Array<{ id: string; addedByName: string; createdAt: string; lead: WorkspaceLead }>;
+};
 
 export function DecisionMakerMapExperienceV2() {
   const units = useMemo(() => demoBusinessUnits.filter((unit) => unit.contextType === "business"), []);
@@ -22,6 +39,14 @@ export function DecisionMakerMapExperienceV2() {
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("search");
+  const [savedSearches, setSavedSearches] = useState<SavedB2BSearch[]>([]);
+  const [workspaceLeads, setWorkspaceLeads] = useState<WorkspaceLead[]>([]);
+  const [workspaceLists, setWorkspaceLists] = useState<WorkspaceList[]>([]);
+  const [activeList, setActiveList] = useState<WorkspaceListDetail | null>(null);
+  const [selectedListId, setSelectedListId] = useState("");
+  const [newListName, setNewListName] = useState("");
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
 
   const [industries, setIndustries] = useState("");
   const [country, setCountry] = useState("Brazil");
@@ -45,6 +70,131 @@ export function DecisionMakerMapExperienceV2() {
   const canSearch = mode === "companies"
     ? Boolean(splitTerms(industries).length || splitTerms(companyKeywords).length || splitTerms(domains).length)
     : Boolean(splitTerms(companyLinkedinUrls).length && splitTerms(rolesText).length);
+
+  useEffect(() => {
+    void refreshWorkspace();
+  }, []);
+
+  async function refreshWorkspace() {
+    try {
+      const response = await fetch("/api/decision-makers/workspace", { cache: "no-store" });
+      const body = await response.json() as { searches?: SavedB2BSearch[]; leads?: WorkspaceLead[]; lists?: WorkspaceList[] };
+      if (!response.ok) return;
+      setSavedSearches(body.searches || []);
+      setWorkspaceLeads(body.leads || []);
+      setWorkspaceLists(body.lists || []);
+      setSelectedListId((current) => current || body.lists?.[0]?.id || "");
+    } catch {
+      // O motor de busca continua disponível mesmo se o workspace estiver temporariamente indisponível.
+    }
+  }
+
+  async function openSavedSearch(id: string) {
+    setWorkspaceLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/decision-makers/workspace/${id}`, { cache: "no-store" });
+      const body = await response.json() as { search?: { input: import("@/lib/decision-makers/search").DecisionMakerSearchInput; result: DecisionMakerResult }; error?: string };
+      if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível abrir a pesquisa.");
+      applyWorkspaceInput(body.search.input);
+      setResult(body.search.result);
+      setSelectedCompanyIds([]);
+      setWorkspaceView("search");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível abrir a pesquisa.");
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  }
+
+  async function deleteSavedSearch(item: SavedB2BSearch) {
+    if (!item.mine || !window.confirm(`Excluir a pesquisa "${item.title}"? Os leads globais encontrados nela serão preservados.`)) return;
+    setWorkspaceLoading(true);
+    try {
+      const response = await fetch(`/api/decision-makers/workspace/${item.id}`, { method: "DELETE" });
+      const body = await response.json() as { deleted?: boolean; error?: string };
+      if (!response.ok || !body.deleted) throw new Error(body.error || "Não foi possível excluir a pesquisa.");
+      await refreshWorkspace();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível excluir a pesquisa.");
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  }
+
+  async function createSharedList() {
+    if (newListName.trim().length < 2) return;
+    setWorkspaceLoading(true);
+    try {
+      const response = await fetch("/api/decision-makers/lists", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newListName.trim() }),
+      });
+      const body = await response.json() as { list?: { id: string }; error?: string };
+      if (!response.ok || !body.list) throw new Error(body.error || "Não foi possível criar a lista.");
+      setNewListName("");
+      setSelectedListId(body.list.id);
+      await refreshWorkspace();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível criar a lista.");
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  }
+
+  async function openSharedList(id: string) {
+    setWorkspaceLoading(true);
+    try {
+      const response = await fetch(`/api/decision-makers/lists/${id}`, { cache: "no-store" });
+      const body = await response.json() as { list?: WorkspaceListDetail; error?: string };
+      if (!response.ok || !body.list) throw new Error(body.error || "Não foi possível abrir a lista.");
+      setActiveList(body.list);
+      setSelectedListId(id);
+      setWorkspaceView("list");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível abrir a lista.");
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  }
+
+  async function saveLeadToList(leadId?: string) {
+    if (!leadId) return setError("Este resultado ainda não possui um registro de lead no workspace.");
+    if (!selectedListId) return setError("Crie ou selecione uma lista compartilhada antes de salvar o lead.");
+    try {
+      const response = await fetch(`/api/decision-makers/lists/${selectedListId}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId }),
+      });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error || "Não foi possível salvar o lead na lista.");
+      await refreshWorkspace();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível salvar o lead na lista.");
+    }
+  }
+
+  function applyWorkspaceInput(input: import("@/lib/decision-makers/search").DecisionMakerSearchInput) {
+    setBusinessUnitId(input.businessUnitId);
+    setObjective(input.objective);
+    setMode(input.mode);
+    if (input.mode === "companies") {
+      setIndustries(input.filters.industries.join(", "));
+      setCountry(input.filters.country);
+      setStates(input.filters.states.join(", "));
+      setCompanyKeywords(input.filters.keywords.join(", "));
+      setDomains(input.filters.domains.join(", "));
+      setCompanyQuantity(input.filters.quantity);
+    } else {
+      setCompanyLinkedinUrls(input.filters.companyLinkedinUrls.join("\n"));
+      setCompanyNames(input.filters.companyNames.join(", "));
+      setRolesText(input.filters.roles.join(", "));
+      setLocations(input.filters.locations.join(", "));
+      setProfileKeywords(input.filters.profileKeywords.join(", "));
+      setPeopleQuantity(input.filters.quantity);
+      setIncludeBroadDiscovery(input.filters.includeBroadDiscovery);
+    }
+  }
 
   async function runSearch({
     loadMore = false,
@@ -132,6 +282,7 @@ export function DecisionMakerMapExperienceV2() {
         setResult(next);
         setSelectedCompanyIds([]);
       }
+      await refreshWorkspace();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível concluir a busca.");
     } finally {
@@ -194,18 +345,32 @@ export function DecisionMakerMapExperienceV2() {
   }
 
   return <main className="share-shell min-h-screen text-[var(--share-ink)]">
-    <div className="mx-auto grid max-w-[1440px] gap-5 px-5 py-7">
+    <div className="mx-auto max-w-[1600px] px-5 py-7">
+      <div className="grid gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
+        <B2BWorkspaceSidebar
+          view={workspaceView}
+          searches={savedSearches}
+          leads={workspaceLeads}
+          lists={workspaceLists}
+          newListName={newListName}
+          setNewListName={setNewListName}
+          onNew={() => { setWorkspaceView("search"); setResult(null); }}
+          onView={setWorkspaceView}
+          onOpenList={(id) => void openSharedList(id)}
+          onCreateList={() => void createSharedList()}
+        />
+        <div className="min-w-0 grid gap-5">
       <section className="rounded-lg bg-[var(--share-green-950)] p-6 text-white">
         <p className="text-xs font-semibold uppercase text-[var(--share-lime)]">B2B Hunting</p>
         <h1 className="mt-2 text-3xl font-semibold">Encontre contas e decisores sem repetir resultados.</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/75">Cada nova rodada amplia a cobertura e deduplica por LinkedIn, domínio e identificadores confiáveis antes de exibir.</p>
       </section>
 
-      <section className="rounded-lg border border-[var(--share-line)] bg-white">
+      {workspaceView === "search" ? <section className="rounded-lg border border-[var(--share-line)] bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--share-line)] p-3">
           <div className="flex gap-2">
-            <Mode active={mode === "companies"} icon={Building2} label="Encontrar empresas" onClick={() => { setMode("companies"); setResult(null); }} />
-            <Mode active={mode === "people"} icon={Users} label="Encontrar pessoas" onClick={() => { setMode("people"); setResult(null); }} />
+            <Mode active={mode === "companies"} icon={Building2} label="Encontrar empresas" onClick={() => { setWorkspaceView("search"); setMode("companies"); setResult(null); }} />
+            <Mode active={mode === "people"} icon={Users} label="Encontrar pessoas" onClick={() => { setWorkspaceView("search"); setMode("people"); setResult(null); }} />
           </div>
           <div className="grid min-w-[520px] gap-2 sm:grid-cols-[200px_1fr]">
             <label className="grid gap-1 text-xs font-semibold text-zinc-600">Contexto de negócio<select value={businessUnitId} onChange={(event) => changeContext(event.target.value)} className="h-10 border border-[var(--share-line)] bg-white px-3 text-sm">{units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></label>
@@ -243,7 +408,10 @@ export function DecisionMakerMapExperienceV2() {
             {!result ? <Empty mode={mode} /> : <>
               <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--share-line)] pb-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Resultados</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Resultados</p>
+                    {result.persistentCache ? <span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">Reaproveitado do Banco Share</span> : null}
+                  </div>
                   <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{result.mode === "companies" ? `${result.companies.length} contas encontradas` : `${result.people.length} pessoas encontradas`}</h2>
                   <p className="mt-1 text-sm text-zinc-600">{result.nextBestAction.reason}</p>
                 </div>
@@ -260,7 +428,11 @@ export function DecisionMakerMapExperienceV2() {
                 onContinue={continueWithSelectedCompanies}
                 onSearchCompany={(company) => { void searchPeopleForCompanies([company]); }}
                 isSearching={isSearching}
-              /> : <PeopleTable people={result.people} />}
+                selectedListId={selectedListId}
+                lists={workspaceLists}
+                onSelectList={setSelectedListId}
+                onSaveLead={(leadId) => void saveLeadToList(leadId)}
+              /> : <PeopleTable people={result.people} selectedListId={selectedListId} lists={workspaceLists} onSelectList={setSelectedListId} onSaveLead={(leadId) => void saveLeadToList(leadId)} />}
 
               <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-md bg-[#fbfdf8] p-4">
                 <p className="text-sm text-zinc-600">{result.mode === "companies" ? "Novas contas são deduplicadas por LinkedIn, domínio e nome normalizado." : "Novas pessoas são deduplicadas pela URL real do LinkedIn e ID da fonte."}</p>
@@ -277,9 +449,138 @@ export function DecisionMakerMapExperienceV2() {
             </>}
           </div>
         </div>
-      </section>
+      </section> : null}
+
+      {workspaceLoading ? <div className="rounded-2xl border border-[var(--share-line)] bg-white p-5 text-sm text-zinc-500"><LoaderCircle className="mr-2 inline h-4 w-4 animate-spin" />Atualizando workspace...</div> : null}
+
+      {!workspaceLoading && (workspaceView === "all" || workspaceView === "mine") ? (
+        <SavedSearchPanel
+          title={workspaceView === "mine" ? "Minhas pesquisas" : "Pesquisas da equipe"}
+          searches={workspaceView === "mine" ? savedSearches.filter((item) => item.mine) : savedSearches}
+          onOpen={(id) => void openSavedSearch(id)}
+          onDelete={(item) => void deleteSavedSearch(item)}
+        />
+      ) : null}
+
+      {!workspaceLoading && (workspaceView === "leads" || workspaceView === "my-leads") ? (
+        <WorkspaceLeadsPanel
+          title={workspaceView === "my-leads" ? "Meus leads" : "Leads da equipe"}
+          leads={workspaceView === "my-leads" ? workspaceLeads.filter((lead) => lead.mine) : workspaceLeads}
+          lists={workspaceLists}
+          selectedListId={selectedListId}
+          onSelectList={setSelectedListId}
+          onSaveLead={(leadId) => void saveLeadToList(leadId)}
+        />
+      ) : null}
+
+      {!workspaceLoading && workspaceView === "list" ? (
+        <LeadListPanel list={activeList} />
+      ) : null}
+        </div>
+      </div>
     </div>
   </main>;
+}
+
+function B2BWorkspaceSidebar({
+  view, searches, leads, lists, newListName, setNewListName, onNew, onView, onOpenList, onCreateList,
+}: {
+  view: WorkspaceView;
+  searches: SavedB2BSearch[];
+  leads: WorkspaceLead[];
+  lists: WorkspaceList[];
+  newListName: string;
+  setNewListName: (value: string) => void;
+  onNew: () => void;
+  onView: (view: WorkspaceView) => void;
+  onOpenList: (id: string) => void;
+  onCreateList: () => void;
+}) {
+  const mine = searches.filter((item) => item.mine).length;
+  return <aside className="self-start rounded-2xl bg-[var(--share-green-950)] p-4 text-white shadow-sm lg:sticky lg:top-24">
+    <p className="px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--share-lime)]">B2B Workspace</p>
+    <button type="button" onClick={onNew} className={`mt-3 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${view === "search" ? "bg-[var(--share-lime)] text-[var(--share-green-950)]" : "bg-white text-[var(--share-green-950)]"}`}><Plus className="h-4 w-4" /> Nova busca</button>
+    <nav className="mt-4 space-y-1">
+      <button type="button" onClick={() => onView("all")} className={workspaceNav(view === "all")}><FolderSearch className="h-4 w-4" /><span className="flex-1">Pesquisas da equipe</span><span className="text-xs opacity-50">{searches.length}</span></button>
+      <button type="button" onClick={() => onView("mine")} className={workspaceNav(view === "mine")}><Search className="h-4 w-4" /><span className="flex-1">Minhas pesquisas</span><span className="text-xs opacity-50">{mine}</span></button>
+      <button type="button" onClick={() => onView("leads")} className={workspaceNav(view === "leads")}><Database className="h-4 w-4" /><span className="flex-1">Leads da equipe</span><span className="text-xs opacity-50">{leads.length}</span></button>
+      <button type="button" onClick={() => onView("my-leads")} className={workspaceNav(view === "my-leads")}><Users className="h-4 w-4" /><span className="flex-1">Meus leads</span><span className="text-xs opacity-50">{leads.filter((lead) => lead.mine).length}</span></button>
+    </nav>
+    <div className="my-4 h-px bg-white/10" />
+    <div className="px-2">
+      <div className="flex items-center gap-2"><ListChecks className="h-4 w-4 text-[var(--share-lime)]" /><p className="text-xs font-bold uppercase tracking-[0.12em] text-white/65">Listas compartilhadas</p></div>
+      <div className="mt-2 space-y-1">
+        {lists.map((list) => <button key={list.id} type="button" onClick={() => onOpenList(list.id)} className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-xs text-white/75 hover:bg-white/10 hover:text-white"><span className="truncate">{list.name}</span><span className="opacity-45">{list.itemCount}</span></button>)}
+      </div>
+      <input value={newListName} onChange={(event) => setNewListName(event.target.value)} placeholder="Nova lista" className="mt-3 h-9 w-full rounded-lg border border-white/15 bg-white/10 px-3 text-xs text-white placeholder:text-white/35" />
+      <button type="button" onClick={onCreateList} disabled={newListName.trim().length < 2} className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-white px-3 text-xs font-bold text-[var(--share-green-950)] disabled:opacity-40"><Plus className="h-3.5 w-3.5" /> Criar lista</button>
+    </div>
+    <div className="mt-5 border-t border-white/10 px-2 pt-4"><p className="text-[10px] uppercase tracking-[0.12em] text-white/40">Cache Share</p><p className="mt-1 text-xs leading-5 text-white/55">Buscas idênticas recentes são reaproveitadas antes de chamar fontes externas.</p></div>
+  </aside>;
+}
+
+function workspaceNav(active: boolean) {
+  return `flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold ${active ? "bg-white/15 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"}`;
+}
+
+function SavedSearchPanel({ title, searches, onOpen, onDelete }: { title: string; searches: SavedB2BSearch[]; onOpen: (id: string) => void; onDelete: (item: SavedB2BSearch) => void }) {
+  return <section className="rounded-2xl border border-[var(--share-line)] bg-white p-6">
+    <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--share-green-800)]">Workspace compartilhado</p>
+    <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{title}</h2>
+    <div className="mt-5 grid gap-3 md:grid-cols-2">
+      {searches.map((item) => <article key={item.id} className="rounded-2xl border border-[var(--share-line)] bg-[#fbfdf9] p-5">
+        <div className="flex items-start justify-between gap-3">
+          <button type="button" onClick={() => onOpen(item.id)} className="min-w-0 flex-1 text-left">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--share-green-800)]">{huntingOwnerLabel(item.ownerName)}</p>
+            <h3 className="mt-1 text-lg font-semibold text-[var(--share-green-950)]">{item.title}</h3>
+            <p className="mt-3 text-xs text-zinc-500">{item.resultCount} resultado(s){item.reused ? " · reaproveitada do banco Share" : ""}</p>
+          </button>
+          {item.mine ? <button type="button" onClick={() => onDelete(item)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" aria-label="Excluir pesquisa"><Trash2 className="h-4 w-4" /></button> : null}
+        </div>
+      </article>)}
+      {!searches.length ? <p className="col-span-full py-10 text-center text-sm text-zinc-500">Nenhuma pesquisa salva nesta área.</p> : null}
+    </div>
+  </section>;
+}
+
+function WorkspaceLeadsPanel({ title, leads, lists, selectedListId, onSelectList, onSaveLead }: { title: string; leads: WorkspaceLead[]; lists: WorkspaceList[]; selectedListId: string; onSelectList: (id: string) => void; onSaveLead: (id: string) => void }) {
+  return <section className="rounded-2xl border border-[var(--share-line)] bg-white p-6">
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--share-green-800)]">Banco Share</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{title}</h2><p className="mt-2 text-sm text-zinc-500">Empresas e pessoas já encontradas pelo comercial, preservando quem trouxe o lead primeiro.</p></div>
+      <LeadListSelector lists={lists} selectedListId={selectedListId} onSelectList={onSelectList} />
+    </div>
+    <div className="mt-5 divide-y divide-[var(--share-line)]">
+      {leads.map((lead) => <div key={lead.id} className="flex flex-wrap items-center justify-between gap-4 py-4">
+        <div><div className="flex flex-wrap items-center gap-2"><strong className="text-[var(--share-green-950)]">{lead.name}</strong><span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(lead.firstSeenByName)}</span></div><p className="mt-1 text-sm text-zinc-500">{lead.title || lead.companyName || lead.domain || "Informações comerciais preservadas no banco Share"}{lead.location ? ` · ${lead.location}` : ""}</p></div>
+        <div className="flex gap-2">{lead.linkedinUrl ? <a href={lead.linkedinUrl} target="_blank" rel="noreferrer" className="rounded-lg border border-[var(--share-line)] px-3 py-2 text-xs font-semibold text-[var(--share-green-800)]">LinkedIn</a> : null}<button type="button" onClick={() => onSaveLead(lead.id)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--share-green-950)] px-3 py-2 text-xs font-semibold text-white"><BookmarkPlus className="h-3.5 w-3.5" /> Salvar na lista</button></div>
+      </div>)}
+      {!leads.length ? <p className="py-10 text-center text-sm text-zinc-500">O banco comercial ainda está vazio.</p> : null}
+    </div>
+  </section>;
+}
+
+function LeadListPanel({ list }: { list: WorkspaceListDetail | null }) {
+  if (!list) return <section className="rounded-2xl border border-[var(--share-line)] bg-white p-8 text-center text-sm text-zinc-500">Selecione uma lista compartilhada.</section>;
+  return <section className="rounded-2xl border border-[var(--share-line)] bg-white p-6">
+    <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--share-green-800)]">Lista compartilhada</p>
+    <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{list.name}</h2>
+    <p className="mt-1 text-sm text-zinc-500">Criada por {list.ownerName}</p>
+    <div className="mt-5 divide-y divide-[var(--share-line)]">{list.items.map((item) => <div key={item.id} className="py-4"><div className="flex flex-wrap items-center gap-2"><strong>{item.lead.name}</strong><span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(item.lead.firstSeenByName)}</span></div><p className="mt-1 text-sm text-zinc-500">{item.lead.title || item.lead.companyName || item.lead.domain || ""}</p><p className="mt-1 text-xs text-zinc-400">Adicionado por {item.addedByName}</p></div>)}</div>
+  </section>;
+}
+
+function LeadListSelector({ lists, selectedListId, onSelectList }: { lists: WorkspaceList[]; selectedListId: string; onSelectList: (id: string) => void }) {
+  return <label className="grid gap-1 text-xs font-semibold text-zinc-600">Salvar em lista<select value={selectedListId} onChange={(event) => onSelectList(event.target.value)} className="h-9 min-w-[180px] rounded-lg border border-[var(--share-line)] bg-white px-2 text-xs"><option value="">Selecione</option>{lists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}</select></label>;
+}
+
+function huntingOwnerLabel(ownerName: string) {
+  const first = ownerName.trim().split(/\s+/)[0] || "Equipe";
+  return first.toLocaleLowerCase("pt-BR") === "gil" ? "Pesquisa da Gil" : `Pesquisa de ${first}`;
+}
+
+function leadOwnerLabel(ownerName: string) {
+  const first = ownerName.trim().split(/\s+/)[0] || "Equipe";
+  return first.toLocaleLowerCase("pt-BR") === "gil" ? "Lead da Gil" : `Lead de ${first}`;
 }
 
 function mergeResults(current: DecisionMakerResult, incoming: DecisionMakerResult): DecisionMakerResult {
@@ -325,6 +626,10 @@ function CompanyTable({
   onContinue,
   onSearchCompany,
   isSearching,
+  selectedListId,
+  lists,
+  onSelectList,
+  onSaveLead,
 }: {
   companies: HuntingCompany[];
   selected: string[];
@@ -332,12 +637,17 @@ function CompanyTable({
   onContinue: () => void;
   onSearchCompany: (company: HuntingCompany) => void;
   isSearching: boolean;
+  selectedListId: string;
+  lists: WorkspaceList[];
+  onSelectList: (id: string) => void;
+  onSaveLead: (leadId?: string) => void;
 }) {
   return <div className="mt-4">
+    <div className="mb-3 flex justify-end"><LeadListSelector lists={lists} selectedListId={selectedListId} onSelectList={onSelectList} /></div>
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[920px] text-left text-sm">
+      <table className="w-full min-w-[1040px] text-left text-sm">
         <thead className="text-xs uppercase text-[var(--share-green-800)]">
-          <tr><th className="border-b p-3">Conta</th><th className="border-b p-3">Setor</th><th className="border-b p-3">Localização</th><th className="border-b p-3">Fit</th><th className="border-b p-3">Fonte</th><th className="border-b p-3">Ação</th></tr>
+          <tr><th className="border-b p-3">Conta</th><th className="border-b p-3">Setor</th><th className="border-b p-3">Localização</th><th className="border-b p-3">Fit</th><th className="border-b p-3">Fonte</th><th className="border-b p-3">Workspace</th><th className="border-b p-3">Ação</th></tr>
         </thead>
         <tbody>{companies.map((company) => <tr key={company.id} className="border-b border-[var(--share-line)]">
           <td className="p-3"><label className="flex items-start gap-3"><input type="checkbox" checked={selected.includes(company.id)} onChange={(event) => setSelected(event.target.checked ? [...selected, company.id] : selected.filter((id) => id !== company.id))} className="mt-1" /><span><strong>{company.name}</strong>{company.domain ? <span className="block text-xs text-zinc-500">{company.domain}</span> : null}</span></label></td>
@@ -345,7 +655,8 @@ function CompanyTable({
           <td className="p-3">{company.location || "Não informada"}</td>
           <td className="p-3 font-semibold">{company.fit}</td>
           <td className="p-3">{company.linkedinUrl ? <a href={company.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[var(--share-green-800)]">LinkedIn <ExternalLink className="h-3.5 w-3.5" /></a> : company.source}</td>
-          <td className="p-3"><button type="button" onClick={() => onSearchCompany(company)} disabled={!company.linkedinUrl || isSearching} className="whitespace-nowrap rounded-md bg-[var(--share-green-950)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{company.linkedinUrl ? "Buscar decisores" : "Sem LinkedIn"}</button></td>
+          <td className="p-3">{company.firstSeenByName ? <span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(company.firstSeenByName)}</span> : <span className="text-xs text-zinc-400">Novo lead</span>}</td>
+          <td className="p-3"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => onSearchCompany(company)} disabled={!company.linkedinUrl || isSearching} className="whitespace-nowrap rounded-md bg-[var(--share-green-950)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{company.linkedinUrl ? "Buscar decisores" : "Sem LinkedIn"}</button><button type="button" onClick={() => onSaveLead(company.workspaceLeadId)} disabled={!company.workspaceLeadId || !selectedListId} className="inline-flex items-center gap-1 rounded-md border border-[var(--share-line)] px-3 py-2 text-xs font-semibold text-[var(--share-green-800)] disabled:opacity-40"><BookmarkPlus className="h-3.5 w-3.5" /> Lista</button></div></td>
         </tr>)}</tbody>
       </table>
     </div>
@@ -353,8 +664,11 @@ function CompanyTable({
   </div>;
 }
 
-function PeopleTable({ people }: { people: HuntingPerson[] }) {
-  return <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className="text-xs uppercase text-[var(--share-green-800)]"><tr><th className="border-b p-3">Pessoa</th><th className="border-b p-3">Cargo</th><th className="border-b p-3">Empresa</th><th className="border-b p-3">Fit</th><th className="border-b p-3">Próxima ação</th></tr></thead><tbody>{people.map((person) => <tr key={person.id} className="border-b border-[var(--share-line)]"><td className="p-3"><a href={person.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--share-green-950)] hover:underline">{person.name}<ExternalLink className="h-3.5 w-3.5" /></a><span className="mt-1 block text-xs text-zinc-500">{person.location || "Localização não informada"}</span></td><td className="p-3">{person.title}</td><td className="p-3">{person.company}</td><td className="p-3"><strong>{person.fitScore}%</strong><span className="ml-2 text-xs text-zinc-500">{person.fit}</span></td><td className="p-3 text-zinc-600">{person.nextBestAction}</td></tr>)}</tbody></table></div>;
+function PeopleTable({ people, selectedListId, lists, onSelectList, onSaveLead }: { people: HuntingPerson[]; selectedListId: string; lists: WorkspaceList[]; onSelectList: (id: string) => void; onSaveLead: (leadId?: string) => void }) {
+  return <div className="mt-4">
+    <div className="mb-3 flex justify-end"><LeadListSelector lists={lists} selectedListId={selectedListId} onSelectList={onSelectList} /></div>
+    <div className="overflow-x-auto"><table className="w-full min-w-[1040px] text-left text-sm"><thead className="text-xs uppercase text-[var(--share-green-800)]"><tr><th className="border-b p-3">Pessoa</th><th className="border-b p-3">Cargo</th><th className="border-b p-3">Empresa</th><th className="border-b p-3">Fit</th><th className="border-b p-3">Workspace</th><th className="border-b p-3">Próxima ação</th></tr></thead><tbody>{people.map((person) => <tr key={person.id} className="border-b border-[var(--share-line)]"><td className="p-3"><a href={person.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--share-green-950)] hover:underline">{person.name}<ExternalLink className="h-3.5 w-3.5" /></a><span className="mt-1 block text-xs text-zinc-500">{person.location || "Localização não informada"}</span></td><td className="p-3">{person.title}</td><td className="p-3">{person.company}</td><td className="p-3"><strong>{person.fitScore}%</strong><span className="ml-2 text-xs text-zinc-500">{person.fit}</span></td><td className="p-3"><div className="flex flex-col items-start gap-2">{person.firstSeenByName ? <span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(person.firstSeenByName)}</span> : <span className="text-xs text-zinc-400">Novo lead</span>}<button type="button" onClick={() => onSaveLead(person.workspaceLeadId)} disabled={!person.workspaceLeadId || !selectedListId} className="inline-flex items-center gap-1 rounded-md border border-[var(--share-line)] px-2 py-1 text-[10px] font-semibold text-[var(--share-green-800)] disabled:opacity-40"><BookmarkPlus className="h-3 w-3" /> Salvar na lista</button></div></td><td className="p-3 text-zinc-600">{person.nextBestAction}</td></tr>)}</tbody></table></div>
+  </div>;
 }
 
 function Empty({ mode }: { mode: SearchMode }) {

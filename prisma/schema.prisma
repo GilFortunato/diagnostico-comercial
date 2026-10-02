@@ -205,6 +205,94 @@ model HrCandidateReview {
   @@index([reviewerId, createdAt])
 }
 
+model B2BWorkspaceSearch {
+  id                 String          @id @default(cuid())
+  ownerId            String
+  ownerName          String
+  mode               String
+  title              String
+  businessUnitId     String
+  objective          String
+  queryHash          String
+  input              Json
+  resultSnapshot     Json
+  resultCount        Int             @default(0)
+  reusedFromSearchId String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  leads              B2BSearchLead[]
+
+  @@index([queryHash, updatedAt])
+  @@index([ownerId, updatedAt])
+  @@index([mode, updatedAt])
+}
+
+model B2BLead {
+  id                String            @id @default(cuid())
+  leadKey           String            @unique
+  kind              String
+  name              String
+  companyName       String?
+  title             String?
+  linkedinUrl       String?
+  domain            String?
+  website           String?
+  location          String?
+  firstSeenById     String
+  firstSeenByName   String
+  firstSeenSearchId String?
+  payload           Json
+  lastSeenAt        DateTime          @default(now())
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  searches          B2BSearchLead[]
+  listItems         B2BLeadListItem[]
+
+  @@index([kind, updatedAt])
+  @@index([firstSeenById, updatedAt])
+  @@index([linkedinUrl])
+  @@index([domain])
+}
+
+model B2BSearchLead {
+  id        String             @id @default(cuid())
+  searchId  String
+  leadId    String
+  search    B2BWorkspaceSearch @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  lead      B2BLead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdAt DateTime           @default(now())
+
+  @@unique([searchId, leadId])
+  @@index([leadId])
+}
+
+model B2BLeadList {
+  id        String            @id @default(cuid())
+  name      String
+  ownerId   String
+  ownerName String
+  shared    Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  items     B2BLeadListItem[]
+
+  @@index([ownerId, updatedAt])
+}
+
+model B2BLeadListItem {
+  id          String      @id @default(cuid())
+  listId      String
+  leadId      String
+  addedById   String
+  addedByName String
+  list        B2BLeadList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  lead        B2BLead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+
+  @@unique([listId, leadId])
+  @@index([leadId])
+}
+
 model ProfessionalProfile {
   id                      String   @id @default(cuid())
   userId                  String   @unique
