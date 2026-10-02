@@ -18,7 +18,8 @@ export class ScoutError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
 export function visualSearchAvailable() {
-  return [process.env.UNSPLASH_ACCESS_KEY, process.env.PEXELS_API_KEY, process.env.PIXABAY_API_KEY].some((key) => key?.trim());
+  // Openverse is available without an API key, so visual reference search always has a fallback.
+  return true;
 }
 export const queryKey = (query = "") => createHash("sha256").update(query.trim().toLocaleLowerCase("pt-BR")).digest("hex");
 type Collector = typeof collectSource;

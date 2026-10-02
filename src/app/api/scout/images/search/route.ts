@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const allowed = await getUserModuleAccess(user, "creative.visual-scout");
+  const allowed = await getUserModuleAccess(user, "creative.trend-intelligence");
   if (!allowed) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const url = new URL(request.url);
