@@ -64,7 +64,9 @@ export function VisualScoutClient({
   const [message, setMessage] = useState<string | null>(() => {
     if (!initialData) return null;
     const configured = initialData.providers.filter((provider) => provider.configured);
-    if (!configured.length) return "O motor está pronto, mas nenhum banco de imagens tem chave configurada neste ambiente ainda.";
+    const responding = initialData.providers.filter((provider) => provider.ok);
+    if (!configured.length) return "Nenhum banco de imagens está disponível neste ambiente.";
+    if (!responding.length) return "Os bancos de imagem estão disponíveis, mas nenhum respondeu com sucesso nesta tentativa. Veja o status dos providers abaixo.";
     if (!initialData.results.length) return "Os bancos responderam, mas nenhuma imagem passou pelos filtros desta busca. Tente um briefing um pouco mais amplo.";
     return null;
   });
@@ -91,8 +93,11 @@ export function VisualScoutClient({
       setData(payload);
 
       const configured = payload.providers.filter((provider) => provider.configured);
+      const responding = payload.providers.filter((provider) => provider.ok);
       if (!configured.length) {
-        setMessage("O motor está pronto, mas nenhum banco de imagens tem chave configurada neste ambiente ainda.");
+        setMessage("Nenhum banco de imagens está disponível neste ambiente.");
+      } else if (!responding.length) {
+        setMessage("Nenhum provider respondeu com sucesso nesta tentativa. Confira o status de cada fonte abaixo.");
       } else if (!payload.results.length) {
         setMessage("Os bancos responderam, mas nenhuma imagem passou pelos filtros desta busca. Tente um briefing um pouco mais amplo.");
       }
