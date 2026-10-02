@@ -24,12 +24,14 @@ export async function POST(request: Request) {
 
   try {
     const workbook = new Workbook();
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const arrayBuffer = await file.arrayBuffer();
 
     if (lower.endsWith(".csv")) {
-      await workbook.csv.read(Readable.from([buffer]));
+      await workbook.csv.read(Readable.from([Buffer.from(arrayBuffer)]));
     } else {
-      await workbook.xlsx.load(buffer);
+      // ExcelJS 4.4.0 types its load input as an ArrayBuffer-like Buffer.
+      // Passing the browser-standard ArrayBuffer avoids the Node Buffer generic mismatch.
+      await workbook.xlsx.load(arrayBuffer);
     }
 
     const sheet = workbook.worksheets[0];
