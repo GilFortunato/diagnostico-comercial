@@ -1,6 +1,6 @@
 import { AppHeader } from "@/components/app/AppHeader";
 import { HumanshipR1ShipExperience } from "@/components/humanship/HumanshipR1ShipExperience";
-import { isAdminEmail } from "@/lib/auth/admin";
+import { isAdminUser } from "@/lib/auth/admin";
 import { getSessionUser } from "@/lib/auth/sessionUser";
 import { getUserModuleAccess } from "@/lib/auth/modulePermissions";
 import { canDeleteHumanshipEvents } from "@/lib/humanship/managers";
@@ -14,7 +14,7 @@ export default async function HumanshipPage() {
   }
 
   return <>
-    <AppHeader isAdmin={isAdminEmail(user.email)} />
+    <AppHeader isAdmin={isAdminUser(user)} />
     <HumanshipR1ShipExperience
       accountName={user.name || user.email || "Usuário"}
       canDeleteEvents={canDeleteHumanshipEvents(user)}
