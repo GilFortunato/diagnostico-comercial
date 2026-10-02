@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authorizeModule } from "@/lib/auth/moduleRequest";
 import { createHumanshipEvent, listHumanshipEvents } from "@/lib/humanship/service";
 import { deleteAllHumanshipEvents } from "@/lib/humanship/cleanup";
+import { canDeleteHumanshipEvents } from "@/lib/humanship/managers";
 
 const createSchema = z.object({ name: z.string().trim().min(2).max(180) });
 
@@ -24,6 +25,9 @@ export async function POST(request: Request) {
 export async function DELETE() {
   const access = await authorizeModule("humanship.r1ship");
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
+  if (!canDeleteHumanshipEvents(access.user)) {
+    return NextResponse.json({ error: "A exclusão de eventos é restrita aos gestores autorizados." }, { status: 403 });
+  }
   const deleted = await deleteAllHumanshipEvents(access.user.id);
   return NextResponse.json({ deleted });
 }
