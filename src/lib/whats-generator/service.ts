@@ -162,10 +162,11 @@ export async function deleteOwnedWhatsCampaign(id: string, ownerId: string) {
 }
 
 export async function refreshWhatsCampaignCounters(campaignId: string) {
-  const [totalRecipients, generatedCount, sentCount] = await Promise.all([
+  const [totalRecipients, generatedCount, sentCount, doNotContactCount] = await Promise.all([
     getPrisma().whatsRecipient.count({ where: { campaignId } }),
     getPrisma().whatsRecipient.count({ where: { campaignId, message: { not: null } } }),
     getPrisma().whatsRecipient.count({ where: { campaignId, status: "sent" } }),
+    getPrisma().whatsRecipient.count({ where: { campaignId, status: "do_not_contact" } }),
   ]);
 
   return getPrisma().whatsCampaign.update({
@@ -174,7 +175,7 @@ export async function refreshWhatsCampaignCounters(campaignId: string) {
       totalRecipients,
       generatedCount,
       sentCount,
-      status: sentCount >= totalRecipients && totalRecipients > 0 ? "completed" : generatedCount > 0 ? "in_progress" : "ready",
+      status: sentCount + doNotContactCount >= totalRecipients && totalRecipients > 0 ? "completed" : generatedCount > 0 ? "in_progress" : "ready",
     },
   });
 }
