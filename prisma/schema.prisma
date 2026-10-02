@@ -660,6 +660,26 @@ model ApprovalRequest {
   updatedAt   DateTime       @updatedAt
 }
 
+model AppAuditLog {
+  id            String   @id @default(cuid())
+  actorUserId   String?
+  actorName     String?
+  actorEmail    String?
+  moduleKey     String
+  action        String
+  entityType    String?
+  entityId      String?
+  severity      String   @default("info")
+  retentionDays Int      @default(7)
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([moduleKey, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([severity, createdAt])
+}
+
 model AuditLog {
   id             String       @id @default(cuid())
   organizationId String
