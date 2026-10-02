@@ -9,7 +9,7 @@ import { splitTerms, type DecisionMakerResult, type HuntingCompany, type Hunting
 
 type SearchMode = "companies" | "people";
 type PeopleSearchTarget = { companyLinkedinUrls: string[]; companyNames: string[] };
-type WorkspaceView = "search" | "all" | "mine" | "leads" | "list";
+type WorkspaceView = "search" | "all" | "mine" | "leads" | "my-leads" | "list";
 type SavedB2BSearch = {
   id: string; title: string; mode: string; ownerId: string; ownerName: string; mine: boolean;
   resultCount: number; reused: boolean; updatedAt: string;
@@ -17,7 +17,7 @@ type SavedB2BSearch = {
 type WorkspaceLead = {
   id: string; kind: string; name: string; companyName?: string | null; title?: string | null;
   linkedinUrl?: string | null; domain?: string | null; website?: string | null; location?: string | null;
-  firstSeenByName: string; updatedAt: string; payload: unknown;
+  firstSeenByName: string; mine: boolean; updatedAt: string; payload: unknown;
 };
 type WorkspaceList = {
   id: string; name: string; ownerId: string; ownerName: string; mine: boolean; shared: boolean; itemCount: number; updatedAt: string;
@@ -459,9 +459,10 @@ export function DecisionMakerMapExperienceV2() {
         />
       ) : null}
 
-      {!workspaceLoading && workspaceView === "leads" ? (
+      {!workspaceLoading && (workspaceView === "leads" || workspaceView === "my-leads") ? (
         <WorkspaceLeadsPanel
-          leads={workspaceLeads}
+          title={workspaceView === "my-leads" ? "Meus leads" : "Leads da equipe"}
+          leads={workspaceView === "my-leads" ? workspaceLeads.filter((lead) => lead.mine) : workspaceLeads}
           lists={workspaceLists}
           selectedListId={selectedListId}
           onSelectList={setSelectedListId}
@@ -500,6 +501,7 @@ function B2BWorkspaceSidebar({
       <button type="button" onClick={() => onView("all")} className={workspaceNav(view === "all")}><FolderSearch className="h-4 w-4" /><span className="flex-1">Pesquisas da equipe</span><span className="text-xs opacity-50">{searches.length}</span></button>
       <button type="button" onClick={() => onView("mine")} className={workspaceNav(view === "mine")}><Search className="h-4 w-4" /><span className="flex-1">Minhas pesquisas</span><span className="text-xs opacity-50">{mine}</span></button>
       <button type="button" onClick={() => onView("leads")} className={workspaceNav(view === "leads")}><Database className="h-4 w-4" /><span className="flex-1">Leads da equipe</span><span className="text-xs opacity-50">{leads.length}</span></button>
+      <button type="button" onClick={() => onView("my-leads")} className={workspaceNav(view === "my-leads")}><Users className="h-4 w-4" /><span className="flex-1">Meus leads</span><span className="text-xs opacity-50">{leads.filter((lead) => lead.mine).length}</span></button>
     </nav>
     <div className="my-4 h-px bg-white/10" />
     <div className="px-2">
@@ -538,10 +540,10 @@ function SavedSearchPanel({ title, searches, onOpen, onDelete }: { title: string
   </section>;
 }
 
-function WorkspaceLeadsPanel({ leads, lists, selectedListId, onSelectList, onSaveLead }: { leads: WorkspaceLead[]; lists: WorkspaceList[]; selectedListId: string; onSelectList: (id: string) => void; onSaveLead: (id: string) => void }) {
+function WorkspaceLeadsPanel({ title, leads, lists, selectedListId, onSelectList, onSaveLead }: { title: string; leads: WorkspaceLead[]; lists: WorkspaceList[]; selectedListId: string; onSelectList: (id: string) => void; onSaveLead: (id: string) => void }) {
   return <section className="rounded-2xl border border-[var(--share-line)] bg-white p-6">
     <div className="flex flex-wrap items-end justify-between gap-4">
-      <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--share-green-800)]">Banco Share</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Leads da equipe</h2><p className="mt-2 text-sm text-zinc-500">Empresas e pessoas já encontradas pelo comercial, preservando quem trouxe o lead primeiro.</p></div>
+      <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--share-green-800)]">Banco Share</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{title}</h2><p className="mt-2 text-sm text-zinc-500">Empresas e pessoas já encontradas pelo comercial, preservando quem trouxe o lead primeiro.</p></div>
       <LeadListSelector lists={lists} selectedListId={selectedListId} onSelectList={onSelectList} />
     </div>
     <div className="mt-5 divide-y divide-[var(--share-line)]">
