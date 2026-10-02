@@ -26,6 +26,7 @@ const moduleLabels: Record<PlatformModule, string> = {
   "decision.makers": "Mapa de decisores",
   "hr.hunting": "HR Hunting",
   "humanship.r1ship": "Humanship · R1 Ship",
+  "humanship.admin": "ADM Humanship",
   rapport: "Rapport",
   "meeting.intelligence": "Inteligência de reuniões",
 };
