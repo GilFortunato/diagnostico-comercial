@@ -105,12 +105,13 @@ const workspaces: Workspace[] = [
     shortTitle: "Gerador Whats",
     ringDescription: "Variações de mensagens\npara WhatsApp",
     category: "Marketing",
-    module: "creative.trend-intelligence",
+    href: "/gerador-whats",
+    module: "communication.whats-generator",
     icon: MessageCircleMore,
     description: "Mensagens variadas para campanhas e abordagens no WhatsApp.",
     summary: "Ambiente em preparação para criar variações de mensagem e apoiar operações com menor repetição de texto.",
-    features: ["Variações de mensagem", "Tom e objetivo", "Campanhas", "Biblioteca de versões"],
-    status: "construction",
+    features: ["Mensagens individualizadas", "Upload de base", "WhatsApp Web", "Histórico de campanhas"],
+    new: true,
   },
   {
     key: "events",
@@ -164,6 +165,7 @@ const workspaces: Workspace[] = [
     features: ["Diagnósticos de liderança", "Desenvolvimento de pessoas", "Jornadas e programas", "Eventos e comunidade"],
     brand: "humanship",
   },
+];
 const NEXUS_ROTATION = -80;
 
 function polar(cx:number, cy:number, radius:number, angle:number) {
