@@ -528,12 +528,12 @@ textarea {
 
 /* Optical corrections per sector: keep text inside each wedge without shrinking the Nexus. */
 .share-hub-sector-label.is-humanship {
-  width:88px;
-  transform:translate(-43%,-50%);
+  width:86px;
+  transform:translate(-38%,-50%);
 }
 .share-hub-sector-label.is-whats-generator {
-  width:88px;
-  transform:translate(-57%,-50%);
+  width:86px;
+  transform:translate(-61%,-50%);
 }
 .share-hub-sector-label.is-diagnostico {
   width:90px;
@@ -544,16 +544,16 @@ textarea {
   transform:translate(-56%,-50%);
 }
 .share-hub-sector-label.is-meetings {
-  width:92px;
-  transform:translate(-50%,-57%);
+  width:90px;
+  transform:translate(-50%,-64%);
 }
 .share-hub-sector-label.is-rapport {
   width:86px;
   transform:translate(-46%,-54%);
 }
 .share-hub-sector-label.is-events {
-  width:92px;
-  transform:translate(-54%,-54%);
+  width:90px;
+  transform:translate(-55%,-59%);
 }
 .share-hub-sector-label.is-hr,
 .share-hub-sector-label.is-b2b {
