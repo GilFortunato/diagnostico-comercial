@@ -213,7 +213,7 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
 
   return (
     <main className="min-h-screen bg-[#eef4e9] text-[var(--share-ink)]">
-      <div className="mx-auto max-w-[1440px] px-5 py-7">
+      <div className="w-full px-4 py-5 xl:px-6">
         <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--share-green-800)]">Humanship</p>
@@ -241,8 +241,8 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
 
         {error ? <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</p> : null}
 
-        <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-          <aside className="self-start rounded-3xl border border-[#cbdcc9] bg-[#003f2c] p-4 text-white shadow-sm lg:sticky lg:top-24">
+        <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="self-start rounded-2xl border border-[#cbdcc9] bg-[#003f2c] p-4 text-white shadow-sm lg:sticky lg:top-[76px] lg:min-h-[calc(100vh-96px)]">
             <div className="px-2 pb-4">
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#d8ef55]">Workspace</p>
               <h2 className="mt-1 text-lg font-semibold">Operação do evento</h2>
