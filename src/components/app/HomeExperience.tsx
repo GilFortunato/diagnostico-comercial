@@ -12,7 +12,6 @@ import {
   ImageIcon,
   LineChart,
   LockKeyhole,
-  LogOut,
   MessageSquareText,
   Search,
   Sparkles,
@@ -155,8 +154,6 @@ const workspaces: Workspace[] = [
     new: true,
   },
 ];
-
-const angles = [-90, -45, 0, 45, 90, 135, 180, 225, 270];
 
 function polar(cx:number, cy:number, radius:number, angle:number) {
   const rad = (angle - 90) * Math.PI / 180;
