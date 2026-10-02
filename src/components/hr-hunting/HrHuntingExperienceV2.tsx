@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BriefcaseBusiness, Check, Copy, Download, ExternalLink, FolderSearch, ListChecks, LoaderCircle, Plus, Search, UserRoundSearch, X } from "lucide-react";
+import { BriefcaseBusiness, Check, Copy, Download, ExternalLink, FolderSearch, ListChecks, LoaderCircle, Plus, Search, Trash2, UserRoundSearch, X } from "lucide-react";
 import { buildLinkedInOutreachMessage } from "@/components/hr-hunting/outreachMessage";
 import type { HrCandidate, HrHuntingSearchSnapshot, JobDna } from "@/lib/hr-hunting/types";
 
 type JobForm = { description: string; jobUrl: string; companyName: string; recruiterName: string };
 type SearchFilters = { quantity: number; currentTitle: string; location: string; keywords: string; seniority: string[] };
-type Pending = "job" | "dna" | "search" | "more" | "export" | null;
+type Pending = "job" | "dna" | "search" | "more" | "export" | "delete" | null;
 
 const emptyForm: JobForm = { description: "", jobUrl: "", companyName: "", recruiterName: "" };
 const emptyFilters: SearchFilters = { quantity: 50, currentTitle: "", location: "", keywords: "", seniority: [] };
@@ -70,6 +70,32 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       if (response.ok) setSavedSearches(body.searches || []);
     } catch {
       // A navegação continua funcional mesmo se a lista compartilhada estiver temporariamente indisponível.
+    }
+  }
+
+  async function deleteSavedSearch(item: SavedSearchSummary) {
+    if (!item.mine) return;
+    const confirmed = window.confirm(`Excluir a vaga "${item.title}"? Essa ação remove esta vaga, seus resultados e shortlist vinculada. A memória global dos candidatos será preservada.`);
+    if (!confirmed) return;
+
+    setPending("delete");
+    setError(null);
+    try {
+      const response = await fetch(`/api/hr-hunting/${item.id}`, { method: "DELETE" });
+      const body = await response.json() as { deleted?: boolean; error?: string };
+      if (!response.ok || !body.deleted) throw new Error(body.error || "Não foi possível excluir a vaga.");
+
+      if (search?.id === item.id) {
+        setSearch(null);
+        setSelected([]);
+        setCandidate(null);
+        setView("mine");
+      }
+      await refreshSavedSearches();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível excluir a vaga.");
+    } finally {
+      setPending(null);
     }
   }
 
@@ -269,6 +295,8 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
                 title={view === "all" ? "Todas as vagas" : view === "mine" ? "Minhas vagas" : "Minhas shortlists"}
                 searches={visibleSearches}
                 onOpen={(id) => void openSavedSearch(id)}
+                onDelete={(item) => void deleteSavedSearch(item)}
+                deleting={pending === "delete"}
               />
             ) : null}
 
@@ -359,7 +387,19 @@ function WorkspaceSidebar({
   );
 }
 
-function SavedSearchList({ title, searches, onOpen }: { title: string; searches: SavedSearchSummary[]; onOpen: (id: string) => void }) {
+function SavedSearchList({
+  title,
+  searches,
+  onOpen,
+  onDelete,
+  deleting,
+}: {
+  title: string;
+  searches: SavedSearchSummary[];
+  onOpen: (id: string) => void;
+  onDelete: (item: SavedSearchSummary) => void;
+  deleting: boolean;
+}) {
   return (
     <section className="rounded-3xl border border-[#cbdcc9] bg-white p-6 shadow-sm">
       <div className="mb-5">
@@ -369,20 +409,35 @@ function SavedSearchList({ title, searches, onOpen }: { title: string; searches:
       {!searches.length ? <p className="rounded-2xl border border-dashed border-[#cbdcc9] px-5 py-10 text-center text-sm text-zinc-500">Nenhuma vaga nesta área ainda.</p> : (
         <div className="grid gap-3 md:grid-cols-2">
           {searches.map((item) => (
-            <button key={item.id} type="button" onClick={() => onOpen(item.id)} className="rounded-2xl border border-[#d8e3d6] bg-[#fbfdf9] p-5 text-left transition hover:border-[#8caf83] hover:bg-white">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#006142]">{huntingLabel(item.ownerName)}</p>
-                  <h3 className="mt-1 text-lg font-semibold text-[#003f2c]">{item.title}</h3>
-                  <p className="mt-1 text-xs text-zinc-500">{item.companyName || "Empresa não informada"}</p>
+            <article key={item.id} className="relative rounded-2xl border border-[#d8e3d6] bg-[#fbfdf9] transition hover:border-[#8caf83] hover:bg-white">
+              <button type="button" onClick={() => onOpen(item.id)} className="w-full p-5 text-left">
+                <div className="flex items-start justify-between gap-3 pr-20">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#006142]">{huntingLabel(item.ownerName)}</p>
+                    <h3 className="mt-1 text-lg font-semibold text-[#003f2c]">{item.title}</h3>
+                    <p className="mt-1 text-xs text-zinc-500">{item.companyName || "Empresa não informada"}</p>
+                  </div>
+                  {item.mine ? <span className="rounded-full bg-[#e9f5dc] px-2.5 py-1 text-[10px] font-bold uppercase text-[#47651a]">Minha</span> : null}
                 </div>
-                {item.mine ? <span className="rounded-full bg-[#e9f5dc] px-2.5 py-1 text-[10px] font-bold uppercase text-[#47651a]">Minha</span> : null}
-              </div>
-              <div className="mt-4 flex gap-4 text-xs text-zinc-500">
-                <span>{item.candidates} candidatos</span>
-                <span>{item.shortlist} shortlist</span>
-              </div>
-            </button>
+                <div className="mt-4 flex gap-4 text-xs text-zinc-500">
+                  <span>{item.candidates} candidatos</span>
+                  <span>{item.shortlist} shortlist</span>
+                </div>
+              </button>
+
+              {item.mine ? (
+                <button
+                  type="button"
+                  onClick={() => onDelete(item)}
+                  disabled={deleting}
+                  className="absolute bottom-4 right-4 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  aria-label={`Excluir vaga ${item.title}`}
+                >
+                  {deleting ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  Excluir
+                </button>
+              ) : null}
+            </article>
           ))}
         </div>
       )}
