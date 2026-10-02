@@ -22,7 +22,7 @@ type ScoutImage = {
 };
 
 type ProviderState = {
-  provider: "unsplash" | "pexels" | "pixabay";
+  provider: "unsplash" | "pexels" | "pixabay" | "openverse";
   configured: boolean;
   ok: boolean;
   count: number;
