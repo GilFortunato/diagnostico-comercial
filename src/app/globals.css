@@ -301,7 +301,7 @@ textarea {
 
 .share-hub-sector-label {
   position:absolute; z-index:5; transform:translate(-50%,-50%);
-  width:132px; min-height:98px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  width:104px; min-height:86px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
   color:rgb(255 255 255 / .95); border:0; background:transparent; text-align:center; cursor:pointer; line-height:1.08;
 }
 .share-hub-sector-label.is-selected { color:white; }
@@ -350,7 +350,7 @@ textarea {
 .share-hub-sector-title {
   display:flex;
   flex-direction:column;
-  font-size:11px;
+  font-size:10.5px;
   font-weight:800;
   line-height:1.05;
   letter-spacing:-.01em;
@@ -359,7 +359,7 @@ textarea {
   display:flex;
   flex-direction:column;
   margin-top:2px;
-  font-size:8.5px;
+  font-size:7.8px;
   font-weight:500;
   line-height:1.18;
   color:rgb(255 255 255 / .58);
@@ -473,7 +473,7 @@ textarea {
     width:min(460px,82vw,68dvh);
     margin:12px auto 18px;
   }
-  .share-hub-sector-label { width:86px; min-height:68px; gap:1px; }
+  .share-hub-sector-label { width:76px; min-height:62px; gap:1px; }
   .share-hub-sector-icon { width:26px; height:26px; border-radius:8px; margin-bottom:1px; }
   .share-hub-sector-icon svg { width:14px; height:14px; }
   .share-hub-sector-title { font-size:8.5px; line-height:1.02; }
@@ -494,7 +494,7 @@ textarea {
   .share-hub-main-grid { min-height:0; }
   .share-hub-nexus-wrap { padding:0; }
   .share-hub-nexus { width:min(500px,78vw,66dvh); }
-  .share-hub-sector-label { width:112px; min-height:82px; }
+  .share-hub-sector-label { width:96px; min-height:74px; }
   .share-hub-sector-icon { width:28px; height:28px; }
   .share-hub-sector-icon svg { width:15px; height:15px; }
   .share-hub-sector-title { font-size:10px; }
@@ -518,4 +518,15 @@ textarea {
 }
 @media (max-width: 600px) {
   .share-hub-nexus { max-height:68dvh; }
+}
+
+
+/* Keep labels visually inside their annular sectors. */
+.share-hub-sector-title,
+.share-hub-sector-description {
+  max-width:100%;
+  overflow-wrap:anywhere;
+}
+.share-hub-sector-label {
+  padding-inline:4px;
 }
