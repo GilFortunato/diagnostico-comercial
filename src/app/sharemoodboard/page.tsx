@@ -17,8 +17,8 @@ export default async function BriefingMoodboardPage() {
       <div className="mx-auto max-w-7xl px-5 py-7 md:py-9">
         <div className="mb-6">
           <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--share-green-800)]">MKT Scout · Projeto de Design</p>
-          <h1 className="mt-1 text-[28px] font-semibold tracking-tight text-[var(--share-green-950)]">Do Briefing ao Moodboard</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Transforme um briefing textual em rotas visuais, referências rastreáveis e um moodboard preliminar para validar direção antes da produção.</p>
+          <h1 className="mt-1 text-[28px] font-semibold tracking-tight text-[var(--share-green-950)]">Moodboard</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Do briefing à direção visual: transforme contexto em rotas criativas, referências rastreáveis e um painel preliminar conectado ao Visual Scout.</p>
         </div>
         <BriefingMoodboardClient />
       </div>
