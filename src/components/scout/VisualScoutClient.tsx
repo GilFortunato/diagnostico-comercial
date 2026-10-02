@@ -208,12 +208,7 @@ export function VisualScoutClient({
                   }`}
                 >
                   <button type="button" onClick={() => toggle(item.id)} className="block w-full text-left">
-                    <div
-                      className="m-3 h-48 rounded-xl bg-[#e9efe7] bg-cover bg-center"
-                      style={{ backgroundImage: `url("${item.previewUrl.replace(/"/g, "%22")}")` }}
-                      role="img"
-                      aria-label={item.title}
-                    />
+                    <ScoutPreview item={item} />
                     <div className="p-4 pt-1">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
@@ -270,5 +265,36 @@ export function VisualScoutClient({
         </section>
       ) : null}
     </>
+  );
+}
+
+
+function ScoutPreview({ item }: { item: ScoutImage }) {
+  const [src, setSrc] = useState(item.previewUrl);
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <div className="m-3 grid h-48 place-items-center rounded-xl bg-[#e9efe7] px-5 text-center text-xs text-zinc-500">
+        Prévia indisponível. A referência continua acessível pelo link da fonte.
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={item.title}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      className="m-3 h-48 w-[calc(100%-1.5rem)] rounded-xl bg-[#e9efe7] object-cover"
+      onError={() => {
+        if (src !== item.fullUrl) {
+          setSrc(item.fullUrl);
+          return;
+        }
+        setFailed(true);
+      }}
+    />
   );
 }
