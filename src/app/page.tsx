@@ -1,12 +1,12 @@
 import { HomeExperience } from "@/components/app/HomeExperience";
-import { isAdminEmail } from "@/lib/auth/admin";
+import { isAdminUser } from "@/lib/auth/admin";
 import { listUserModuleAccess } from "@/lib/auth/modulePermissions";
 import { getSessionUser } from "@/lib/auth/sessionUser";
 import { getNextHumanshipAgendaEvent } from "@/lib/humanship/agenda";
 
 export default async function Home() {
   const user = await getSessionUser();
-  const isAdmin = isAdminEmail(user?.email);
+  const isAdmin = isAdminUser(user);
   const access = user
     ? await listUserModuleAccess(user).catch(() => ({}))
     : {};
