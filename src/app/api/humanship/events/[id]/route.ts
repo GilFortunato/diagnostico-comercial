@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authorizeModule } from "@/lib/auth/moduleRequest";
-import { canDeleteHumanshipEvents } from "@/lib/humanship/managers";
 import { deleteHumanshipEvent, getHumanshipEvent, renameHumanshipEvent } from "@/lib/humanship/service";
 import { writeAppAuditLog } from "@/lib/audit/appAudit";
 
@@ -40,11 +39,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const access = await authorizeModule("humanship.r1ship");
+  const access = await authorizeModule("humanship.admin");
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
-  if (!canDeleteHumanshipEvents(access.user)) {
-    return NextResponse.json({ error: "Somente os gestores autorizados podem excluir eventos." }, { status: 403 });
-  }
 
   const id = (await params).id;
   const deleted = await deleteHumanshipEvent(id);
