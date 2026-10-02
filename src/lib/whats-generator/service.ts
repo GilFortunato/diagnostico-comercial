@@ -97,13 +97,15 @@ export async function getWhatsCampaign(id: string): Promise<WhatsCampaignView | 
   };
 }
 
-export async function getWhatsRecipientsForGeneration(campaignId: string, recipientId?: string) {
+export async function getWhatsRecipientsForGeneration(campaignId: string, recipientIds?: string[]) {
   return getPrisma().whatsRecipient.findMany({
     where: {
       campaignId,
-      ...(recipientId ? { id: recipientId } : { status: { not: "do_not_contact" } }),
+      status: { not: "do_not_contact" },
+      ...(recipientIds?.length ? { id: { in: recipientIds } } : { message: null }),
     },
     orderBy: { rowNumber: "asc" },
+    take: recipientIds?.length ? Math.min(25, recipientIds.length) : 20,
   });
 }
 
