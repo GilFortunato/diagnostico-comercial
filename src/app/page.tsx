@@ -2,6 +2,7 @@ import { HomeExperience } from "@/components/app/HomeExperience";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { listUserModuleAccess } from "@/lib/auth/modulePermissions";
 import { getSessionUser } from "@/lib/auth/sessionUser";
+import { getNextHumanshipAgendaEvent } from "@/lib/humanship/agenda";
 
 export default async function Home() {
   const user = await getSessionUser();
@@ -9,6 +10,7 @@ export default async function Home() {
   const access = user
     ? await listUserModuleAccess(user).catch(() => ({}))
     : {};
+  const nextEvent = await getNextHumanshipAgendaEvent().catch(() => null);
 
   return (
     <HomeExperience
@@ -16,6 +18,11 @@ export default async function Home() {
       isAdmin={isAdmin}
       access={access}
       userName={user?.name || user?.email || null}
+      nextEvent={nextEvent ? {
+        title: nextEvent.title,
+        startAt: nextEvent.startAt,
+        endAt: nextEvent.endAt,
+      } : null}
     />
   );
 }
