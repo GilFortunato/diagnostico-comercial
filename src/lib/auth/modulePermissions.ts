@@ -1,5 +1,5 @@
 import "server-only";
-import { isAdminEmail } from "@/lib/auth/admin";
+import { isAdminUser } from "@/lib/auth/admin";
 import type { SessionUser } from "@/lib/auth/sessionUser";
 import { getPrisma } from "@/lib/db/prisma";
 import { platformModules, resolveUserModuleAccess, type PlatformModule } from "@/lib/auth/moduleAccessPolicy";
@@ -7,7 +7,7 @@ import { platformModules, resolveUserModuleAccess, type PlatformModule } from "@
 export { platformModules, resolveModuleAccess, resolveUserModuleAccess, type PlatformModule } from "@/lib/auth/moduleAccessPolicy";
 
 export async function getUserModuleAccess(user: SessionUser, moduleKey: PlatformModule) {
-  const admin = isAdminEmail(user.email);
+  const admin = isAdminUser(user);
   if (!user.active || admin) return resolveUserModuleAccess(moduleKey, { active: user.active, admin });
   const permission = await getPrisma().userModulePermission.findUnique({
     where: { userId_moduleKey: { userId: user.id, moduleKey } },
@@ -24,7 +24,7 @@ export async function listUserModuleAccess(user: SessionUser) {
   const explicit = new Map(rows.map((row) => [row.moduleKey, row.enabled]));
   return Object.fromEntries(platformModules.map((moduleKey) => [
     moduleKey,
-    resolveUserModuleAccess(moduleKey, { active: user.active, admin: isAdminEmail(user.email), explicitValue: explicit.get(moduleKey) }),
+    resolveUserModuleAccess(moduleKey, { active: user.active, admin: isAdminUser(user), explicitValue: explicit.get(moduleKey) }),
   ])) as Record<PlatformModule, boolean>;
 }
 
