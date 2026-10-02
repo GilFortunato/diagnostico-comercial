@@ -14,7 +14,7 @@ export const platformModules = [
 
 export type PlatformModule = (typeof platformModules)[number];
 
-// New users enter through the personal LinkedIn diagnostic only.
+// New users enter with only the Diagnóstico Comercial workspace enabled.
 // Existing explicit permissions remain authoritative and admins keep full access.
 const defaultModuleAccess: Record<PlatformModule, boolean> = {
   "authority.personal": true,
