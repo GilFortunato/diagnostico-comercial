@@ -4,8 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { LoginButton } from "@/components/auth/LoginButton";
 
-export function ScoutHeader({ active }: { active: "visual" | "trend" }) {
-  const item = (href: string, label: string, key: "visual" | "trend") => (
+export function ScoutHeader({ active }: { active: "visual" | "trend" | "moodboard" }) {
+  const item = (href: string, label: string, key: "visual" | "trend" | "moodboard") => (
     <Link
       href={href}
       aria-current={active === key ? "page" : undefined}
@@ -33,6 +33,7 @@ export function ScoutHeader({ active }: { active: "visual" | "trend" }) {
         <nav aria-label="MKT Scout" className="flex items-center gap-5">
           {item("/sharetrendintelligence", "Trend Intelligence", "trend")}
           {item("/sharevisualscout", "Visual Scout", "visual")}
+          {item("/sharemoodboard", "Moodboard", "moodboard")}
         </nav>
         <LoginButton variant="light" label="Entrar" />
       </div>

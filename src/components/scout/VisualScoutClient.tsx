@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { Bookmark, Check, ExternalLink, LoaderCircle, Search } from "lucide-react";
+import { Check, ExternalLink, LoaderCircle, Palette, Search } from "lucide-react";
 
 type ScoutImage = {
   id: string;
@@ -122,6 +122,13 @@ export function VisualScoutClient({
   const visible = useMemo(() => data?.results.slice(0, visibleCount) ?? [], [data, visibleCount]);
   const hasMore = Boolean(data && visibleCount < data.results.length);
 
+  function sendToMoodboard() {
+    if (!data || !selected.length) return;
+    const images = data.results.filter((item) => selected.includes(item.id));
+    sessionStorage.setItem("share:mkt-scout:visual-selection", JSON.stringify({ query, images }));
+    window.location.href = "/sharemoodboard?from=visual";
+  }
+
   return (
     <>
       <form onSubmit={submit} className="share-card rounded-2xl p-6">
@@ -201,12 +208,7 @@ export function VisualScoutClient({
                   }`}
                 >
                   <button type="button" onClick={() => toggle(item.id)} className="block w-full text-left">
-                    <div
-                      className="m-3 h-48 rounded-xl bg-[#e9efe7] bg-cover bg-center"
-                      style={{ backgroundImage: `url("${item.previewUrl.replace(/"/g, "%22")}")` }}
-                      role="img"
-                      aria-label={item.title}
-                    />
+                    <ScoutPreview item={item} />
                     <div className="p-4 pt-1">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
@@ -252,15 +254,47 @@ export function VisualScoutClient({
               <span className="text-sm font-semibold">{selected.length} referências selecionadas</span>
               <button
                 type="button"
+                onClick={sendToMoodboard}
                 disabled={!selected.length}
                 className="inline-flex items-center gap-2 rounded-lg bg-[var(--share-lime)] px-4 py-2 text-sm font-bold text-[var(--share-green-950)] disabled:opacity-50"
               >
-                <Bookmark className="h-4 w-4" /> Salvar coleção
+                <Palette className="h-4 w-4" /> Usar no Moodboard
               </button>
             </div>
           ) : null}
         </section>
       ) : null}
     </>
+  );
+}
+
+
+function ScoutPreview({ item }: { item: ScoutImage }) {
+  const [src, setSrc] = useState(item.previewUrl);
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <div className="m-3 grid h-48 place-items-center rounded-xl bg-[#e9efe7] px-5 text-center text-xs text-zinc-500">
+        Prévia indisponível. A referência continua acessível pelo link da fonte.
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={item.title}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      className="m-3 h-48 w-[calc(100%-1.5rem)] rounded-xl bg-[#e9efe7] object-cover"
+      onError={() => {
+        if (src !== item.fullUrl) {
+          setSrc(item.fullUrl);
+          return;
+        }
+        setFailed(true);
+      }}
+    />
   );
 }
