@@ -292,8 +292,8 @@ export function HomeExperience({
               {available.map((workspace,index) => {
                 const step = 360 / available.length;
                 const angle = NEXUS_ROTATION + index * step + step / 2;
-                const textPoint = polar(50,50,37.2,angle);
-                const iconPoint = polar(50,50,41.6,angle);
+                const textPoint = polar(50,50,39.4,angle);
+                const iconPoint = polar(50,50,43.4,angle);
                 const Icon = workspace.icon;
                 const selectedNow = workspace.key === selected.key;
                 return (
