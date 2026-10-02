@@ -31,7 +31,7 @@ type Workspace = {
   title: string;
   shortTitle: string;
   category: string;
-  href: string;
+  href?: string;
   module: PlatformModule;
   icon: React.ComponentType<{ className?: string }>;
   description: string;
@@ -108,7 +108,6 @@ const workspaces: Workspace[] = [
     title: "Rapport",
     shortTitle: "Rapport",
     category: "Relacionamento",
-    href: "/rapport",
     module: "rapport.pre-meeting",
     icon: MessageSquareText,
     description: "Contexto e inteligência para conversas mais relevantes.",
@@ -133,7 +132,6 @@ const workspaces: Workspace[] = [
     title: "Inteligência de Reuniões",
     shortTitle: "Inteligência\nde Reuniões",
     category: "Relacionamento",
-    href: "/meeting-intelligence",
     module: "meeting.intelligence",
     icon: Camera,
     description: "Contexto, preparação e próximos passos para reuniões.",
@@ -324,8 +322,21 @@ export function HomeExperience({
                 ))}
               </ul>
 
-              {selected.allowed || !authenticated ? (
-                <Link href={authenticated ? selected.href : "#"} onClick={(event) => { if (!authenticated) { event.preventDefault(); void signIn("google"); } }} className="share-hub-open">
+              {!selected.href ? (
+                <button type="button" className="share-hub-open is-disabled" disabled>
+                  Workspace em preparação
+                </button>
+              ) : selected.allowed || !authenticated ? (
+                <Link
+                  href={authenticated ? selected.href : "#"}
+                  onClick={(event) => {
+                    if (!authenticated) {
+                      event.preventDefault();
+                      void signIn("google");
+                    }
+                  }}
+                  className="share-hub-open"
+                >
                   Abrir workspace <ArrowRight />
                 </Link>
               ) : (
