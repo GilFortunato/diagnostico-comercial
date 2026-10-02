@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/app/AppHeader";
 import { ConnectorStatusSummary } from "@/components/connectors/ConnectorStatusSummary";
 import { AuthorityDiagnostic } from "@/components/diagnostics/AuthorityDiagnostic";
-import { isAdminEmail } from "@/lib/auth/admin";
+import { isAdminUser } from "@/lib/auth/admin";
 import { getUserModuleAccess } from "@/lib/auth/modulePermissions";
 import { getSessionUser } from "@/lib/auth/sessionUser";
 
@@ -25,7 +25,7 @@ export default async function DiagnosticoPage() {
 
   return (
     <main className="share-shell min-h-screen text-[var(--share-ink)]">
-      <AppHeader isAdmin={isAdminEmail(user.email)} />
+      <AppHeader isAdmin={isAdminUser(user)} />
       <div className="mx-auto grid max-w-7xl gap-8 px-5 py-8">
         <section className="share-green-panel overflow-hidden rounded-2xl text-white">
           <div className="grid gap-8 p-6 md:p-8 lg:grid-cols-[1fr_420px]">
