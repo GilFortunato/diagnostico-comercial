@@ -15,10 +15,10 @@ export function NexusBackground() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const canvasElement = canvasRef.current;
+    if (!canvasElement) return;
+    const context = canvasElement.getContext("2d");
+    if (!context) return;
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let width = 0;
@@ -29,13 +29,13 @@ export function NexusBackground() {
     let last = performance.now();
 
     function resize() {
-      const rect = canvas.getBoundingClientRect();
+      const rect = canvasElement.getBoundingClientRect();
       width = rect.width;
       height = rect.height;
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.round(width * dpr));
-      canvas.height = Math.max(1, Math.round(height * dpr));
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      canvasElement.width = Math.max(1, Math.round(width * dpr));
+      canvasElement.height = Math.max(1, Math.round(height * dpr));
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const count = Math.max(34, Math.min(66, Math.round((width * height) / 26000)));
       nodes = Array.from({ length: count }, (_, index) => ({
@@ -49,13 +49,13 @@ export function NexusBackground() {
     }
 
     const observer = new ResizeObserver(resize);
-    observer.observe(canvas);
+    observer.observe(canvasElement);
     resize();
 
     function frame(now: number) {
       const dt = Math.min(2, (now - last) / 16.67);
       last = now;
-      ctx.clearRect(0, 0, width, height);
+      context.clearRect(0, 0, width, height);
 
       const cx = width / 2;
       const cy = height / 2;
@@ -87,24 +87,24 @@ export function NexusBackground() {
           if (dist > maxLink) continue;
 
           const alpha = Math.pow(1 - dist / maxLink, 2) * 0.2;
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-          ctx.strokeStyle = `rgba(156,255,0,${alpha})`;
-          ctx.lineWidth = 0.8;
-          ctx.stroke();
+          context.beginPath();
+          context.moveTo(a.x, a.y);
+          context.lineTo(b.x, b.y);
+          context.strokeStyle = `rgba(156,255,0,${alpha})`;
+          context.lineWidth = 0.8;
+          context.stroke();
 
           if ((i + j) % 13 === 0) {
             const t = reduced ? 0.5 : (Math.sin(now * 0.00055 + i * 0.7 + j) + 1) / 2;
             const px = a.x + dx * t;
             const py = a.y + dy * t;
-            ctx.beginPath();
-            ctx.arc(px, py, 1.15, 0, Math.PI * 2);
-            ctx.fillStyle = "rgba(191,255,210,0.72)";
-            ctx.shadowColor = "#9cff00";
-            ctx.shadowBlur = 7;
-            ctx.fill();
-            ctx.shadowBlur = 0;
+            context.beginPath();
+            context.arc(px, py, 1.15, 0, Math.PI * 2);
+            context.fillStyle = "rgba(191,255,210,0.72)";
+            context.shadowColor = "#9cff00";
+            context.shadowBlur = 7;
+            context.fill();
+            context.shadowBlur = 0;
           }
         }
       }
@@ -112,19 +112,19 @@ export function NexusBackground() {
       for (const node of nodes) {
         const pulse = reduced ? 1 : 0.76 + Math.sin(node.phase) * 0.22;
         const radius = node.size * pulse;
-        const glow = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, radius * 6);
+        const glow = context.createRadialGradient(node.x, node.y, 0, node.x, node.y, radius * 6);
         glow.addColorStop(0, "rgba(191,255,210,0.48)");
         glow.addColorStop(0.28, "rgba(156,255,0,0.22)");
         glow.addColorStop(1, "rgba(156,255,0,0)");
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, radius * 6, 0, Math.PI * 2);
-        ctx.fill();
+        context.fillStyle = glow;
+        context.beginPath();
+        context.arc(node.x, node.y, radius * 6, 0, Math.PI * 2);
+        context.fill();
 
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(220,255,230,0.78)";
-        ctx.fill();
+        context.beginPath();
+        context.arc(node.x, node.y, radius, 0, Math.PI * 2);
+        context.fillStyle = "rgba(220,255,230,0.78)";
+        context.fill();
       }
 
       if (!reduced) raf = requestAnimationFrame(frame);
