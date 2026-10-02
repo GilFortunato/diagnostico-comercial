@@ -1,6 +1,6 @@
 "use client";
 
-// deploy-refresh: nexus-orbit
+// deploy-refresh: nexus-icon-ring
 
 import Link from "next/link";
 import Image from "next/image";
