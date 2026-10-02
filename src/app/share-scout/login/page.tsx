@@ -1,12 +1,16 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { CheckCircle2, Search, TrendingUp } from "lucide-react";
 
 export default function ShareScoutLoginPage() {
-  const params = useSearchParams();
-  const next = params.get("next") || "/sharevisualscout";
+  const [next, setNext] = useState("/sharevisualscout");
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("next");
+    if (requested?.startsWith("/")) setNext(requested);
+  }, []);
 
   return (
     <main className="share-shell min-h-screen text-[var(--share-ink)]">
