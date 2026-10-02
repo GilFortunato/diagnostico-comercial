@@ -133,7 +133,7 @@ export function BriefingMoodboardClient() {
           <Field label="Nome do projeto" value={projectName} onChange={setProjectName} placeholder="Ex.: Campanha Potenc.IA" />
           <label className="grid gap-1 text-xs font-semibold text-zinc-600">Marca
             <select value={brandId} onChange={(event) => setBrandId(event.target.value as BrandId)} className="h-11 rounded-xl border border-[var(--share-line)] bg-white px-3 text-sm font-normal">
-              {BRANDS.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
+              {BRANDS.filter((brand) => brand.id !== "ache").map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
             </select>
           </label>
           <Field label="Público" value={audience} onChange={setAudience} placeholder="Quem precisa ser impactado?" />
