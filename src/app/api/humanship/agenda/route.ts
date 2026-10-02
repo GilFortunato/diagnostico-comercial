@@ -5,6 +5,7 @@ import {
   createHumanshipAgendaEvent,
   listHumanshipAgendaEvents,
 } from "@/lib/humanship/agenda";
+import { writeAppAuditLog } from "@/lib/audit/appAudit";
 
 const createSchema = z.object({
   title: z.string().trim().min(2).max(180),
@@ -56,6 +57,18 @@ export async function POST(request: Request) {
       endAt,
       createdById: access.user.id,
     });
+    if (event) {
+      await writeAppAuditLog({
+        actor: access.user,
+        moduleKey: "humanship",
+        action: "agenda.event.created",
+        entityType: "agenda-event",
+        entityId: event.id,
+        severity: "attention",
+        retentionDays: 30,
+        metadata: { title: event.title, status: event.status, featured: event.featured },
+      });
+    }
     return NextResponse.json({ event }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Não foi possível cadastrar o evento." }, { status: 500 });
