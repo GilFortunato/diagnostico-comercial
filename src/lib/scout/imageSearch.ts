@@ -7,7 +7,7 @@ export const visualScoutLimits = {
   displayBatch: 12,
 } as const;
 
-export type ImageProvider = "unsplash" | "pexels" | "pixabay";
+export type ImageProvider = "unsplash" | "pexels" | "pixabay" | "openverse";
 
 export type VisualScoutImage = {
   id: string;
@@ -50,6 +50,7 @@ const providerLabels: Record<ImageProvider, string> = {
   unsplash: "Unsplash",
   pexels: "Pexels",
   pixabay: "Pixabay",
+  openverse: "Openverse",
 };
 
 function compactWords(value: string) {
@@ -418,12 +419,92 @@ async function searchPixabay(providerQuery: string, scoreQuery: string): Promise
   }
 }
 
+async function searchOpenverse(providerQuery: string, scoreQuery: string): Promise<SearchBundle> {
+  const state: ProviderState = { provider: "openverse", configured: true, ok: false, count: 0 };
+
+  try {
+    const params = new URLSearchParams({
+      q: providerQuery,
+      page_size: String(visualScoutLimits.perQuery),
+    });
+
+    const response = await fetch(`https://api.openverse.org/v1/images/?${params}`, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "SharePeopleHub-VisualScout/1.0",
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const payload = await response.json() as {
+      results?: Array<{
+        id?: string;
+        title?: string | null;
+        url?: string | null;
+        thumbnail?: string | null;
+        foreign_landing_url?: string | null;
+        width?: number | null;
+        height?: number | null;
+        creator?: string | null;
+        creator_url?: string | null;
+        source?: string | null;
+        license?: string | null;
+        license_url?: string | null;
+        tags?: Array<{ name?: string | null }> | null;
+      }>;
+    };
+
+    const normalized = (payload.results ?? []).flatMap((image) => {
+      const previewUrl = image.thumbnail || image.url;
+      const fullUrl = image.url || image.thumbnail;
+      const sourceUrl = image.foreign_landing_url || image.url;
+      if (!previewUrl || !fullUrl || !sourceUrl) return [];
+
+      const width = Number(image.width || 0);
+      const height = Number(image.height || 0);
+      const author = image.creator?.trim() || "Openverse contributor";
+      const license = image.license?.trim();
+      const source = image.source?.trim();
+      const tags = (image.tags ?? []).map((tag) => tag.name || "").filter(Boolean);
+
+      return [{
+        id: `openverse:${image.id || fullUrl}`,
+        provider: "openverse" as const,
+        providerLabel: providerLabels.openverse,
+        title: image.title?.trim() || tags.slice(0, 4).join(", ") || "Imagem do Openverse",
+        previewUrl,
+        fullUrl,
+        sourceUrl,
+        width: width || 1200,
+        height: height || 800,
+        author,
+        authorUrl: image.creator_url ?? null,
+        tags: compactWords(tags.join(" ")),
+        attribution: [`Imagem por ${author}`, source, license].filter(Boolean).join(" / "),
+      }];
+    });
+
+    const items = finalize(normalized, scoreQuery);
+    return { items, state: { ...state, ok: true, count: items.length } };
+  } catch (error) {
+    return { items: [], state: { ...state, error: error instanceof Error ? error.message : "Falha no Openverse" } };
+  }
+}
+
 async function searchProviderAcrossQueries(
   provider: ImageProvider,
   queries: string[],
   briefing: string,
 ) {
-  const run = provider === "unsplash" ? searchUnsplash : provider === "pexels" ? searchPexels : searchPixabay;
+  const run = provider === "unsplash"
+    ? searchUnsplash
+    : provider === "pexels"
+      ? searchPexels
+      : provider === "pixabay"
+        ? searchPixabay
+        : searchOpenverse;
   const bundles = await Promise.all(queries.map((query) => run(query, briefing)));
   const items = dedupe(bundles.flatMap((bundle) => bundle.items));
   const configured = bundles.some((bundle) => bundle.state.configured);
@@ -464,6 +545,7 @@ export async function searchVisualScoutImages(briefing: string) {
     searchProviderAcrossQueries("unsplash", queries, briefing),
     searchProviderAcrossQueries("pexels", queries, briefing),
     searchProviderAcrossQueries("pixabay", queries, briefing),
+    searchProviderAcrossQueries("openverse", queries, briefing),
   ]);
 
   const raw = bundles.flatMap((bundle) => bundle.items);
