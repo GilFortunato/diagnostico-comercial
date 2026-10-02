@@ -6,7 +6,7 @@ import { CheckCircle2, Search, TrendingUp } from "lucide-react";
 export default function ShareScoutLoginPage() {
   function callbackUrl() {
     const requested = new URLSearchParams(window.location.search).get("next");
-    return requested?.startsWith("/") ? requested : "/sharevisualscout";
+    return requested?.startsWith("/") && !requested.startsWith("//") ? requested : "/sharetrendintelligence";
   }
 
   return (
@@ -14,7 +14,7 @@ export default function ShareScoutLoginPage() {
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-5 py-8">
         <div className="mb-6 flex items-end gap-3">
           <span className="share-wordmark text-5xl text-[var(--share-green-950)]">share</span>
-          <span className="pb-1 text-xs font-semibold uppercase text-[var(--share-green-800)]">Scout</span>
+          <span className="pb-1 text-xs font-semibold uppercase text-[var(--share-green-800)]">MKT Scout</span>
         </div>
 
         <section className="overflow-hidden rounded-2xl border border-[var(--share-line)] bg-white shadow-[0_28px_90px_rgb(0_63_46_/_0.12)]">
@@ -23,16 +23,16 @@ export default function ShareScoutLoginPage() {
               <div className="h-2 w-64 rounded-r bg-[var(--share-lime)]" />
               <p className="mt-8 text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Inteligência criativa da Share</p>
               <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight text-[var(--share-green-950)] md:text-5xl">
-                Da tendência à imagem certa, sem perder horas procurando.
+                Do que está acontecendo ao que sua marca pode criar.
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-600">
-                Dois copilotos conectados para transformar assuntos do momento em pautas, briefings visuais e referências prontas para o time criar.
+                Um workspace para descobrir sinais recentes, entender sua relevância e transformar evidências em conteúdo e direção visual.
               </p>
 
               <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                <Feature icon={Search} title="Visual Scout" text="Busca + curadoria" />
-                <Feature icon={TrendingUp} title="Trend Intelligence" text="Pauta + contexto" />
-                <Feature icon={CheckCircle2} title="Share AI" text="Fluxo integrado" />
+                <Feature icon={Search} title="Radar" text="Sinais + fontes" />
+                <Feature icon={TrendingUp} title="Estratégia" text="Marca + contexto" />
+                <Feature icon={CheckCircle2} title="Criação" text="Conteúdo + visual" />
               </div>
             </div>
 
@@ -40,13 +40,13 @@ export default function ShareScoutLoginPage() {
               <div>
                 <div className="h-2 w-44 rounded-r bg-[var(--share-lime)]" />
                 <p className="mt-8 text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Acesso com Google</p>
-                <h2 className="mt-3 text-3xl font-semibold">Entre no Share Scout</h2>
+                <h2 className="mt-3 text-3xl font-semibold">Entre no MKT Scout</h2>
                 <p className="mt-4 text-sm leading-6 text-white/75">
-                  O login é o mesmo da plataforma, mas o acesso aos módulos Scout é controlado separadamente.
+                  Use sua conta da plataforma para acessar o MKT Scout.
                 </p>
                 <div className="mt-7 grid gap-3 text-sm text-white/80">
-                  <span className="rounded-full bg-white px-4 py-2 font-semibold text-[var(--share-green-950)]">Share Visual Scout</span>
-                  <span className="rounded-full bg-white px-4 py-2 font-semibold text-[var(--share-green-950)]">Share Trend Intelligence</span>
+                  <span className="rounded-full bg-white px-4 py-2 font-semibold text-[var(--share-green-950)]">MKT Scout</span>
+
                 </div>
               </div>
 

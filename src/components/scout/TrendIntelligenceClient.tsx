@@ -1,239 +1,134 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { ExternalLink, LoaderCircle, Search, Sparkles, TrendingUp } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ArrowDownRight, ArrowUpRight, Clock3, Radar, RefreshCw, Search } from "lucide-react";
+import { BRANDS, getBrandContext } from "@/lib/scout/mkt/brands";
+import type { BrandId, SourceStatus, Trend } from "@/lib/scout/mkt/types";
+import { TrendDetail } from "./TrendDetail";
+import { SavedGeneration } from "./SavedGeneration";
+import { formatScoutDate, scoutRequest } from "./scoutClient";
+import styles from "./MktScout.module.css";
 
-type TrendVideoSignal = {
-  id: string;
-  title: string;
-  channel: string;
-  publishedAt: string;
-  url: string;
-  thumbnailUrl: string | null;
-  views: number;
-  likes: number;
-  comments: number;
-  viewsPerDay: number;
-  engagementRate: number;
-  signalScore: number;
+export type RadarResponse = {
+  trends: Trend[];
+  sources: SourceStatus[];
+  collectedAt: string;
+  cache: { status: "fresh" | "cached" | "stale"; persistent: boolean; message?: string };
+  visualSearchAvailable: boolean;
 };
+const sourceTypeLabels = { search: "Busca", news: "Notícias", community: "Comunidades", video: "Vídeo" };
+const statusLabels = { ok: "Disponível", empty: "Sem sinais recentes", unavailable: "Indisponível", stale: "Coleta anterior" };
 
-type TrendPublicationIdea = {
-  format: "Carrossel" | "Post" | "Vídeo curto" | "Artigo";
-  title: string;
-  angle: string;
-  channel: string;
-};
+export function TrendIntelligenceClient({ initialGenerationId, initialQuery = "" }: { initialGenerationId?: string; initialQuery?: string } = {}) {
+  const [savedGenerationId, setSavedGenerationId] = useState(initialGenerationId);
+  const [brandId, setBrandId] = useState<BrandId>("share");
+  const [query, setQuery] = useState(initialQuery);
+  const [draft, setDraft] = useState(initialQuery);
+  const [revision, setRevision] = useState(0);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const brand = getBrandContext(brandId);
 
-type TrendResponse = {
-  query: string;
-  days: number;
-  provider: "youtube";
-  configured: boolean;
-  trendScore: number;
-  summary: string;
-  whyNow: string;
-  keywords: string[];
-  publicationIdeas: TrendPublicationIdea[];
-  visualBrief: string;
-  searchTerms: string[];
-  videos: TrendVideoSignal[];
-  generatedBy: "gemini" | "rules";
-  error?: string;
-};
-
-const compactNumber = new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 });
-
-export function TrendIntelligenceClient() {
-  const [query, setQuery] = useState("inteligência artificial no trabalho");
-  const [days, setDays] = useState(7);
-  const [data, setData] = useState<TrendResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-
-  async function runSearch() {
-    const term = query.trim();
-    if (term.length < 2) {
-      setMessage("Digite um tema para analisar.");
-      return;
-    }
-
-    setLoading(true);
-    setMessage(null);
-
-    try {
-      const response = await fetch(
-        `/api/scout/trends/search?q=${encodeURIComponent(term)}&days=${days}`,
-        { cache: "no-store" },
-      );
-      const payload = await response.json() as TrendResponse;
-      if (!response.ok) throw new Error(payload.error || "Não foi possível consultar os sinais.");
-      setData(payload);
-
-      if (!payload.configured) {
-        setMessage("O módulo está pronto, mas a chave do YouTube Data API ainda não está configurada neste ambiente.");
-      }
-    } catch (error) {
-      setData(null);
-      setMessage(error instanceof Error ? error.message : "Falha ao consultar tendências.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function submit(event: FormEvent) {
+  function search(event: FormEvent) {
     event.preventDefault();
-    void runSearch();
+    const term = draft.trim();
+    if (term.length < 2) { setSearchError("Digite pelo menos 2 caracteres para pesquisar um tema."); return; }
+    setSearchError(null);
+    setQuery(term);
+    setRevision((value) => value + 1);
   }
 
   return (
-    <>
-      <form onSubmit={submit} className="share-card mt-8 grid gap-3 rounded-2xl p-4 lg:grid-cols-[1fr_160px_220px]">
-        <label className="sr-only" htmlFor="trend-query">Tema</label>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-          <input
-            id="trend-query"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            maxLength={120}
-            placeholder="Ex.: IA no trabalho, acessibilidade digital, carreira..."
-            className="h-12 w-full rounded-xl border border-[var(--share-line)] bg-[#fafcf8] pl-11 pr-4 text-sm outline-none focus:border-[var(--share-green-700)]"
-          />
+    <div className={styles.workspace}>
+      {savedGenerationId ? <SavedGeneration id={savedGenerationId} onClose={() => { setSavedGenerationId(undefined); const url = new URL(window.location.href); url.searchParams.delete("generation"); window.history.replaceState(null, "", url); }} /> : null}
+      <section className={styles.hero} aria-labelledby="scout-radar-heading">
+        <div>
+          <p className={styles.eyebrow}>Radar de sinais · Brasil e mundo</p>
+          <h2 id="scout-radar-heading">O que está em<br className="hidden sm:block" /> movimento agora</h2>
+          <p>Sinais recentes, contexto para a sua marca e caminhos para criar. Comece pelo que está acontecendo.</p>
         </div>
+        <div className={styles.context}>
+          <label htmlFor="scout-brand">Contexto da marca</label>
+          <select id="scout-brand" value={brandId} onChange={(event) => setBrandId(event.target.value as BrandId)}>
+            {BRANDS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+          <p>O mesmo sinal. Uma leitura para {brand.name}.</p>
+        </div>
+      </section>
+      <div className={styles.toolbar}>
+        <span className={styles.meta}><span className={styles.dot} /> Fontes públicas · Evidências rastreáveis</span>
+        <button type="button" className={styles.secondary} onClick={() => setRevision((value) => value + 1)}><RefreshCw size={13} aria-hidden="true" /> Atualizar radar</button>
+      </div>
+      <details className={styles.search}>
+        <summary><Search size={13} aria-hidden="true" className="mr-2 inline" />Pesquisar um tema específico</summary>
+        <form onSubmit={search}>
+          <label htmlFor="scout-query">Tema para investigar<input id="scout-query" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={120} placeholder="Ex.: inteligência artificial no trabalho" aria-describedby={searchError ? "scout-search-error" : undefined} /></label>
+          <button className={styles.primary} type="submit"><Search size={14} aria-hidden="true" /> Pesquisar</button>
+        </form>
+        {searchError ? <p id="scout-search-error" role="alert" className={styles.notice}>{searchError}</p> : null}
+      </details>
+      {query ? <div className={styles.searchActive}><span>Investigando: <strong>{query}</strong></span><button className={styles.back} onClick={() => { setQuery(""); setDraft(""); }} type="button">Voltar ao radar geral</button></div> : null}
+      <RadarWorkspace key={`${brandId}:${query}:${revision}`} brandId={brandId} query={query} retry={() => setRevision((value) => value + 1)} />
+      <footer className={styles.footer}><span>MKT Scout · Da evidência à criação.</span><span>Horários de Brasília · Relevância editorial não comprova crescimento.</span></footer>
+    </div>
+  );
+}
 
-        <select
-          value={days}
-          onChange={(event) => setDays(Number(event.target.value))}
-          className="h-12 rounded-xl border border-[var(--share-line)] bg-white px-4 text-sm font-semibold text-[var(--share-green-950)] outline-none"
-        >
-          <option value={1}>Últimas 24h</option>
-          <option value={7}>Últimos 7 dias</option>
-          <option value={30}>Últimos 30 dias</option>
-        </select>
+function RadarWorkspace({ brandId, query, retry }: { brandId: BrandId; query: string; retry: () => void }) {
+  const [data, setData] = useState<RadarResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Trend | null>(null);
+  const selectedButton = useRef<HTMLButtonElement | null>(null);
+  const brand = getBrandContext(brandId);
 
-        <button
-          disabled={loading}
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[var(--share-lime)] px-5 text-sm font-bold text-[var(--share-green-950)] disabled:cursor-wait disabled:opacity-70"
-        >
-          {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4" />}
-          {loading ? "Analisando..." : "Analisar tendências"}
-        </button>
-      </form>
+  useEffect(() => {
+    const controller = new AbortController();
+    const params = new URLSearchParams({ brand: brandId });
+    if (query) params.set("q", query);
+    scoutRequest<RadarResponse>(`/api/scout/radar?${params}`, controller.signal)
+      .then((payload) => { if (!controller.signal.aborted) setData(payload); })
+      .catch((cause: unknown) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Não foi possível atualizar os sinais agora."); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [brandId, query]);
 
-      {message ? <div className="mt-4 rounded-xl border border-[var(--share-line)] bg-white px-4 py-3 text-sm text-zinc-600">{message}</div> : null}
+  function closeDetail() {
+    setSelected(null);
+    // The radar cards stay mounted to preserve the keyboard user's return target.
+    requestAnimationFrame(() => selectedButton.current?.focus());
+  }
 
-      {data ? (
-        <>
-          <div className="mt-7 grid gap-6 lg:grid-cols-[1fr_420px]">
-            <section className="share-green-panel rounded-2xl p-7 text-white">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-lime)]">Leitura do momento</p>
-              <h2 className="mt-4 text-3xl font-semibold">{data.query}</h2>
-              <p className="mt-4 max-w-3xl text-sm leading-6 text-white/80">{data.summary}</p>
-              <p className="mt-4 max-w-3xl text-sm leading-6 text-white/80">{data.whyNow}</p>
+  const available = data?.sources.filter((source) => (source.status === "ok" || source.status === "empty")).length ?? 0;
+  const allUnavailable = Boolean(data?.sources.length) && data!.sources.every((source) => source.status === "unavailable");
 
-              <div className="mt-6 flex flex-wrap gap-2">
-                {data.keywords.slice(0, 6).map((keyword) => (
-                  <span key={keyword} className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-[var(--share-green-950)]">{keyword}</span>
-                ))}
-              </div>
-            </section>
-
-            <section className="share-card rounded-2xl p-6">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Trend Score</p>
-                <span className="rounded-full bg-[#edf7eb] px-3 py-1 text-xs font-semibold text-[var(--share-green-900)]">
-                  {data.generatedBy === "gemini" ? "Insights com IA" : "Insights por regras"}
-                </span>
-              </div>
-              <div className="mt-4 flex items-end gap-5">
-                <span className="text-6xl font-semibold text-[var(--share-green-950)]">{data.trendScore}</span>
-                <p className="pb-2 text-sm text-zinc-600">Score interno baseado em recência, velocidade, engajamento e quantidade de sinais.</p>
-              </div>
-              <div className="mt-5 rounded-xl bg-[#eef5ec] p-4 text-sm text-[var(--share-green-900)]">
-                {data.videos.length} sinais do YouTube no recorte de {data.days} dia{data.days === 1 ? "" : "s"}.
-              </div>
-            </section>
-          </div>
-
-          <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_420px]">
-            <section>
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-[var(--share-green-700)]" />
-                <h2 className="text-xl font-semibold text-[var(--share-green-950)]">Oportunidades de publicação</h2>
-              </div>
-              <div className="mt-4 grid gap-3">
-                {data.publicationIdeas.map((idea) => (
-                  <article key={idea.title} className="share-card rounded-xl p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div className="flex min-w-0 flex-1 items-start gap-4">
-                        <span className="shrink-0 rounded-full bg-[#edf7eb] px-3 py-2 text-xs font-semibold text-[var(--share-green-900)]">{idea.format}</span>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-[var(--share-green-950)]">{idea.title}</p>
-                          <p className="mt-2 text-sm leading-6 text-zinc-600">{idea.angle}</p>
-                          <p className="mt-2 text-xs text-zinc-500">{idea.channel}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <aside className="share-card rounded-2xl p-6">
-              <p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Direção criativa</p>
-              <h2 className="mt-4 text-2xl font-semibold text-[var(--share-green-950)]">Direção visual sugerida</h2>
-              <p className="mt-4 text-sm leading-6 text-zinc-600">{data.visualBrief}</p>
-              <p className="mt-6 text-xs font-semibold uppercase text-[var(--share-green-800)]">Termos de busca</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {data.searchTerms.map((term) => (
-                  <span key={term} className="rounded-full bg-[#eef5ec] px-3 py-2 text-xs font-semibold text-[var(--share-green-900)]">{term}</span>
-                ))}
-              </div>
-            </aside>
-          </div>
-
-          {data.videos.length ? (
-            <section className="mt-8">
-              <h2 className="text-xl font-semibold text-[var(--share-green-950)]">Sinais usados na análise</h2>
-              <p className="mt-1 text-sm text-zinc-500">A leitura não trata esses vídeos como verdade; eles funcionam como sinais de atenção e linguagem em circulação.</p>
-              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {data.videos.slice(0, 6).map((video) => (
-                  <article key={video.id} className="share-card overflow-hidden rounded-xl">
-                    {video.thumbnailUrl ? (
-                      <div
-                        className="h-36 bg-cover bg-center"
-                        style={{ backgroundImage: `url("${video.thumbnailUrl.replace(/"/g, "%22")}")` }}
-                        role="img"
-                        aria-label={video.title}
-                      />
-                    ) : null}
-                    <div className="p-4">
-                      <p className="line-clamp-2 min-h-10 text-sm font-semibold text-[var(--share-green-950)]">{video.title}</p>
-                      <p className="mt-2 text-xs text-zinc-500">{video.channel}</p>
-                      <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                        <span className="rounded-full bg-[#eef5ec] px-2 py-1 font-semibold text-[var(--share-green-900)]">{compactNumber.format(video.views)} views</span>
-                        <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-600">{compactNumber.format(video.viewsPerDay)}/dia</span>
-                      </div>
-                      <a href={video.url} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-[var(--share-green-800)] hover:underline">
-                        Abrir sinal <ExternalLink className="h-3 w-3" />
-                      </a>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </>
-      ) : (
-        <section className="share-card mt-7 rounded-2xl p-8">
-          <p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Comece por um tema</p>
-          <h2 className="mt-3 text-2xl font-semibold text-[var(--share-green-950)]">Busque um assunto para ver os sinais recentes.</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-600">
-            O primeiro provider é o YouTube Data API. A arquitetura já permite adicionar outros conectores depois, sem mudar a experiência desta tela.
-          </p>
-        </section>
-      )}
+  return (
+    <>
+      <div role="status" className="sr-only" aria-live="polite">{loading ? "Consultando fontes do radar." : error ? error : `${data?.trends.length ?? 0} tendências encontradas para ${brand.name}.`}</div>
+      <div hidden={Boolean(selected)} aria-busy={loading}>
+        <div className={styles.sectionHeading}>
+          <h2>{query ? "Sinais do tema" : "No radar"}{data ? <span className="ml-2 text-sm font-normal text-[#728269]">{data.trends.length.toString().padStart(2, "0")}</span> : null}</h2>
+          {data ? <p>{available} de {data.sources.length} fontes disponíveis</p> : null}
+        </div>
+        {data ? <div className={`${styles.meta} mb-4`}><Clock3 size={12} aria-hidden="true" /><span>{data.trends.length ? "Última coleta com sinais" : "Última verificação"}: {formatScoutDate(data.collectedAt)}</span><span>·</span><span>{allUnavailable ? "Atualização indisponível" : data.cache.status === "stale" ? "Sinais da última coleta disponível" : data.cache.status === "cached" ? "Coleta recente reutilizada" : "Coleta atualizada"}</span></div> : null}
+        {data?.cache.message ? <p className={styles.notice}>{data.cache.message}</p> : null}
+        {loading ? <div className={styles.grid} aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <div key={index} className={styles.skeleton} />)}</div> : null}
+        {error ? <div className={styles.empty} role="alert"><div className={styles.emptyIcon}><Radar size={22} /></div><h3>O radar não pôde ser atualizado</h3><p>{error}</p><button className={styles.primary} onClick={retry}>Tentar novamente</button></div> : null}
+        {!loading && !error && !data?.trends.length ? <div className={styles.empty}><div className={styles.emptyIcon}><Radar size={22} /></div><h3>{allUnavailable ? "Não foi possível atualizar os sinais agora" : "Nenhum sinal confirmado neste recorte"}</h3><p>{allUnavailable ? "As fontes consultadas estão temporariamente indisponíveis. Tente atualizar em alguns instantes; o status de cada fonte está abaixo." : query ? "As fontes disponíveis não trouxeram sinais recentes para este tema. Experimente uma expressão mais ampla ou volte ao radar geral." : "As fontes disponíveis ainda não retornaram sinais recentes suficientes. Você pode atualizar a coleta ou investigar um tema específico."}</p><button className={styles.secondary} onClick={retry}><RefreshCw size={13} />Tentar novamente</button></div> : null}
+        {data?.trends.length ? <div className={styles.grid}>{data.trends.map((trend) => {
+          const types = [...new Set(trend.signals.map((signal) => sourceTypeLabels[signal.sourceType]))];
+          return <button key={trend.id} type="button" className={styles.card} onClick={(event) => { selectedButton.current = event.currentTarget; setSelected(trend); }} aria-label={`Analisar ${trend.title}`}>
+            <div className={styles.cardTop}><span className={styles.chip}><Radar size={11} aria-hidden="true" /> Sinal recente</span><span className={styles.scoreNumber}><strong>{Math.round(trend.score.value)}</strong>/100</span></div>
+            <h3>{trend.title}</h3><p className={styles.cardSummary}>{trend.summary}</p>
+            <div className={styles.cardBottom}><div className={styles.meta}>{types.join(" · ")}</div><div className={styles.cardRelevance}><span>Relevância para {brand.name}</span><strong>{trend.brandRelevance.label}</strong></div><div className={styles.cardFoot}><span>{trend.signals.length} evidência{trend.signals.length !== 1 ? "s" : ""} · {trend.independentSourceCount} fonte{trend.independentSourceCount !== 1 ? "s" : ""}</span><ArrowUpRight size={16} aria-hidden="true" /></div></div>
+          </button>;
+        })}</div> : null}
+        {data ? <SourceHealth sources={data.sources} /> : null}
+      </div>
+      {selected && data ? <TrendDetail key={selected.id} trend={selected} brandId={brandId} query={query} sources={data.sources} visualSearchAvailable={data.visualSearchAvailable} onBack={closeDetail} /> : null}
     </>
   );
+}
+
+export function SourceHealth({ sources }: { sources: SourceStatus[] }) {
+  return <details className={styles.sources} open={sources.every((source) => source.status !== "ok")}><summary><ArrowDownRight size={13} aria-hidden="true" className="mr-2 inline" />Fontes e disponibilidade · {sources.length} conectores</summary><div className={styles.sourceGrid}>{sources.map((source) => <article className={styles.source} key={source.id}><header><strong>{source.name}</strong><span className={`${styles.chip} ${source.status === "ok" ? styles.statusOk : styles.statusWarning}`}>{statusLabels[source.status]}</span></header><p>{source.message}</p><small>{source.count} sinais · {formatScoutDate(source.collectedAt)}</small></article>)}</div></details>;
 }

@@ -1,41 +1,42 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { ScoutHeader } from "@/components/scout/ScoutHeader";
 import { TrendIntelligenceClient } from "@/components/scout/TrendIntelligenceClient";
 import { getSessionUser } from "@/lib/auth/sessionUser";
 import { getUserModuleAccess } from "@/lib/auth/modulePermissions";
 
-export default async function ShareTrendIntelligencePage() {
-  const user = await getSessionUser();
-  if (!user) redirect("/share-scout/login?next=/sharetrendintelligence");
+type PageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
+export default async function ShareTrendIntelligencePage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const destination = new URLSearchParams();
+  if (typeof params.generation === "string") destination.set("generation", params.generation.slice(0, 150));
+  if (typeof params.q === "string") destination.set("q", params.q.slice(0, 120));
+  const returnPath = `/sharetrendintelligence${destination.size ? `?${destination}` : ""}`;
+  const user = await getSessionUser();
+  if (!user) redirect(`/share-scout/login?next=${encodeURIComponent(returnPath)}`);
   const allowed = await getUserModuleAccess(user, "creative.trend-intelligence");
   if (!allowed) return <AccessDenied />;
+  const generationId = typeof params.generation === "string" ? params.generation.slice(0, 150) : undefined;
+  const initialQuery = typeof params.q === "string" ? params.q.slice(0, 120) : undefined;
 
   return (
     <main className="share-shell min-h-screen text-[var(--share-ink)]">
       <ScoutHeader active="trend" />
-      <div className="mx-auto max-w-7xl px-5 py-9">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="mx-auto max-w-7xl px-5 py-7 md:py-9">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Marketing Intelligence</p>
-            <h1 className="mt-2 text-4xl font-semibold text-[var(--share-green-950)]">MKT Scout</h1>
-            <p className="mt-2 max-w-3xl text-zinc-600">Descubra sinais recentes e transforme tendências em pautas, campanhas, conteúdo e direção visual.</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--share-green-800)]">Inteligência de marketing</p>
+            <h1 className="mt-1 text-[28px] font-semibold tracking-tight text-[var(--share-green-950)]">MKT Scout</h1>
           </div>
-          <span className="rounded-full border border-[var(--share-line)] bg-white px-4 py-2 text-xs font-semibold text-[var(--share-green-800)]">/sharetrendintelligence</span>
+          <p className="text-xs text-[#64765e]">Explore o agora. Crie com contexto.</p>
         </div>
-        <TrendIntelligenceClient />
+        <TrendIntelligenceClient initialGenerationId={generationId} initialQuery={initialQuery} />
       </div>
     </main>
   );
 }
 
 function AccessDenied() {
-  return (
-    <main className="share-shell grid min-h-screen place-items-center p-6">
-      <div className="share-card max-w-lg rounded-2xl p-8">
-        <h1 className="text-2xl font-semibold text-[var(--share-green-950)]">Módulo ainda não liberado</h1>
-        <p className="mt-3 text-sm leading-6 text-zinc-600">Seu login está ativo, mas sua conta ainda não tem acesso ao MKT Scout.</p>
-      </div>
-    </main>
-  );
+  return <main className="share-shell grid min-h-screen place-items-center p-6"><div className="share-card max-w-lg rounded-2xl p-8"><h1 className="text-2xl font-semibold text-[var(--share-green-950)]">Módulo ainda não liberado</h1><p className="mt-3 text-sm leading-6 text-zinc-600">Seu login está ativo, mas sua conta ainda não tem acesso ao MKT Scout.</p><Link href="/" className="mt-5 inline-block text-sm font-semibold text-[var(--share-green-800)] underline underline-offset-4">Voltar ao Share Hub</Link></div></main>;
 }
