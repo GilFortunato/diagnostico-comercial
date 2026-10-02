@@ -6,12 +6,13 @@ import { runApifyActor } from "@/lib/connectors/apifyClient";
 import { getPrisma } from "@/lib/db/prisma";
 import { normalizeCandidates } from "@/lib/hr-hunting/service";
 import { buildHumanshipLinkedinQueries, chooseHumanshipLinkedinMatch, type HumanshipLinkedinMatch } from "@/lib/humanship/linkedinMatch";
-import { classifyHumanshipParticipant, currentRestrictionSnapshot, humanshipRestrictionVersion, normalizeHumanshipRoleTitle } from "@/lib/humanship/restrictions";
+import { classifyHumanshipParticipant, normalizeHumanshipRoleTitle, type HumanshipRestrictionSnapshot } from "@/lib/humanship/restrictions";
+import { getCurrentHumanshipRestrictions } from "@/lib/humanship/restrictionConfig";
 import type { HumanshipDecision, HumanshipEvent, HumanshipParticipant, HumanshipRoleRule, HumanshipRoleRuleDecision, ImportedHumanshipRow } from "@/lib/humanship/types";
 
 type EventRow = {
   id: string; ownerId: string; name: string; status: string; sourceKind: string | null; sourceName: string | null; sourceExternalId: string | null;
-  sourceSheetName: string | null; sourceRowCount: number; restrictionVersion: string; lastSyncedAt: Date | null; createdAt: Date; updatedAt: Date;
+  sourceSheetName: string | null; sourceRowCount: number; restrictionVersion: string; restrictionSnapshot: unknown; lastSyncedAt: Date | null; createdAt: Date; updatedAt: Date;
 };
 
 type ParticipantRow = {
@@ -28,10 +29,15 @@ type RoleRuleRow = {
 
 export async function createHumanshipEvent(ownerId: string, name: string) {
   const id = `hse_${randomUUID()}`;
-  const snapshot = currentRestrictionSnapshot();
+  const current = await getCurrentHumanshipRestrictions();
+  const snapshot: HumanshipRestrictionSnapshot = {
+    version: current.version,
+    companyGroups: current.companyGroups,
+    roleReferences: current.roleReferences,
+  };
   await getPrisma().$executeRaw(Prisma.sql`
     INSERT INTO "HumanshipEvent" ("id", "ownerId", "name", "restrictionVersion", "restrictionSnapshot", "createdAt", "updatedAt")
-    VALUES (${id}, ${ownerId}, ${name.trim()}, ${humanshipRestrictionVersion}, CAST(${JSON.stringify(snapshot)} AS jsonb), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    VALUES (${id}, ${ownerId}, ${name.trim()}, ${current.version}, CAST(${JSON.stringify(snapshot)} AS jsonb), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
   `);
   return getHumanshipEvent(ownerId, id);
 }
@@ -57,7 +63,7 @@ export async function deleteHumanshipEvent(eventId: string) {
 
 export async function listHumanshipEvents(_actorId: string) {
   const rows = await getPrisma().$queryRaw<EventRow[]>(Prisma.sql`
-    SELECT "id", "ownerId", "name", "status", "sourceKind", "sourceName", "sourceExternalId", "sourceSheetName", "sourceRowCount", "restrictionVersion", "lastSyncedAt", "createdAt", "updatedAt"
+    SELECT "id", "ownerId", "name", "status", "sourceKind", "sourceName", "sourceExternalId", "sourceSheetName", "sourceRowCount", "restrictionVersion", "restrictionSnapshot", "lastSyncedAt", "createdAt", "updatedAt"
     FROM "HumanshipEvent"
     ORDER BY "updatedAt" DESC
   `);
@@ -78,7 +84,7 @@ export async function getHumanshipRoleRules(_actorId: string): Promise<Humanship
 
 export async function getHumanshipEvent(actorId: string, id: string): Promise<HumanshipEvent | null> {
   const events = await getPrisma().$queryRaw<EventRow[]>(Prisma.sql`
-    SELECT "id", "ownerId", "name", "status", "sourceKind", "sourceName", "sourceExternalId", "sourceSheetName", "sourceRowCount", "restrictionVersion", "lastSyncedAt", "createdAt", "updatedAt"
+    SELECT "id", "ownerId", "name", "status", "sourceKind", "sourceName", "sourceExternalId", "sourceSheetName", "sourceRowCount", "restrictionVersion", "restrictionSnapshot", "lastSyncedAt", "createdAt", "updatedAt"
     FROM "HumanshipEvent"
     WHERE "id" = ${id}
     LIMIT 1
@@ -184,6 +190,7 @@ export async function runHumanshipLinkedinSearch(ownerId: string, eventId: strin
         linkedinTitle: best?.currentTitle,
         linkedinFound: Boolean(best?.profileUrl),
         roleRuleDecision: roleRules.get(normalizeHumanshipRoleTitle(roleTitle)) ?? null,
+        restrictionSnapshot: event.restrictionSnapshot,
       });
       const probable = match?.confidence === "probable";
       const finalClassification = probable && classification.classification === "eligible" ? "validate" : classification.classification;
@@ -219,6 +226,7 @@ export async function runHumanshipLinkedinSearch(ownerId: string, eventId: strin
         sourceTitle: participant.jobTitle,
         linkedinFound: false,
         roleRuleDecision: ruleDecision,
+        restrictionSnapshot: event.restrictionSnapshot,
       });
       await getPrisma().$executeRaw(Prisma.sql`
         UPDATE "HumanshipParticipant" SET
@@ -284,12 +292,14 @@ export async function saveHumanshipRoleRule(input: {
     `);
   }
 
-  const related = await getPrisma().$queryRaw<ParticipantRow[]>(Prisma.sql`
+  const related = await getPrisma().$queryRaw<Array<ParticipantRow & { restrictionSnapshot: unknown }>>(Prisma.sql`
     SELECT p."id", p."eventId", p."sourceKey", p."sourceRow", p."active", p."fullName", p."email", p."company", p."jobTitle", p."phone",
            p."linkedinUrl", p."linkedinName", p."linkedinTitle", p."linkedinCompany", p."linkedinLocation", p."searchStatus",
            p."classification", p."classificationReason", p."roleReference", p."roleScore", p."companyRestriction", p."humanDecision",
-           p."decisionByName", p."decisionAt", p."message1CopiedAt", p."message2CopiedAt", p."createdAt", p."updatedAt"
+           p."decisionByName", p."decisionAt", p."message1CopiedAt", p."message2CopiedAt", p."createdAt", p."updatedAt",
+           e."restrictionSnapshot" AS "restrictionSnapshot"
     FROM "HumanshipParticipant" p
+    JOIN "HumanshipEvent" e ON e."id" = p."eventId"
     WHERE p."active" = true
   `);
 
@@ -303,6 +313,7 @@ export async function saveHumanshipRoleRule(input: {
       linkedinTitle: row.linkedinTitle,
       linkedinFound: Boolean(row.linkedinUrl),
       roleRuleDecision: input.decision,
+      restrictionSnapshot: normalizeRestrictionSnapshot(row.restrictionSnapshot),
     });
     const probable = row.searchStatus === "probable";
     const finalClassification = probable && classification.classification === "eligible" ? "validate" : classification.classification;
@@ -326,8 +337,8 @@ export async function saveHumanshipRoleRule(input: {
 export async function saveHumanshipLinkedin(input: { ownerId: string; participantId: string; linkedinUrl: string; savedByName: string }) {
   const linkedinUrl = normalizeManualLinkedinUrl(input.linkedinUrl);
   if (!linkedinUrl) return false;
-  const participants = await getPrisma().$queryRaw<Array<{ company: string | null; jobTitle: string | null }>>(Prisma.sql`
-    SELECT p."company", p."jobTitle" FROM "HumanshipParticipant" p
+  const participants = await getPrisma().$queryRaw<Array<{ company: string | null; jobTitle: string | null; restrictionSnapshot: unknown }>>(Prisma.sql`
+    SELECT p."company", p."jobTitle", e."restrictionSnapshot" AS "restrictionSnapshot" FROM "HumanshipParticipant" p
     JOIN "HumanshipEvent" e ON e."id" = p."eventId"
     WHERE p."id" = ${input.participantId} AND p."active" = true
     LIMIT 1
@@ -339,6 +350,7 @@ export async function saveHumanshipLinkedin(input: { ownerId: string; participan
     sourceCompany: participant.company,
     sourceTitle: participant.jobTitle,
     roleRuleDecision: rules.find((rule) => rule.normalizedTitle === normalizeHumanshipRoleTitle(participant.jobTitle))?.decision,
+    restrictionSnapshot: normalizeRestrictionSnapshot(participant.restrictionSnapshot),
   });
   const snapshot = JSON.stringify({ source: "manual", linkedinUrl, savedByName: input.savedByName, savedAt: new Date().toISOString() });
   const count = await getPrisma().$executeRaw(Prisma.sql`
@@ -409,11 +421,32 @@ function serializeEvent(row: EventRow, participants: HumanshipParticipant[], rol
     sourceSheetName: row.sourceSheetName || undefined,
     sourceRowCount: row.sourceRowCount,
     restrictionVersion: row.restrictionVersion,
+    restrictionSnapshot: normalizeRestrictionSnapshot(row.restrictionSnapshot),
     lastSyncedAt: row.lastSyncedAt?.toISOString(),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     participants,
     roleRules,
+  };
+}
+
+function normalizeRestrictionSnapshot(value: unknown): HumanshipRestrictionSnapshot | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  if (typeof record.version !== "string" || !Array.isArray(record.companyGroups) || !Array.isArray(record.roleReferences)) return undefined;
+  return {
+    version: record.version,
+    companyGroups: record.companyGroups
+      .map((item) => {
+        const group = item && typeof item === "object" && !Array.isArray(item) ? item as Record<string, unknown> : {};
+        return {
+          reference: String(group.reference || "").trim(),
+          category: String(group.category || "").trim(),
+          companies: Array.isArray(group.companies) ? group.companies.map((company) => String(company).trim()).filter(Boolean) : [],
+        };
+      })
+      .filter((group) => group.reference && group.category && group.companies.length),
+    roleReferences: record.roleReferences.map((item) => String(item).trim()).filter(Boolean),
   };
 }
 

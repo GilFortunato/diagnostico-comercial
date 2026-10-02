@@ -7,6 +7,7 @@ export type PersistedSessionUser = {
   name: string | null;
   image: string | null;
   active: boolean;
+  isAdmin: boolean;
 };
 
 export async function ensureGoogleUser(input: {
@@ -29,7 +30,7 @@ export async function ensureGoogleUser(input: {
       image: input.image?.trim() || undefined,
       ...(input.recordLogin ? { lastLoginAt: new Date() } : {}),
     },
-    select: { id: true, email: true, name: true, image: true, active: true },
+    select: { id: true, email: true, name: true, image: true, active: true, isAdmin: true },
   });
   return user;
 }
@@ -37,7 +38,7 @@ export async function ensureGoogleUser(input: {
 export async function findActiveUserByIdentity(id: string | null, email: string | null) {
   const user = await getPrisma().user.findFirst({
     where: email ? { email: email.toLocaleLowerCase("pt-BR") } : { id: id ?? "" },
-    select: { id: true, email: true, name: true, image: true, active: true },
+    select: { id: true, email: true, name: true, image: true, active: true, isAdmin: true },
   });
   return user?.active ? user : null;
 }

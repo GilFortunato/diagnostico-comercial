@@ -9,8 +9,9 @@ import {
   CalendarDays,
   Camera,
   ChevronDown,
-  ImageIcon,
   LineChart,
+  Megaphone,
+  MessageCircleMore,
   LockKeyhole,
   MessageSquareText,
   Search,
@@ -129,30 +130,29 @@ const workspaces: Workspace[] = [
     status: "construction",
   },
   {
-    key: "trends",
-    title: "Share Trend Intelligence",
-    shortTitle: "Trend\nIntelligence",
-    category: "Criatividade",
+    key: "mkt-scout",
+    title: "MKT Scout",
+    shortTitle: "MKT\nScout",
+    category: "Marketing",
     href: "/sharetrendintelligence",
     module: "creative.trend-intelligence",
-    icon: TrendingUp,
-    description: "Tendências para seu próximo movimento.",
-    summary: "Transforme sinais recentes em pauta, contexto, oportunidades de publicação e briefing visual.",
-    features: ["Assuntos em alta", "Palavras relacionadas", "Ideias de conteúdo", "Briefing para o Scout"],
+    icon: Megaphone,
+    description: "Tendências, sinais e inspiração para marketing.",
+    summary: "Transforme movimentos de mercado em pautas, campanhas, conteúdo e direção visual.",
+    features: ["Tendências de mercado", "Sinais recentes", "Ideias de conteúdo", "Direção visual"],
     new: true,
   },
   {
-    key: "visual",
-    title: "Share Visual Scout",
-    shortTitle: "Share\nVisual Scout",
-    category: "Criatividade",
-    href: "/sharevisualscout",
-    module: "creative.visual-scout",
-    icon: ImageIcon,
-    description: "Pesquisa e curadoria inteligente de imagens.",
-    summary: "Cole o briefing e encontre referências visuais em múltiplos bancos com curadoria e ranking.",
-    features: ["Busca multi-banco", "Curadoria visual", "Briefing semântico", "Coleções"],
-    new: true,
+    key: "whats-generator",
+    title: "Gerador Whats",
+    shortTitle: "Gerador\nWhats",
+    category: "Marketing",
+    module: "creative.trend-intelligence",
+    icon: MessageCircleMore,
+    description: "Mensagens variadas para campanhas e abordagens no WhatsApp.",
+    summary: "Ambiente em preparação para criar variações de mensagem e apoiar operações com menor repetição de texto.",
+    features: ["Variações de mensagem", "Tom e objetivo", "Campanhas", "Biblioteca de versões"],
+    status: "construction",
   },
 ];
 const NEXUS_ROTATION = -80;
@@ -389,8 +389,8 @@ export function HomeExperience({
             <span className="share-hub-bottom-icon share-hub-spark"><Sparkles /></span>
             <span className="share-hub-bottom-content">
               <small>Novidade</small>
-              <strong>Share Trend Intelligence</strong>
-              <span>Tendências para seu próximo movimento</span>
+              <strong>MKT Scout</strong>
+              <span>Tendências e sinais para seu próximo movimento</span>
             </span>
             <ArrowRight className="share-hub-bottom-arrow" />
           </Link>

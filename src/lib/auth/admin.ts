@@ -13,3 +13,8 @@ export function isAdminEmail(email?: string | null, value?: string) {
 export function adminAccessStatus(email?: string | null, value?: string) {
   return isAdminEmail(email, value) ? 200 : 403;
 }
+
+
+export function isAdminUser(user?: { email?: string | null; isAdmin?: boolean | null } | null) {
+  return Boolean(user?.isAdmin || isAdminEmail(user?.email));
+}

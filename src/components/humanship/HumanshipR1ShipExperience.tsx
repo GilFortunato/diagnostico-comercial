@@ -2,16 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ParticipantLinkedinCell } from "./ParticipantLinkedinCell";
-import { Check, Clipboard, ExternalLink, FileSpreadsheet, LoaderCircle, MessageCircle, Pencil, Plus, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
-import { humanshipCompanyRestrictionGroups, humanshipRestrictionVersion, humanshipRoleReferences } from "@/lib/humanship/restrictions";
-import type { HumanshipClassification, HumanshipDecision, HumanshipEvent, HumanshipParticipant, HumanshipRoleRule, HumanshipRoleRuleDecision } from "@/lib/humanship/types";
+import { CalendarDays, Check, Clipboard, ExternalLink, FileSpreadsheet, LoaderCircle, MessageCircle, Pencil, Plus, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
+import type { HumanshipClassification, HumanshipDecision, HumanshipEvent, HumanshipParticipant, HumanshipRestrictionSnapshot, HumanshipRoleRule, HumanshipRoleRuleDecision } from "@/lib/humanship/types";
 import { buildWhatsAppLink } from "@/lib/humanship/whatsapp";
 
-type Pending = "load" | "create" | "rename" | "delete" | "upload" | "search" | "decision" | "role" | "copy" | null;
+type Pending = "load" | "create" | "rename" | "delete" | "upload" | "search" | "decision" | "role" | "copy" | "restrictions" | "apply_restrictions" | null;
 type Tab = "source" | "results" | "restrictions";
 type Filter = "all" | HumanshipClassification | "approved" | "rejected";
+type RestrictionConfig = HumanshipRestrictionSnapshot & { updatedByName?: string; createdAt?: string };
 
-export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false }: { accountName: string; canDeleteEvents?: boolean }) {
+export function HumanshipR1ShipExperience({ accountName, canManageHumanship = false }: { accountName: string; canManageHumanship?: boolean }) {
   const [events, setEvents] = useState<HumanshipEvent[]>([]);
   const [event, setEvent] = useState<HumanshipEvent | null>(null);
   const [eventName, setEventName] = useState("");
@@ -23,6 +23,7 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
   const [selected, setSelected] = useState<HumanshipParticipant | null>(null);
   const [pending, setPending] = useState<Pending>("load");
   const [error, setError] = useState<string | null>(null);
+  const [workspaceRestrictions, setWorkspaceRestrictions] = useState<RestrictionConfig | null>(null);
 
   async function loadEvents(selectId?: string) {
     const response = await fetch("/api/humanship/events", { cache: "no-store" });
@@ -35,12 +36,13 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
     else setEvent(null);
   }
 
-  async function loadEvent(id: string) {
+  async function loadEvent(id: string, resetTab = false) {
     const response = await fetch(`/api/humanship/events/${id}`, { cache: "no-store" });
     const body = await response.json() as { event?: HumanshipEvent; error?: string };
     if (!response.ok || !body.event) throw new Error(body.error || "Não foi possível abrir o evento.");
     setEvent(body.event);
     setDraftEventName(body.event.name);
+    if (resetTab) setTab(body.event.sourceRowCount > 0 ? "results" : "source");
     setSelected((current) => current ? body.event?.participants.find((item) => item.id === current.id) || null : null);
   }
 
@@ -53,7 +55,7 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
         if (!response.ok) throw new Error(body.error || "Não foi possível carregar os eventos.");
         const next = body.events || [];
         setEvents(next);
-        if (next[0]?.id) await loadEvent(next[0].id);
+        if (next[0]?.id) await loadEvent(next[0].id, true);
       })
       .catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : "Não foi possível carregar os eventos."); })
       .finally(() => { if (!cancelled) setPending(null); });
@@ -95,7 +97,7 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
   }
 
   async function deleteEvent() {
-    if (!event || !canDeleteEvents) return;
+    if (!event || !canManageHumanship) return;
     if (!window.confirm(`Excluir definitivamente o evento "${event.name}" e todos os participantes vinculados? Essa ação não pode ser desfeita.`)) return;
     setPending("delete"); setError(null);
     try {
@@ -192,6 +194,61 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
     finally { setPending(null); }
   }
 
+  async function openRestrictions() {
+    setTab("restrictions");
+    if (workspaceRestrictions) return;
+    setPending("restrictions");
+    setError(null);
+    try {
+      const response = await fetch("/api/humanship/restrictions", { cache: "no-store" });
+      const body = await response.json() as { restrictions?: RestrictionConfig; error?: string };
+      if (!response.ok || !body.restrictions) throw new Error(body.error || "Não foi possível carregar as restrições.");
+      setWorkspaceRestrictions(body.restrictions);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível carregar as restrições.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function saveRestrictions(next: RestrictionConfig) {
+    if (!canManageHumanship) return;
+    setPending("restrictions");
+    setError(null);
+    try {
+      const response = await fetch("/api/humanship/restrictions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyGroups: next.companyGroups, roleReferences: next.roleReferences }),
+      });
+      const body = await response.json() as { restrictions?: RestrictionConfig; error?: string };
+      if (!response.ok || !body.restrictions) throw new Error(body.error || "Não foi possível salvar as restrições.");
+      setWorkspaceRestrictions(body.restrictions);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível salvar as restrições.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function applyRestrictionsToEvent() {
+    if (!event || !canManageHumanship) return;
+    setPending("apply_restrictions");
+    setError(null);
+    try {
+      const response = await fetch(`/api/humanship/events/${event.id}/restrictions`, { method: "POST" });
+      const body = await response.json() as { event?: HumanshipEvent; restrictions?: RestrictionConfig; error?: string };
+      if (!response.ok || !body.event) throw new Error(body.error || "Não foi possível aplicar as restrições ao evento.");
+      setEvent(body.event);
+      if (body.restrictions) setWorkspaceRestrictions(body.restrictions);
+      await loadEvents(body.event.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível aplicar as restrições ao evento.");
+    } finally {
+      setPending(null);
+    }
+  }
+
   const counts = useMemo(() => {
     const list = event?.participants || [];
     return {
@@ -213,60 +270,55 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
 
   return (
     <main className="min-h-screen bg-[#eef4e9] text-[var(--share-ink)]">
-      <div className="mx-auto max-w-[1440px] px-5 py-7">
-        <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--share-green-800)]">Humanship</p>
-            <h1 className="mt-1 text-3xl font-semibold text-[var(--share-green-950)]">R1 Ship</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
-              Organize os eventos, importe participantes e acompanhe a validação em um único fluxo.
-            </p>
-          </div>
-          {events.length ? (
-            <select
-              value={event?.id || ""}
-              onChange={(e) => {
-                setPending("load");
-                loadEvent(e.target.value)
-                  .catch((cause) => setError(cause instanceof Error ? cause.message : "Erro ao abrir evento."))
-                  .finally(() => setPending(null));
-              }}
-              className="h-11 min-w-[240px] rounded-xl border border-[#cbdcc9] bg-white px-4 text-sm font-semibold text-[#003f2c] shadow-sm"
-            >
-              <option value="">Escolha um evento</option>
-              {events.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-          ) : null}
+      <div className="w-full px-4 py-5 xl:px-6">
+        <header className="mb-5">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--share-green-800)]">Humanship</p>
+          <h1 className="mt-1 text-3xl font-semibold text-[var(--share-green-950)]">R1 Ship</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
+            Selecione um evento para importar a base, trabalhar os participantes e acompanhar as regras aplicadas.
+          </p>
         </header>
 
         {error ? <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</p> : null}
 
-        <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
-          <aside className="self-start rounded-3xl border border-[#cbdcc9] bg-[#003f2c] p-4 text-white shadow-sm lg:sticky lg:top-24">
-            <div className="px-2 pb-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#d8ef55]">Workspace</p>
-              <h2 className="mt-1 text-lg font-semibold">Operação do evento</h2>
+        <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="self-start rounded-2xl border border-[#cbdcc9] bg-[#003f2c] p-4 text-white shadow-sm lg:sticky lg:top-[76px] lg:min-h-[calc(100vh-96px)]">
+            <div className="px-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#d8ef55]">Workspace Humanship</p>
+              <h2 className="mt-1 text-lg font-semibold">Eventos</h2>
+              <p className="mt-1 text-xs leading-5 text-white/55">Cada evento mantém sua própria base de participantes e histórico operacional.</p>
             </div>
 
-            <nav className="space-y-1">
-              {([
-                ["source", "Importar base", FileSpreadsheet],
-                ["results", "Participantes", UsersRound],
-                ["restrictions", "Restrições", ShieldCheck],
-              ] as const).map(([key, label, Icon]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setTab(key)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
-                    tab === key ? "bg-[#dcef55] text-[#173b28]" : "text-white/75 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {label}
-                </button>
-              ))}
-            </nav>
+            <div className="mt-4 max-h-[48vh] space-y-2 overflow-y-auto pr-1">
+              {events.map((item) => {
+                const active = item.id === event?.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setPending("load");
+                      setSelected(null);
+                      loadEvent(item.id, true)
+                        .catch((cause) => setError(cause instanceof Error ? cause.message : "Erro ao abrir evento."))
+                        .finally(() => setPending(null));
+                    }}
+                    className={`w-full rounded-xl border px-3 py-3 text-left transition ${active ? "border-[#dcef55] bg-[#dcef55] text-[#173b28]" : "border-white/10 bg-white/5 text-white hover:bg-white/10"}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <CalendarDays className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div className="min-w-0">
+                        <strong className="block truncate text-sm">{item.name}</strong>
+                        <span className={`mt-1 block text-[11px] ${active ? "text-[#173b28]/65" : "text-white/50"}`}>
+                          {item.sourceRowCount} participante{item.sourceRowCount === 1 ? "" : "s"} · {formatCompactDate(item.updatedAt)}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+              {!events.length ? <p className="rounded-xl border border-dashed border-white/15 px-3 py-5 text-center text-xs text-white/45">Nenhum evento criado ainda.</p> : null}
+            </div>
 
             <div className="my-5 h-px bg-white/10" />
 
@@ -347,7 +399,7 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
                       </div>
                     </div>
 
-                    {canDeleteEvents ? (
+                    {canManageHumanship ? (
                       <button
                         type="button"
                         onClick={() => void deleteEvent()}
@@ -361,16 +413,28 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
                   </div>
                 </article>
 
+                <nav className="mt-4 flex flex-wrap gap-2 rounded-2xl border border-[#cbdcc9] bg-white p-2 shadow-sm">
+                  <button type="button" onClick={() => setTab("results")} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold ${tab === "results" ? "bg-[#003f2c] text-white" : "text-[#006142] hover:bg-[#eef6ea]"}`}>
+                    <UsersRound className="h-4 w-4" /> Participantes
+                  </button>
+                  <button type="button" onClick={() => setTab("source")} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold ${tab === "source" ? "bg-[#003f2c] text-white" : "text-[#006142] hover:bg-[#eef6ea]"}`}>
+                    <FileSpreadsheet className="h-4 w-4" /> Importar base
+                  </button>
+                  <button type="button" onClick={() => void openRestrictions()} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold ${tab === "restrictions" ? "bg-[#003f2c] text-white" : "text-[#006142] hover:bg-[#eef6ea]"}`}>
+                    <ShieldCheck className="h-4 w-4" /> Restrições aplicadas
+                  </button>
+                </nav>
+
                 <div className="mt-5">
                   {tab === "source" ? <SourceTab event={event} file={file} onFile={chooseSpreadsheet} pending={pending} onUpload={uploadExcel} /> : null}
                   {tab === "results" ? <ResultsTab event={event} visible={visible} counts={counts} filter={filter} setFilter={setFilter} pending={pending} onSearch={searchLinkedin} onDecision={decide} onRoleRule={decideRole} onMessages={setSelected} onLinkedinSaved={() => loadEvent(event.id)} /> : null}
-                  {tab === "restrictions" ? <RestrictionsTab event={event} /> : null}
+                  {tab === "restrictions" ? <RestrictionsTab event={event} current={workspaceRestrictions} canManage={canManageHumanship} pending={pending} onSave={saveRestrictions} onApply={applyRestrictionsToEvent} /> : null}
                 </div>
               </>
             ) : pending !== "load" ? (
               <div className="rounded-3xl border border-dashed border-[#b9ceb6] bg-white/65 px-6 py-14 text-center">
                 <p className="text-sm font-semibold text-[#003f2c]">Nenhum evento selecionado.</p>
-                <p className="mt-1 text-sm text-zinc-500">Crie um evento pelo menu lateral para começar.</p>
+                <p className="mt-1 text-sm text-zinc-500">Crie um evento na lateral. Depois dele criado, você poderá importar a base e trabalhar os participantes.</p>
               </div>
             ) : null}
           </section>
@@ -380,6 +444,10 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
       </div>
     </main>
   );}
+
+function formatCompactDate(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(new Date(value));
+}
 
 function SourceTab({ event, file, onFile, pending, onUpload }: { event: HumanshipEvent; file: File | null; onFile: (v: File | null) => void; pending: Pending; onUpload: () => void }) {
   return <section>
@@ -448,18 +516,204 @@ function RoleCell({ participant, event, pending, onRoleRule }: { participant: Hu
   </td>;
 }
 
-function RestrictionsTab({ event }: { event: HumanshipEvent }) {
+function RestrictionsTab({
+  event,
+  current,
+  canManage,
+  pending,
+  onSave,
+  onApply,
+}: {
+  event: HumanshipEvent;
+  current: RestrictionConfig | null;
+  canManage: boolean;
+  pending: Pending;
+  onSave: (next: RestrictionConfig) => Promise<void>;
+  onApply: () => Promise<void>;
+}) {
+  const eventSnapshot = event.restrictionSnapshot;
+  const base: RestrictionConfig = current || eventSnapshot || {
+    version: event.restrictionVersion,
+    companyGroups: [],
+    roleReferences: [],
+  };
+  const [draft, setDraft] = useState<RestrictionConfig>(base);
+
+  useEffect(() => {
+    setDraft(current || event.restrictionSnapshot || {
+      version: event.restrictionVersion,
+      companyGroups: [],
+      roleReferences: [],
+    });
+  }, [current, event.id, event.restrictionVersion, event.restrictionSnapshot]);
+
   const accepted = (event.roleRules ?? []).filter((rule) => rule.decision === "accepted");
   const rejected = (event.roleRules ?? []).filter((rule) => rule.decision === "rejected");
-  return <section className="mt-5 grid gap-5">
-    <div className="rounded-lg border border-[var(--share-line)] bg-white p-5"><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-[var(--share-green-800)]" /><div><h2 className="font-semibold text-[var(--share-green-950)]">Restrições e regras vigentes</h2><p className="text-sm text-zinc-600">Versão {humanshipRestrictionVersion}. As decisões manuais de cargo ficam salvas e são reutilizadas nas próximas análises.</p></div></div></div>
-    <div className="rounded-lg border border-[var(--share-line)] bg-white p-5"><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Restrição 01</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Concorrentes e patrocinadores</h3><div className="mt-4 grid gap-3 md:grid-cols-2">{humanshipCompanyRestrictionGroups.map((group) => <article key={`${group.reference}-${group.category}`} className="rounded-md border border-[var(--share-line)] p-3"><p className="font-semibold">{group.reference}</p><p className="mt-1 text-xs text-zinc-500">{group.category}</p><p className="mt-2 text-sm text-zinc-700">{group.companies.join(" · ")}</p></article>)}</div></div>
-    <div className="rounded-lg border border-[var(--share-line)] bg-white p-5"><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Restrição 02</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Cargos executivos de RH e Pessoas</h3><p className="mt-2 text-sm leading-6 text-zinc-600">Os títulos abaixo são a referência original. Cargos próximos podem ser ensinados pelo time diretamente na tabela de resultados.</p><div className="mt-4 flex flex-wrap gap-2">{humanshipRoleReferences.map((role) => <span key={role} className="rounded-full border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-1.5 text-xs font-medium text-zinc-700">{role}</span>)}</div></div>
-    <div className="grid gap-5 lg:grid-cols-2">
-      <RoleRuleList title={`Cargos aceitos · ${accepted.length}`} rules={accepted} empty="Nenhum cargo adicional foi aprovado ainda." tone="accepted" />
-      <RoleRuleList title={`Cargos reprovados · ${rejected.length}`} rules={rejected} empty="Nenhum cargo adicional foi reprovado ainda." tone="rejected" />
-    </div>
-  </section>;
+  const saving = pending === "restrictions";
+  const applying = pending === "apply_restrictions";
+  const currentVersion = current?.version || base.version;
+  const eventUsesCurrent = currentVersion === event.restrictionVersion;
+
+  function updateGroup(index: number, patch: Partial<RestrictionConfig["companyGroups"][number]>) {
+    setDraft((value) => ({
+      ...value,
+      companyGroups: value.companyGroups.map((group, position) => position === index ? { ...group, ...patch } : group),
+    }));
+  }
+
+  return (
+    <section className="grid gap-5">
+      <article className="rounded-2xl border border-[var(--share-line)] bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="rounded-xl bg-[#edf7eb] p-2 text-[var(--share-green-900)]"><ShieldCheck className="h-5 w-5" /></span>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#006142]">Restrições do Humanship</p>
+              <h2 className="mt-1 text-xl font-semibold text-[#003f2c]">Regras versionadas</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
+                Cada evento mantém a versão usada na análise. Alterar a configuração cria uma nova versão e não muda eventos antigos automaticamente.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full bg-[#eef6e8] px-3 py-1.5 font-bold text-[#52712b]">Evento: {event.restrictionVersion}</span>
+            <span className="rounded-full bg-zinc-100 px-3 py-1.5 font-bold text-zinc-600">Atual: {currentVersion}</span>
+          </div>
+        </div>
+
+        {canManage ? (
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void onSave(draft)}
+              disabled={saving || !draft.companyGroups.length || !draft.roleReferences.length}
+              className="rounded-xl bg-[#006142] px-4 py-2 text-sm font-bold text-white disabled:opacity-45"
+            >
+              {saving ? "Salvando nova versão..." : "Salvar nova versão"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void onApply()}
+              disabled={applying || eventUsesCurrent}
+              className="rounded-xl border border-[#b8ceb5] px-4 py-2 text-sm font-bold text-[#006142] disabled:opacity-45"
+            >
+              {applying ? "Aplicando..." : eventUsesCurrent ? "Evento já usa a versão atual" : "Aplicar versão atual ao evento"}
+            </button>
+          </div>
+        ) : (
+          <p className="mt-5 rounded-xl border border-[#dce6d9] bg-[#f8fbf6] px-4 py-3 text-sm text-zinc-600">
+            Somente usuários com permissão <strong>ADM Humanship</strong> podem alterar as restrições. A equipe continua visualizando a versão aplicada ao evento.
+          </p>
+        )}
+      </article>
+
+      <article className="rounded-2xl border border-[var(--share-line)] bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#006142]">Restrição 01</p>
+            <h3 className="mt-1 text-xl font-semibold text-[#003f2c]">Empresas e grupos restritos</h3>
+          </div>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={() => setDraft((value) => ({
+                ...value,
+                companyGroups: [...value.companyGroups, { reference: "", category: "", companies: [] }],
+              }))}
+              className="inline-flex items-center gap-2 rounded-xl border border-[#b8ceb5] px-3 py-2 text-xs font-bold text-[#006142]"
+            >
+              <Plus className="h-3.5 w-3.5" /> Adicionar grupo
+            </button>
+          ) : null}
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {draft.companyGroups.map((group, index) => (
+            <div key={`${index}-${group.reference}-${group.category}`} className="rounded-xl border border-[#dce6d9] bg-[#fbfdf9] p-4">
+              {canManage ? (
+                <>
+                  <div className="flex items-start gap-2">
+                    <div className="grid min-w-0 flex-1 gap-2">
+                      <input
+                        value={group.reference}
+                        onChange={(e) => updateGroup(index, { reference: e.target.value })}
+                        placeholder="Referência / patrocinador"
+                        className="h-10 rounded-lg border border-[#cbdcc9] bg-white px-3 text-sm font-semibold text-[#003f2c]"
+                      />
+                      <input
+                        value={group.category}
+                        onChange={(e) => updateGroup(index, { category: e.target.value })}
+                        placeholder="Categoria da restrição"
+                        className="h-10 rounded-lg border border-[#cbdcc9] bg-white px-3 text-sm text-zinc-700"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDraft((value) => ({
+                        ...value,
+                        companyGroups: value.companyGroups.filter((_, position) => position !== index),
+                      }))}
+                      className="rounded-lg p-2 text-red-600 hover:bg-red-50"
+                      aria-label="Remover grupo"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={group.companies.join("\n")}
+                    onChange={(e) => updateGroup(index, {
+                      companies: e.target.value.split(/\n|,/).map((item) => item.trim()).filter(Boolean),
+                    })}
+                    placeholder="Uma empresa por linha"
+                    className="mt-3 w-full rounded-lg border border-[#cbdcc9] bg-white p-3 text-sm text-zinc-700"
+                  />
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-[#003f2c]">{group.reference}</p>
+                  <p className="mt-1 text-xs text-zinc-500">{group.category}</p>
+                  <p className="mt-3 text-sm leading-6 text-zinc-700">{group.companies.join(" · ")}</p>
+                </>
+              )}
+            </div>
+          ))}
+          {!draft.companyGroups.length ? <p className="text-sm text-zinc-500">Nenhum grupo restrito cadastrado.</p> : null}
+        </div>
+      </article>
+
+      <article className="rounded-2xl border border-[var(--share-line)] bg-white p-5 shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#006142]">Restrição 02</p>
+        <h3 className="mt-1 text-xl font-semibold text-[#003f2c]">Cargos executivos de RH e Pessoas</h3>
+        <p className="mt-2 text-sm leading-6 text-zinc-600">
+          Esta lista é usada como referência de senioridade e proximidade. Os cargos aprendidos manualmente continuam registrados separadamente.
+        </p>
+        {canManage ? (
+          <textarea
+            rows={10}
+            value={draft.roleReferences.join("\n")}
+            onChange={(e) => setDraft((value) => ({
+              ...value,
+              roleReferences: e.target.value.split("\n").map((item) => item.trim()).filter(Boolean),
+            }))}
+            className="mt-4 w-full rounded-xl border border-[#cbdcc9] bg-[#fbfdf9] p-4 text-sm leading-6 text-zinc-700"
+            placeholder="Um cargo por linha"
+          />
+        ) : (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {draft.roleReferences.map((role) => (
+              <span key={role} className="rounded-full border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-1.5 text-xs font-medium text-zinc-700">{role}</span>
+            ))}
+          </div>
+        )}
+      </article>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <RoleRuleList title={`Cargos aceitos · ${accepted.length}`} rules={accepted} empty="Nenhum cargo adicional foi aprovado ainda." tone="accepted" />
+        <RoleRuleList title={`Cargos reprovados · ${rejected.length}`} rules={rejected} empty="Nenhum cargo adicional foi reprovado ainda." tone="rejected" />
+      </div>
+    </section>
+  );
 }
 
 function RoleRuleList({ title, rules, empty, tone }: { title: string; rules: HumanshipRoleRule[]; empty: string; tone: HumanshipRoleRuleDecision }) {

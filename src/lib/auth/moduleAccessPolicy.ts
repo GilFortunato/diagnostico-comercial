@@ -8,13 +8,14 @@ export const platformModules = [
   "decision.makers",
   "hr.hunting",
   "humanship.r1ship",
+  "humanship.admin",
   "rapport",
   "meeting.intelligence",
 ] as const;
 
 export type PlatformModule = (typeof platformModules)[number];
 
-// New users enter through the personal LinkedIn diagnostic only.
+// New users enter with only the Diagnóstico Comercial workspace enabled.
 // Existing explicit permissions remain authoritative and admins keep full access.
 const defaultModuleAccess: Record<PlatformModule, boolean> = {
   "authority.personal": true,
@@ -26,6 +27,7 @@ const defaultModuleAccess: Record<PlatformModule, boolean> = {
   "decision.makers": false,
   "hr.hunting": false,
   "humanship.r1ship": false,
+  "humanship.admin": false,
   rapport: false,
   "meeting.intelligence": false,
 };

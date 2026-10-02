@@ -9,21 +9,24 @@ type AdminUser = {
   name: string | null;
   email: string;
   active: boolean;
+  isAdmin: boolean;
+  bootstrapAdmin: boolean;
   createdAt: string;
   lastLoginAt: string | null;
   modulePermissions: Array<{ moduleKey: string; enabled: boolean }>;
 };
 
 const moduleLabels: Record<PlatformModule, string> = {
-  "authority.personal": "Diagnóstico pessoal",
+  "authority.personal": "Diagnóstico Comercial",
   "authority.company": "Diagnóstico de empresas",
   "authority.leader": "Diagnóstico de líderes",
   "content.intelligence": "Inteligência de conteúdo",
   "creative.visual-scout": "Share Visual Scout",
-  "creative.trend-intelligence": "Share Trend Intelligence",
+  "creative.trend-intelligence": "MKT Scout",
   "decision.makers": "Mapa de decisores",
   "hr.hunting": "HR Hunting",
   "humanship.r1ship": "Humanship · R1 Ship",
+  "humanship.admin": "ADM Humanship",
   rapport: "Rapport",
   "meeting.intelligence": "Inteligência de reuniões",
 };
@@ -83,7 +86,7 @@ export function AdminUsersExperience() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Administração</p>
             <h1 className="mt-1 text-3xl font-semibold text-[var(--share-green-950)]">Usuários e permissões</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Gerencie o acesso às áreas da plataforma sem alterar a autenticação Google nem expor credenciais.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Gerencie módulos e acesso ADM. Novos usuários entram somente com o Diagnóstico Comercial liberado.</p>
           </div>
           <span className="inline-flex items-center gap-2 rounded-md bg-[#edf7eb] px-3 py-2 text-sm font-semibold text-[var(--share-green-900)]">
             <ShieldCheck className="h-4 w-4" /> Controle no servidor
@@ -103,14 +106,20 @@ export function AdminUsersExperience() {
                     <span className="flex h-10 w-10 items-center justify-center rounded-md bg-[#edf7eb] text-[var(--share-green-900)]"><UserRoundCog className="h-5 w-5" /></span>
                     <div><h2 className="font-semibold text-zinc-950">{user.name || "Nome não informado"}</h2><p className="text-sm text-zinc-600">{user.email}</p><p className="mt-1 text-xs text-zinc-500">Cadastro: {formatDate(user.createdAt)} · Último acesso: {formatDate(user.lastLoginAt)}</p></div>
                   </div>
-                  <label className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-700">
-                    <input type="checkbox" checked={user.active} disabled={isPending} onChange={(event) => update({ action: "account", userId: user.id, active: event.target.checked })} />
-                    {user.active ? "Conta ativa" : "Conta desativada"}
-                  </label>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <label className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-700">
+                      <input type="checkbox" checked={user.isAdmin || user.bootstrapAdmin} disabled={isPending || user.bootstrapAdmin} onChange={(event) => update({ action: "admin", userId: user.id, enabled: event.target.checked })} />
+                      {user.bootstrapAdmin ? "ADM fixo" : "ADM"}
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-700">
+                      <input type="checkbox" checked={user.active} disabled={isPending} onChange={(event) => update({ action: "account", userId: user.id, active: event.target.checked })} />
+                      {user.active ? "Conta ativa" : "Conta desativada"}
+                    </label>
+                  </div>
                 </div>
                 <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   {modules.map((moduleKey) => {
-                    const enabled = explicit.get(moduleKey) ?? ["authority.personal", "content.intelligence", "decision.makers", "hr.hunting", "humanship.r1ship"].includes(moduleKey);
+                    const enabled = explicit.get(moduleKey) ?? moduleKey === "authority.personal";
                     return <label key={moduleKey} className="flex items-center gap-2 rounded-md border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-3 text-sm text-zinc-700"><input type="checkbox" checked={enabled} disabled={isPending || !user.active} onChange={(event) => update({ action: "permission", userId: user.id, moduleKey, enabled: event.target.checked })} /><span>{moduleLabels[moduleKey]}</span>{enabled ? <CheckCircle2 className="ml-auto h-4 w-4 text-[var(--share-green-800)]" /> : null}</label>;
                   })}
                 </div>

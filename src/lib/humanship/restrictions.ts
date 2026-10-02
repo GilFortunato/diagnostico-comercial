@@ -1,5 +1,17 @@
 import type { HumanshipRoleRuleDecision } from "@/lib/humanship/types";
 
+export type HumanshipCompanyRestrictionGroup = {
+  reference: string;
+  category: string;
+  companies: string[];
+};
+
+export type HumanshipRestrictionSnapshot = {
+  version: string;
+  companyGroups: HumanshipCompanyRestrictionGroup[];
+  roleReferences: string[];
+};
+
 export const humanshipRestrictionVersion = "2026-09-11-v1";
 
 export const humanshipCompanyRestrictionGroups = [
@@ -60,19 +72,26 @@ export type CompanyAssessment = {
   reason: string;
 };
 
-export function currentRestrictionSnapshot() {
+export function currentRestrictionSnapshot(): HumanshipRestrictionSnapshot {
   return {
     version: humanshipRestrictionVersion,
-    companyGroups: humanshipCompanyRestrictionGroups,
-    roleReferences: humanshipRoleReferences,
+    companyGroups: humanshipCompanyRestrictionGroups.map((group) => ({
+      reference: group.reference,
+      category: group.category,
+      companies: [...group.companies],
+    })),
+    roleReferences: [...humanshipRoleReferences],
   };
 }
 
-export function assessCompanyRestriction(company: string | undefined | null): CompanyAssessment {
+export function assessCompanyRestriction(
+  company: string | undefined | null,
+  snapshot: HumanshipRestrictionSnapshot = currentRestrictionSnapshot(),
+): CompanyAssessment {
   const value = normalize(company || "");
   if (!value) return { restricted: false, matchedCompany: null, reference: null, category: null, reason: "Empresa não informada para comparação." };
 
-  for (const group of humanshipCompanyRestrictionGroups) {
+  for (const group of snapshot.companyGroups) {
     for (const restrictedCompany of group.companies) {
       const candidate = normalize(restrictedCompany);
       if (sameOrganization(value, candidate)) {
@@ -90,7 +109,11 @@ export function assessCompanyRestriction(company: string | undefined | null): Co
   return { restricted: false, matchedCompany: null, reference: null, category: null, reason: "Nenhuma restrição de empresa identificada." };
 }
 
-export function assessRole(title: string | undefined | null, learnedDecision?: HumanshipRoleRuleDecision | null): RoleAssessment {
+export function assessRole(
+  title: string | undefined | null,
+  learnedDecision?: HumanshipRoleRuleDecision | null,
+  snapshot: HumanshipRestrictionSnapshot = currentRestrictionSnapshot(),
+): RoleAssessment {
   const raw = (title || "").trim();
   const value = normalize(raw);
   if (!value) return { classification: "possible_rejected", reference: null, score: 0, reason: "Cargo não informado." };
@@ -102,7 +125,7 @@ export function assessRole(title: string | undefined | null, learnedDecision?: H
     return { classification: "possible_rejected", reference: raw, score: 0, reason: `Cargo reprovado manualmente e incluído na lista de cargos reprovados: ${raw}.` };
   }
 
-  const exact = humanshipRoleReferences.find((reference) => normalize(reference) === value);
+  const exact = snapshot.roleReferences.find((reference) => normalize(reference) === value);
   if (exact && normalize(exact) !== "cpo") {
     return { classification: "eligible", reference: exact, score: 100, reason: `Cargo corresponde diretamente à diretriz: ${exact}.` };
   }
@@ -116,16 +139,16 @@ export function assessRole(title: string | undefined | null, learnedDecision?: H
   }
 
   if (executive && domain) {
-    const reference = closestRole(raw);
+    const reference = closestRole(raw, snapshot.roleReferences);
     return { classification: "eligible", reference, score: Math.max(88, roleSimilarity(raw, reference || raw)), reason: `Senioridade executiva e domínio de RH/Pessoas compatíveis${reference ? ` com ${reference}` : ""}.` };
   }
 
   if (nearExecutive && domain) {
-    const reference = closestRole(raw);
+    const reference = closestRole(raw, snapshot.roleReferences);
     return { classification: "validate", reference, score: Math.max(62, roleSimilarity(raw, reference || raw)), reason: "Cargo está na liderança de RH/Pessoas, mas abaixo ou ao lado da faixa executiva principal; exige validação humana." };
   }
 
-  const reference = closestRole(raw);
+  const reference = closestRole(raw, snapshot.roleReferences);
   const similarity = roleSimilarity(raw, reference || "");
   if (domain && similarity >= 55) {
     return { classification: "validate", reference, score: similarity, reason: `Cargo profissionalmente próximo da diretriz${reference ? ` (${reference})` : ""}, mas não é uma equivalência executiva clara.` };
@@ -141,11 +164,13 @@ export function classifyHumanshipParticipant(input: {
   linkedinTitle?: string | null;
   linkedinFound: boolean;
   roleRuleDecision?: HumanshipRoleRuleDecision | null;
+  restrictionSnapshot?: HumanshipRestrictionSnapshot;
 }) {
   const company = input.linkedinCompany || input.sourceCompany || "";
   const title = input.linkedinTitle || input.sourceTitle || "";
-  const companyAssessment = assessCompanyRestriction(company);
-  const roleAssessment = assessRole(title, input.roleRuleDecision);
+  const snapshot = input.restrictionSnapshot || currentRestrictionSnapshot();
+  const companyAssessment = assessCompanyRestriction(company, snapshot);
+  const roleAssessment = assessRole(title, input.roleRuleDecision, snapshot);
 
   if (companyAssessment.restricted) {
     return {
@@ -177,10 +202,10 @@ export function normalizeHumanshipRoleTitle(value: string | undefined | null) {
   return normalize(value || "").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function closestRole(title: string) {
+function closestRole(title: string, roleReferences: readonly string[]) {
   let best: string | null = null;
   let score = 0;
-  for (const reference of humanshipRoleReferences) {
+  for (const reference of roleReferences) {
     if (normalize(reference) === "cpo") continue;
     const current = roleSimilarity(title, reference);
     if (current > score) { score = current; best = reference; }

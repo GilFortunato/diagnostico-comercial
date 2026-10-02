@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { ExternalLink, LoaderCircle, Search, Sparkles, TrendingUp } from "lucide-react";
 
@@ -182,8 +181,8 @@ export function TrendIntelligenceClient() {
             </section>
 
             <aside className="share-card rounded-2xl p-6">
-              <p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Do insight à imagem</p>
-              <h2 className="mt-4 text-2xl font-semibold text-[var(--share-green-950)]">Briefing visual sugerido</h2>
+              <p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Direção criativa</p>
+              <h2 className="mt-4 text-2xl font-semibold text-[var(--share-green-950)]">Direção visual sugerida</h2>
               <p className="mt-4 text-sm leading-6 text-zinc-600">{data.visualBrief}</p>
               <p className="mt-6 text-xs font-semibold uppercase text-[var(--share-green-800)]">Termos de busca</p>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -191,12 +190,6 @@ export function TrendIntelligenceClient() {
                   <span key={term} className="rounded-full bg-[#eef5ec] px-3 py-2 text-xs font-semibold text-[var(--share-green-900)]">{term}</span>
                 ))}
               </div>
-              <Link
-                href={`/sharevisualscout?q=${encodeURIComponent(data.visualBrief)}`}
-                className="mt-6 block rounded-xl bg-[var(--share-lime)] px-4 py-3 text-center text-sm font-bold text-[var(--share-green-950)]"
-              >
-                Buscar no Visual Scout
-              </Link>
             </aside>
           </div>
 

@@ -45,6 +45,12 @@ export type HumanshipParticipant = {
   updatedAt: string;
 };
 
+export type HumanshipRestrictionSnapshot = {
+  version: string;
+  companyGroups: Array<{ reference: string; category: string; companies: string[] }>;
+  roleReferences: string[];
+};
+
 export type HumanshipEvent = {
   id: string;
   ownerId: string;
@@ -56,6 +62,7 @@ export type HumanshipEvent = {
   sourceSheetName?: string;
   sourceRowCount: number;
   restrictionVersion: string;
+  restrictionSnapshot?: HumanshipRestrictionSnapshot;
   lastSyncedAt?: string;
   createdAt: string;
   updatedAt: string;
