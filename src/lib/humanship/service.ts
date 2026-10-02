@@ -36,6 +36,25 @@ export async function createHumanshipEvent(ownerId: string, name: string) {
   return getHumanshipEvent(ownerId, id);
 }
 
+export async function renameHumanshipEvent(ownerId: string, eventId: string, name: string) {
+  const cleanName = name.trim();
+  if (cleanName.length < 2) return null;
+  await getPrisma().$executeRaw(Prisma.sql`
+    UPDATE "HumanshipEvent"
+    SET "name" = ${cleanName}, "updatedAt" = CURRENT_TIMESTAMP
+    WHERE "id" = ${eventId} AND "ownerId" = ${ownerId}
+  `);
+  return getHumanshipEvent(ownerId, eventId);
+}
+
+export async function deleteHumanshipEvent(eventId: string) {
+  const deleted = await getPrisma().$executeRaw(Prisma.sql`
+    DELETE FROM "HumanshipEvent"
+    WHERE "id" = ${eventId}
+  `);
+  return Number(deleted) > 0;
+}
+
 export async function listHumanshipEvents(ownerId: string) {
   const rows = await getPrisma().$queryRaw<EventRow[]>(Prisma.sql`
     SELECT "id", "ownerId", "name", "status", "sourceKind", "sourceName", "sourceExternalId", "sourceSheetName", "sourceRowCount", "restrictionVersion", "lastSyncedAt", "createdAt", "updatedAt"
