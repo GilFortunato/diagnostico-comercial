@@ -57,40 +57,36 @@ export async function persistB2BWorkspaceSearch(input: {
       : input.result.people.map((item) => ({ kind: "person" as const, item }));
 
     for (const entry of all) {
-      const key = entry.kind === "company" ? companyLeadKey(entry.item) : personLeadKey(entry.item);
+      const company = entry.kind === "company" ? entry.item as HuntingCompany : null;
+      const person = entry.kind === "person" ? entry.item as HuntingPerson : null;
+      const key = company ? companyLeadKey(company) : personLeadKey(person!);
       const existing = await tx.b2BLead.findUnique({ where: { leadKey: key } });
+      const item = company ?? person!;
+      const commonData = {
+        name: item.name,
+        companyName: person ? person.company : company!.name,
+        title: person ? person.title : null,
+        linkedinUrl: item.linkedinUrl || null,
+        domain: company?.domain || null,
+        website: company?.website || null,
+        location: item.location || null,
+        payload: item as unknown as Prisma.InputJsonValue,
+        lastSeenAt: new Date(),
+      };
 
       const lead = existing
         ? await tx.b2BLead.update({
             where: { id: existing.id },
-            data: {
-              name: entry.item.name,
-              companyName: entry.kind === "person" ? entry.item.company : entry.item.name,
-              title: entry.kind === "person" ? entry.item.title : null,
-              linkedinUrl: entry.item.linkedinUrl || null,
-              domain: entry.kind === "company" ? entry.item.domain || null : null,
-              website: entry.kind === "company" ? entry.item.website || null : null,
-              location: entry.item.location || null,
-              payload: entry.item as unknown as Prisma.InputJsonValue,
-              lastSeenAt: new Date(),
-            },
+            data: commonData,
           })
         : await tx.b2BLead.create({
             data: {
               leadKey: key,
               kind: entry.kind,
-              name: entry.item.name,
-              companyName: entry.kind === "person" ? entry.item.company : entry.item.name,
-              title: entry.kind === "person" ? entry.item.title : null,
-              linkedinUrl: entry.item.linkedinUrl || null,
-              domain: entry.kind === "company" ? entry.item.domain || null : null,
-              website: entry.kind === "company" ? entry.item.website || null : null,
-              location: entry.item.location || null,
+              ...commonData,
               firstSeenById: input.actor.id,
               firstSeenByName: actorName,
               firstSeenSearchId: search.id,
-              payload: entry.item as unknown as Prisma.InputJsonValue,
-              lastSeenAt: new Date(),
             },
           });
 
