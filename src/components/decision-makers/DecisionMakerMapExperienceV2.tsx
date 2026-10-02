@@ -408,7 +408,10 @@ export function DecisionMakerMapExperienceV2() {
             {!result ? <Empty mode={mode} /> : <>
               <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--share-line)] pb-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Resultados</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Resultados</p>
+                    {result.persistentCache ? <span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">Reaproveitado do Banco Share</span> : null}
+                  </div>
                   <h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{result.mode === "companies" ? `${result.companies.length} contas encontradas` : `${result.people.length} pessoas encontradas`}</h2>
                   <p className="mt-1 text-sm text-zinc-600">{result.nextBestAction.reason}</p>
                 </div>
