@@ -1,9 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowLeft, Building2, Download, ExternalLink, LoaderCircle, Plus, Search, Users } from "lucide-react";
-import { LoginButton } from "@/components/auth/LoginButton";
+import { Building2, Download, ExternalLink, LoaderCircle, Plus, Search, Users } from "lucide-react";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
 import { defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
 import { getSuggestedRoles } from "@/lib/decision-makers/roleIntelligence";
@@ -196,13 +194,6 @@ export function DecisionMakerMapExperienceV2() {
   }
 
   return <main className="share-shell min-h-screen text-[var(--share-ink)]">
-    <header className="border-b border-white/15 bg-[var(--share-green-950)] text-white">
-      <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-5 py-3">
-        <Link href="/" className="inline-flex items-center gap-3"><ArrowLeft className="h-4 w-4 text-[var(--share-lime)]" /><span className="share-wordmark text-4xl">share</span><span className="text-xs font-semibold uppercase text-[var(--share-lime)]">AI</span></Link>
-        <LoginButton />
-      </div>
-    </header>
-
     <div className="mx-auto grid max-w-[1440px] gap-5 px-5 py-7">
       <section className="rounded-lg bg-[var(--share-green-950)] p-6 text-white">
         <p className="text-xs font-semibold uppercase text-[var(--share-lime)]">B2B Hunting</p>
