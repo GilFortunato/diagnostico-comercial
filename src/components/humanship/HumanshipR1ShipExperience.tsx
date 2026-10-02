@@ -272,59 +272,54 @@ export function HumanshipR1ShipExperience({ accountName, canManageHumanship = fa
   return (
     <main className="min-h-screen bg-[#eef4e9] text-[var(--share-ink)]">
       <div className="w-full px-4 py-5 xl:px-6">
-        <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--share-green-800)]">Humanship</p>
-            <h1 className="mt-1 text-3xl font-semibold text-[var(--share-green-950)]">R1 Ship</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
-              Organize os eventos, importe participantes e acompanhe a validação em um único fluxo.
-            </p>
-          </div>
-          {events.length ? (
-            <select
-              value={event?.id || ""}
-              onChange={(e) => {
-                setPending("load");
-                loadEvent(e.target.value)
-                  .catch((cause) => setError(cause instanceof Error ? cause.message : "Erro ao abrir evento."))
-                  .finally(() => setPending(null));
-              }}
-              className="h-11 min-w-[240px] rounded-xl border border-[#cbdcc9] bg-white px-4 text-sm font-semibold text-[#003f2c] shadow-sm"
-            >
-              <option value="">Escolha um evento</option>
-              {events.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-          ) : null}
+        <header className="mb-5">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--share-green-800)]">Humanship</p>
+          <h1 className="mt-1 text-3xl font-semibold text-[var(--share-green-950)]">R1 Ship</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
+            Selecione um evento para importar a base, trabalhar os participantes e acompanhar as regras aplicadas.
+          </p>
         </header>
 
         {error ? <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</p> : null}
 
         <div className="grid gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
           <aside className="self-start rounded-2xl border border-[#cbdcc9] bg-[#003f2c] p-4 text-white shadow-sm lg:sticky lg:top-[76px] lg:min-h-[calc(100vh-96px)]">
-            <div className="px-2 pb-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#d8ef55]">Workspace</p>
-              <h2 className="mt-1 text-lg font-semibold">Operação do evento</h2>
+            <div className="px-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#d8ef55]">Workspace Humanship</p>
+              <h2 className="mt-1 text-lg font-semibold">Eventos</h2>
+              <p className="mt-1 text-xs leading-5 text-white/55">Cada evento mantém sua própria base de participantes e histórico operacional.</p>
             </div>
 
-            <nav className="space-y-1">
-              {([
-                ["source", "Importar base", FileSpreadsheet],
-                ["results", "Participantes", UsersRound],
-                ["restrictions", "Restrições", ShieldCheck],
-              ] as const).map(([key, label, Icon]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setTab(key)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
-                    tab === key ? "bg-[#dcef55] text-[#173b28]" : "text-white/75 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {label}
-                </button>
-              ))}
-            </nav>
+            <div className="mt-4 max-h-[48vh] space-y-2 overflow-y-auto pr-1">
+              {events.map((item) => {
+                const active = item.id === event?.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setPending("load");
+                      setSelected(null);
+                      loadEvent(item.id, true)
+                        .catch((cause) => setError(cause instanceof Error ? cause.message : "Erro ao abrir evento."))
+                        .finally(() => setPending(null));
+                    }}
+                    className={`w-full rounded-xl border px-3 py-3 text-left transition ${active ? "border-[#dcef55] bg-[#dcef55] text-[#173b28]" : "border-white/10 bg-white/5 text-white hover:bg-white/10"}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <CalendarDays className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div className="min-w-0">
+                        <strong className="block truncate text-sm">{item.name}</strong>
+                        <span className={`mt-1 block text-[11px] ${active ? "text-[#173b28]/65" : "text-white/50"}`}>
+                          {item.sourceRowCount} participante{item.sourceRowCount === 1 ? "" : "s"} · {formatCompactDate(item.updatedAt)}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+              {!events.length ? <p className="rounded-xl border border-dashed border-white/15 px-3 py-5 text-center text-xs text-white/45">Nenhum evento criado ainda.</p> : null}
+            </div>
 
             <div className="my-5 h-px bg-white/10" />
 
@@ -405,7 +400,7 @@ export function HumanshipR1ShipExperience({ accountName, canManageHumanship = fa
                       </div>
                     </div>
 
-                    {canDeleteEvents ? (
+                    {canManageHumanship ? (
                       <button
                         type="button"
                         onClick={() => void deleteEvent()}
@@ -419,16 +414,28 @@ export function HumanshipR1ShipExperience({ accountName, canManageHumanship = fa
                   </div>
                 </article>
 
+                <nav className="mt-4 flex flex-wrap gap-2 rounded-2xl border border-[#cbdcc9] bg-white p-2 shadow-sm">
+                  <button type="button" onClick={() => setTab("results")} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold ${tab === "results" ? "bg-[#003f2c] text-white" : "text-[#006142] hover:bg-[#eef6ea]"}`}>
+                    <UsersRound className="h-4 w-4" /> Participantes
+                  </button>
+                  <button type="button" onClick={() => setTab("source")} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold ${tab === "source" ? "bg-[#003f2c] text-white" : "text-[#006142] hover:bg-[#eef6ea]"}`}>
+                    <FileSpreadsheet className="h-4 w-4" /> Importar base
+                  </button>
+                  <button type="button" onClick={() => void openRestrictions()} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold ${tab === "restrictions" ? "bg-[#003f2c] text-white" : "text-[#006142] hover:bg-[#eef6ea]"}`}>
+                    <ShieldCheck className="h-4 w-4" /> Restrições aplicadas
+                  </button>
+                </nav>
+
                 <div className="mt-5">
                   {tab === "source" ? <SourceTab event={event} file={file} onFile={chooseSpreadsheet} pending={pending} onUpload={uploadExcel} /> : null}
                   {tab === "results" ? <ResultsTab event={event} visible={visible} counts={counts} filter={filter} setFilter={setFilter} pending={pending} onSearch={searchLinkedin} onDecision={decide} onRoleRule={decideRole} onMessages={setSelected} onLinkedinSaved={() => loadEvent(event.id)} /> : null}
-                  {tab === "restrictions" ? <RestrictionsTab event={event} /> : null}
+                  {tab === "restrictions" ? <RestrictionsTab event={event} current={workspaceRestrictions} canManage={canManageHumanship} pending={pending} onSave={saveRestrictions} onApply={applyRestrictionsToEvent} /> : null}
                 </div>
               </>
             ) : pending !== "load" ? (
               <div className="rounded-3xl border border-dashed border-[#b9ceb6] bg-white/65 px-6 py-14 text-center">
                 <p className="text-sm font-semibold text-[#003f2c]">Nenhum evento selecionado.</p>
-                <p className="mt-1 text-sm text-zinc-500">Crie um evento pelo menu lateral para começar.</p>
+                <p className="mt-1 text-sm text-zinc-500">Crie um evento na lateral. Depois dele criado, você poderá importar a base e trabalhar os participantes.</p>
               </div>
             ) : null}
           </section>
@@ -438,6 +445,10 @@ export function HumanshipR1ShipExperience({ accountName, canManageHumanship = fa
       </div>
     </main>
   );}
+
+function formatCompactDate(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(new Date(value));
+}
 
 function SourceTab({ event, file, onFile, pending, onUpload }: { event: HumanshipEvent; file: File | null; onFile: (v: File | null) => void; pending: Pending; onUpload: () => void }) {
   return <section>
