@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ArrowDownRight, ArrowUpRight, Clock3, Radar, RefreshCw, Search } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Clock3, ExternalLink, LoaderCircle, Radar, RefreshCw, Search } from "lucide-react";
 import { BRANDS, getBrandContext } from "@/lib/scout/mkt/brands";
 import type { BrandId, SourceStatus, Trend } from "@/lib/scout/mkt/types";
 import { TrendDetail } from "./TrendDetail";
@@ -26,6 +26,7 @@ export function TrendIntelligenceClient({ initialGenerationId, initialQuery = ""
   const [draft, setDraft] = useState(initialQuery);
   const [revision, setRevision] = useState(0);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [radarMode, setRadarMode] = useState<"general" | "social">("general");
   const brand = getBrandContext(brandId);
 
   function search(event: FormEvent) {
@@ -54,20 +55,20 @@ export function TrendIntelligenceClient({ initialGenerationId, initialQuery = ""
           <p>O mesmo sinal. Uma leitura para {brand.name}.</p>
         </div>
       </section>
-      <div className={styles.toolbar}>
+      <div className={styles.radarTabs} role="tablist" aria-label="Tipo de radar">\n        <button type="button" role="tab" aria-selected={radarMode === "general"} className={radarMode === "general" ? styles.radarTabActive : styles.radarTab} onClick={() => setRadarMode("general")}>Radar Geral</button>\n        <button type="button" role="tab" aria-selected={radarMode === "social"} className={radarMode === "social" ? styles.radarTabActive : styles.radarTab} onClick={() => setRadarMode("social")}>Radar Social</button>\n      </div>\n      <div className={styles.toolbar}>
         <span className={styles.meta}><span className={styles.dot} /> Fontes públicas · Evidências rastreáveis</span>
         <button type="button" className={styles.secondary} onClick={() => setRevision((value) => value + 1)}><RefreshCw size={13} aria-hidden="true" /> Atualizar radar</button>
       </div>
-      <details className={styles.search}>
-        <summary><Search size={13} aria-hidden="true" className="mr-2 inline" />Pesquisar um tema específico</summary>
-        <form onSubmit={search}>
-          <label htmlFor="scout-query">Tema para investigar<input id="scout-query" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={120} placeholder="Ex.: inteligência artificial no trabalho" aria-describedby={searchError ? "scout-search-error" : undefined} /></label>
-          <button className={styles.primary} type="submit"><Search size={14} aria-hidden="true" /> Pesquisar</button>
-        </form>
-        {searchError ? <p id="scout-search-error" role="alert" className={styles.notice}>{searchError}</p> : null}
-      </details>
-      {query ? <div className={styles.searchActive}><span>Investigando: <strong>{query}</strong></span><button className={styles.back} onClick={() => { setQuery(""); setDraft(""); }} type="button">Voltar ao radar geral</button></div> : null}
-      <RadarWorkspace key={`${brandId}:${query}:${revision}`} brandId={brandId} query={query} retry={() => setRevision((value) => value + 1)} />
+      {radarMode === "general" ? <>\n        <details className={styles.search}>
+          <summary><Search size={13} aria-hidden="true" className="mr-2 inline" />Pesquisar um tema específico</summary>
+          <form onSubmit={search}>
+            <label htmlFor="scout-query">Tema para investigar<input id="scout-query" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={120} placeholder="Ex.: inteligência artificial no trabalho" aria-describedby={searchError ? "scout-search-error" : undefined} /></label>
+            <button className={styles.primary} type="submit"><Search size={14} aria-hidden="true" /> Pesquisar</button>
+          </form>
+          {searchError ? <p id="scout-search-error" role="alert" className={styles.notice}>{searchError}</p> : null}
+        </details>
+        {query ? <div className={styles.searchActive}><span>Investigando: <strong>{query}</strong></span><button className={styles.back} onClick={() => { setQuery(""); setDraft(""); }} type="button">Voltar ao radar geral</button></div> : null}
+        <RadarWorkspace key={`${brandId}:${query}:${revision}`} brandId={brandId} query={query} retry={() => setRevision((value) => value + 1)} />\n      </> : <SocialRadar initialQuery={draft || query} />}
       <footer className={styles.footer}><span>MKT Scout · Da evidência à criação.</span><span>Horários de Brasília · Relevância editorial não comprova crescimento.</span></footer>
     </div>
   );
@@ -131,4 +132,117 @@ function RadarWorkspace({ brandId, query, retry }: { brandId: BrandId; query: st
 
 export function SourceHealth({ sources }: { sources: SourceStatus[] }) {
   return <details className={styles.sources} open={sources.every((source) => source.status !== "ok")}><summary><ArrowDownRight size={13} aria-hidden="true" className="mr-2 inline" />Fontes e disponibilidade · {sources.length} conectores</summary><div className={styles.sourceGrid}>{sources.map((source) => <article className={styles.source} key={source.id}><header><strong>{source.name}</strong><span className={`${styles.chip} ${source.status === "ok" ? styles.statusOk : styles.statusWarning}`}>{statusLabels[source.status]}</span></header><p>{source.message}</p><small>{source.count} sinais · {formatScoutDate(source.collectedAt)}</small></article>)}</div></details>;
+}
+
+
+type SocialTrendResponse = {
+  query: string;
+  days: number;
+  provider: "youtube";
+  configured: boolean;
+  trendScore: number;
+  summary: string;
+  whyNow: string;
+  keywords: string[];
+  videos: Array<{
+    id: string;
+    title: string;
+    channel: string;
+    publishedAt: string;
+    url: string;
+    thumbnailUrl: string | null;
+    views: number;
+    likes: number;
+    comments: number;
+    viewsPerDay: number;
+    engagementRate: number;
+    signalScore: number;
+  }>;
+};
+
+function SocialRadar({ initialQuery = "" }: { initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery);
+  const [days, setDays] = useState(7);
+  const [data, setData] = useState<SocialTrendResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function searchSocial(event: FormEvent) {
+    event.preventDefault();
+    const term = query.trim();
+    if (term.length < 2) { setError("Digite pelo menos 2 caracteres para investigar um tema nas redes."); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(\`/api/scout/trends/search?q=\${encodeURIComponent(term)}&days=\${days}\`, { cache: "no-store" });
+      const payload = await response.json() as SocialTrendResponse & { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Não foi possível consultar os sinais sociais.");
+      setData(payload);
+    } catch (cause) {
+      setData(null);
+      setError(cause instanceof Error ? cause.message : "Falha ao consultar sinais sociais.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return <section className={styles.socialRadar}>
+    <div className={styles.socialIntro}>
+      <div>
+        <p className={styles.eyebrow}>Radar Social · proveniência explícita</p>
+        <h2>O que está ganhando tração nas redes</h2>
+        <p>O MKT Scout separa dado direto da plataforma de sinais indiretos. Hoje o YouTube está conectado diretamente; X, Instagram e TikTok permanecem identificados como não conectados até existir uma fonte confiável.</p>
+      </div>
+      <div className={styles.platformGrid}>
+        <PlatformStatus name="YouTube" state="Direto" detail="API oficial · vídeos, views, likes e comentários" ok />
+        <PlatformStatus name="X" state="Não conectado" detail="Sem inferir trend a partir de busca web" />
+        <PlatformStatus name="Instagram" state="Não conectado" detail="Sem fingir hashtags como dado direto" />
+        <PlatformStatus name="TikTok" state="Não conectado" detail="Aguardando fonte/API confiável" />
+      </div>
+    </div>
+
+    <form onSubmit={searchSocial} className={styles.socialSearch}>
+      <label>Tema para investigar nas redes
+        <input value={query} onChange={(event) => setQuery(event.target.value)} maxLength={120} placeholder="Ex.: IA no trabalho, liderança, recrutamento..." />
+      </label>
+      <label className={styles.periodLabel}>Período
+        <select value={days} onChange={(event) => setDays(Number(event.target.value))}>
+          <option value={1}>24 horas</option>
+          <option value={7}>7 dias</option>
+          <option value={30}>30 dias</option>
+        </select>
+      </label>
+      <button className={styles.primary} disabled={loading}>{loading ? <LoaderCircle size={14} className="animate-spin" /> : <Search size={14} />} Analisar sinais</button>
+    </form>
+
+    {error ? <p className={styles.notice}>{error}</p> : null}
+    {data ? <div className={styles.socialResults}>
+      <div className={styles.socialScore}>
+        <div><span>Índice interno de tração no YouTube</span><strong>{data.trendScore}<small>/100</small></strong></div>
+        <p>{data.summary}</p>
+        <p><strong>Por que agora:</strong> {data.whyNow}</p>
+        {data.keywords.length ? <div className={styles.keywordRow}>{data.keywords.slice(0,8).map((word)=><span key={word}>{word}</span>)}</div> : null}
+      </div>
+      <div className={styles.socialVideoGrid}>
+        {data.videos.slice(0,9).map((video)=><article key={video.id} className={styles.socialVideo}>
+          {video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" /> : <div className={styles.videoPlaceholder}>YouTube</div>}
+          <div className={styles.socialVideoBody}>
+            <span className={styles.directBadge}>Fonte direta · YouTube</span>
+            <h3>{video.title}</h3>
+            <p>{video.channel}</p>
+            <div className={styles.socialMetrics}><span>{video.views.toLocaleString("pt-BR")} views</span><span>{video.viewsPerDay.toLocaleString("pt-BR")}/dia</span><span>{video.engagementRate.toFixed(2)}% eng.</span></div>
+            <a href={video.url} target="_blank" rel="noreferrer">Abrir vídeo <ExternalLink size={12} /></a>
+          </div>
+        </article>)}
+      </div>
+      {!data.videos.length ? <div className={styles.empty}><h3>Nenhum sinal direto encontrado</h3><p>Tente ampliar o período ou pesquisar um tema menos específico.</p></div> : null}
+    </div> : null}
+  </section>;
+}
+
+function PlatformStatus({ name, state, detail, ok = false }: { name: string; state: string; detail: string; ok?: boolean }) {
+  return <article className={styles.platformCard}>
+    <div><strong>{name}</strong><span className={ok ? styles.platformOk : styles.platformPending}>{state}</span></div>
+    <p>{detail}</p>
+  </article>;
 }
