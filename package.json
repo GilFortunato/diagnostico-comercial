@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/test/*.test.ts src/test/*.test.mts && node --conditions=react-server --import tsx --test src/test/decisionMakerHunting.server.ts src/test/hrHuntingRegression.server.ts src/test/humanshipManualLinkedin.server.ts",
+    "test": "tsx --test src/test/*.test.ts src/test/*.test.mts && node --conditions=react-server --import tsx --test src/test/decisionMakerHunting.server.ts src/test/hrHuntingRegression.server.ts src/test/humanshipManualLinkedin.server.ts src/test/b2bWorkspace.server.ts",
     "test:mkt-scout": "tsx --test src/test/mktSignals.test.ts && node --conditions=react-server --import tsx --test src/test/mktSources.server.ts src/test/mktScoutWorkflow.server.ts"
   },
   "dependencies": {

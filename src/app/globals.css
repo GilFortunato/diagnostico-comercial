@@ -459,7 +459,7 @@ textarea {
   .share-hub-brand img { width:132px; }
   .share-hub-userbar { gap:3px; }
   .share-hub-intro h1 { font-size:42px; }
-  .share-hub-nexus { width:108vw; margin-left:-4vw; }
+  .share-hub-nexus { width:100%; margin-left:0; }
   .share-hub-sector-label { width:94px; min-height:76px; gap:2px; }
   .share-hub-sector-icon { width:34px; height:34px; border-radius:9px; margin-bottom:2px; }
   .share-hub-sector-icon svg { width:19px; height:19px; }

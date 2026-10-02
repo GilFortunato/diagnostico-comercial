@@ -428,7 +428,7 @@ export function HumanshipR1ShipExperience({ accountName, canManageHumanship = fa
                 <div className="mt-5">
                   {tab === "source" ? <SourceTab event={event} file={file} onFile={chooseSpreadsheet} pending={pending} onUpload={uploadExcel} /> : null}
                   {tab === "results" ? <ResultsTab event={event} visible={visible} counts={counts} filter={filter} setFilter={setFilter} pending={pending} onSearch={searchLinkedin} onDecision={decide} onRoleRule={decideRole} onMessages={setSelected} onLinkedinSaved={() => loadEvent(event.id)} /> : null}
-                  {tab === "restrictions" ? <RestrictionsTab event={event} current={workspaceRestrictions} canManage={canManageHumanship} pending={pending} onSave={saveRestrictions} onApply={applyRestrictionsToEvent} /> : null}
+                  {tab === "restrictions" ? <RestrictionsTab key={`${event.id}:${event.restrictionVersion}:${workspaceRestrictions?.version ?? "snapshot"}`} event={event} current={workspaceRestrictions} canManage={canManageHumanship} pending={pending} onSave={saveRestrictions} onApply={applyRestrictionsToEvent} /> : null}
                 </div>
               </>
             ) : pending !== "load" ? (
@@ -538,14 +538,6 @@ function RestrictionsTab({
     roleReferences: [],
   };
   const [draft, setDraft] = useState<RestrictionConfig>(base);
-
-  useEffect(() => {
-    setDraft(current || event.restrictionSnapshot || {
-      version: event.restrictionVersion,
-      companyGroups: [],
-      roleReferences: [],
-    });
-  }, [current, event.id, event.restrictionVersion, event.restrictionSnapshot]);
 
   const accepted = (event.roleRules ?? []).filter((rule) => rule.decision === "accepted");
   const rejected = (event.roleRules ?? []).filter((rule) => rule.decision === "rejected");

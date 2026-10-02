@@ -62,6 +62,7 @@ export async function deleteHumanshipEvent(eventId: string) {
 }
 
 export async function listHumanshipEvents(_actorId: string) {
+  void _actorId; // Shared workspace; module access is enforced by the route.
   const rows = await getPrisma().$queryRaw<EventRow[]>(Prisma.sql`
     SELECT "id", "ownerId", "name", "status", "sourceKind", "sourceName", "sourceExternalId", "sourceSheetName", "sourceRowCount", "restrictionVersion", "restrictionSnapshot", "lastSyncedAt", "createdAt", "updatedAt"
     FROM "HumanshipEvent"
@@ -71,6 +72,7 @@ export async function listHumanshipEvents(_actorId: string) {
 }
 
 export async function getHumanshipRoleRules(_actorId: string): Promise<HumanshipRoleRule[]> {
+  void _actorId; // Learned rules are shared across authorized event workspaces.
   const rows = await getPrisma().$queryRaw<RoleRuleRow[]>(Prisma.sql`
     SELECT DISTINCT ON ("normalizedTitle")
       "id", "ownerId", "normalizedTitle", "title", "decision", "decidedByName", "createdAt", "updatedAt"

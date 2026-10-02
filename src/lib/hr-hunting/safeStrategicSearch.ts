@@ -217,7 +217,7 @@ async function enrich(candidates: HrCandidate[], input: SearchInput, warnings: s
   }
 }
 
-async function persistResult({ id, ownerId, candidates, discoveryState, warnings, status }: {
+async function persistResult({ id, candidates, discoveryState, warnings, status }: {
   id: string;
   ownerId: string;
   candidates: HrCandidate[];

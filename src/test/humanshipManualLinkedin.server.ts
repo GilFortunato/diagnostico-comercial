@@ -3,7 +3,7 @@ import test from "node:test";
 import type { PrismaClient, Prisma } from "@prisma/client";
 import { saveHumanshipLinkedin } from "@/lib/humanship/service";
 
-test("manual LinkedIn persistence scopes the participant and preserves human decisions", async () => {
+test("manual LinkedIn persistence targets active shared participants and preserves human decisions", async () => {
   const globals = globalThis as unknown as { shareAiPrisma?: PrismaClient };
   const previous = globals.shareAiPrisma;
   const previousUrl = process.env.DATABASE_URL;
@@ -14,8 +14,9 @@ test("manual LinkedIn persistence scopes the participant and preserves human dec
     $queryRaw: async (sql: Prisma.Sql) => {
       statements.push(sql);
       if (sql.text.includes('FROM "HumanshipRoleRule"')) return [];
-      assert.ok(sql.values.includes("owner-test"));
-      assert.match(sql.text, /e\."ownerId" = \$/);
+      assert.ok(sql.values.includes("participant-test"));
+      assert.match(sql.text, /p\."id" = \$/);
+      assert.match(sql.text, /p\."active" = true/);
       return accessible ? [{ company: "Hesselbach", jobTitle: "Head de RH" }] : [];
     },
     $executeRaw: async (sql: Prisma.Sql) => { statements.push(sql); return 1; },
@@ -26,7 +27,9 @@ test("manual LinkedIn persistence scopes the participant and preserves human dec
     const update = statements.find((sql) => sql.text.includes('UPDATE "HumanshipParticipant"'))!;
     assert.ok(update.values.includes("https://www.linkedin.com/in/test-person"));
     assert.ok(update.values.includes("validate"));
-    assert.match(update.text, /e\."ownerId" = \$/);
+    assert.ok(update.values.includes("participant-test"));
+    assert.match(update.text, /p\."id" = \$/);
+    assert.match(update.text, /p\."active" = true/);
     assert.doesNotMatch(update.text, /"humanDecision"|"decisionAt"|"message1CopiedAt"|"email"\s*=/);
     statements.length = 0;
     accessible = false;

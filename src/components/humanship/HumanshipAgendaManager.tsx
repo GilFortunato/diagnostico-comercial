@@ -53,24 +53,24 @@ export function HumanshipAgendaManager() {
   const [pending, setPending] = useState<string | null>("load");
   const [error, setError] = useState<string | null>(null);
 
+  const [referenceTime, setReferenceTime] = useState(0);
+
   const upcoming = useMemo(
-    () => events.filter((event) => new Date(event.endAt || event.startAt).getTime() >= Date.now()),
-    [events],
+    () => events.filter((event) => new Date(event.endAt || event.startAt).getTime() >= referenceTime),
+    [events, referenceTime],
   );
 
   const past = useMemo(
-    () => events.filter((event) => new Date(event.endAt || event.startAt).getTime() < Date.now()),
-    [events],
+    () => events.filter((event) => new Date(event.endAt || event.startAt).getTime() < referenceTime),
+    [events, referenceTime],
   );
 
   async function loadEvents() {
-    setPending("load");
-    setError(null);
     try {
-      const response = await fetch("/api/humanship/agenda", { cache: "no-store" });
-      const body = await response.json() as { events?: HumanshipAgendaEvent[]; error?: string };
-      if (!response.ok) throw new Error(body.error || "Não foi possível carregar a agenda.");
-      setEvents(body.events || []);
+      const snapshot = await fetchAgendaEvents();
+      setReferenceTime(snapshot.collectedAt);
+      setEvents(snapshot.events);
+      setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível carregar a agenda.");
     } finally {
@@ -79,7 +79,17 @@ export function HumanshipAgendaManager() {
   }
 
   useEffect(() => {
-    void loadEvents();
+    let active = true;
+    fetchAgendaEvents().then((snapshot) => {
+      if (!active) return;
+      setReferenceTime(snapshot.collectedAt);
+      setEvents(snapshot.events);
+    }).catch((cause: unknown) => {
+      if (active) setError(cause instanceof Error ? cause.message : "Não foi possível carregar a agenda.");
+    }).finally(() => {
+      if (active) setPending(null);
+    });
+    return () => { active = false; };
   }, []);
 
   function editEvent(event: HumanshipAgendaEvent) {
@@ -514,4 +524,11 @@ function formatEventRange(event: HumanshipAgendaEvent) {
     timeZone: "America/Sao_Paulo",
   }).format(end);
   return `${date} → ${endText}`;
+}
+
+async function fetchAgendaEvents() {
+  const response = await fetch("/api/humanship/agenda", { cache: "no-store" });
+  const body = await response.json() as { events?: HumanshipAgendaEvent[]; error?: string };
+  if (!response.ok) throw new Error(body.error || "Não foi possível carregar a agenda.");
+  return { events: body.events || [], collectedAt: Date.now() };
 }

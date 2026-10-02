@@ -164,6 +164,8 @@ const workspaces: Workspace[] = [
     features: ["Diagnósticos de liderança", "Desenvolvimento de pessoas", "Jornadas e programas", "Eventos e comunidade"],
     brand: "humanship",
   },
+];
+
 const NEXUS_ROTATION = -80;
 
 function polar(cx:number, cy:number, radius:number, angle:number) {

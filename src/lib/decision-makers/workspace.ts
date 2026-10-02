@@ -18,7 +18,8 @@ export async function findReusableB2BSearch(input: DecisionMakerSearchInput) {
   const queryHash = b2bQueryHash(input);
   const cutoff = new Date(Date.now() - CACHE_TTL_MS);
   return getPrisma().b2BWorkspaceSearch.findFirst({
-    where: { queryHash, updatedAt: { gte: cutoff } },
+    // Reused snapshots must not renew the age of the external collection.
+    where: { queryHash, reusedFromSearchId: null, updatedAt: { gte: cutoff } },
     orderBy: { updatedAt: "desc" },
   });
 }
