@@ -25,7 +25,7 @@ export async function executeResilientHrHuntingSearch(id: string, ownerId: strin
     if (!current) return null;
     const warning = "A busca encontrou uma falha interna antes de concluir a persistência. Os resultados anteriores foram preservados; tente novamente sem alterar a vaga.";
     await getPrisma().hrHuntingSearch.updateMany({
-      where: { id, ownerId },
+      where: { id },
       data: { status: "connector_error", connectorWarnings: [...new Set([...current.connectorWarnings, warning])] },
     });
     return findOwnedHrHuntingSearch(id, ownerId);
