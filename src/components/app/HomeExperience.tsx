@@ -108,7 +108,7 @@ const workspaces: Workspace[] = [
     title: "Rapport",
     shortTitle: "Rapport",
     category: "Relacionamento",
-    module: "rapport.pre-meeting",
+    module: "rapport",
     icon: MessageSquareText,
     description: "Contexto e inteligência para conversas mais relevantes.",
     summary: "Chegue às interações com contexto, sinais e pontos de conexão preparados.",
