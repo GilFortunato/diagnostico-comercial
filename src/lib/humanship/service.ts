@@ -36,15 +36,15 @@ export async function createHumanshipEvent(ownerId: string, name: string) {
   return getHumanshipEvent(ownerId, id);
 }
 
-export async function renameHumanshipEvent(ownerId: string, eventId: string, name: string) {
+export async function renameHumanshipEvent(actorId: string, eventId: string, name: string) {
   const cleanName = name.trim();
   if (cleanName.length < 2) return null;
   await getPrisma().$executeRaw(Prisma.sql`
     UPDATE "HumanshipEvent"
     SET "name" = ${cleanName}, "updatedAt" = CURRENT_TIMESTAMP
-    WHERE "id" = ${eventId} AND "ownerId" = ${ownerId}
+    WHERE "id" = ${eventId}
   `);
-  return getHumanshipEvent(ownerId, eventId);
+  return getHumanshipEvent(actorId, eventId);
 }
 
 export async function deleteHumanshipEvent(eventId: string) {
@@ -55,31 +55,32 @@ export async function deleteHumanshipEvent(eventId: string) {
   return Number(deleted) > 0;
 }
 
-export async function listHumanshipEvents(ownerId: string) {
+export async function listHumanshipEvents(_actorId: string) {
   const rows = await getPrisma().$queryRaw<EventRow[]>(Prisma.sql`
     SELECT "id", "ownerId", "name", "status", "sourceKind", "sourceName", "sourceExternalId", "sourceSheetName", "sourceRowCount", "restrictionVersion", "lastSyncedAt", "createdAt", "updatedAt"
     FROM "HumanshipEvent"
-    WHERE "ownerId" = ${ownerId}
     ORDER BY "updatedAt" DESC
   `);
   return rows.map((row) => serializeEvent(row, []));
 }
 
-export async function getHumanshipRoleRules(ownerId: string): Promise<HumanshipRoleRule[]> {
+export async function getHumanshipRoleRules(_actorId: string): Promise<HumanshipRoleRule[]> {
   const rows = await getPrisma().$queryRaw<RoleRuleRow[]>(Prisma.sql`
-    SELECT "id", "ownerId", "normalizedTitle", "title", "decision", "decidedByName", "createdAt", "updatedAt"
+    SELECT DISTINCT ON ("normalizedTitle")
+      "id", "ownerId", "normalizedTitle", "title", "decision", "decidedByName", "createdAt", "updatedAt"
     FROM "HumanshipRoleRule"
-    WHERE "ownerId" = ${ownerId}
-    ORDER BY "decision" ASC, "title" ASC
+    ORDER BY "normalizedTitle", "updatedAt" DESC
   `);
-  return rows.map(serializeRoleRule);
+  return rows.map(serializeRoleRule).sort((a, b) =>
+    a.decision.localeCompare(b.decision) || a.title.localeCompare(b.title, "pt-BR")
+  );
 }
 
-export async function getHumanshipEvent(ownerId: string, id: string): Promise<HumanshipEvent | null> {
+export async function getHumanshipEvent(actorId: string, id: string): Promise<HumanshipEvent | null> {
   const events = await getPrisma().$queryRaw<EventRow[]>(Prisma.sql`
     SELECT "id", "ownerId", "name", "status", "sourceKind", "sourceName", "sourceExternalId", "sourceSheetName", "sourceRowCount", "restrictionVersion", "lastSyncedAt", "createdAt", "updatedAt"
     FROM "HumanshipEvent"
-    WHERE "id" = ${id} AND "ownerId" = ${ownerId}
+    WHERE "id" = ${id}
     LIMIT 1
   `);
   const event = events[0];
@@ -91,7 +92,7 @@ export async function getHumanshipEvent(ownerId: string, id: string): Promise<Hu
       WHERE "eventId" = ${id} AND "active" = true
       ORDER BY CASE "classification" WHEN 'eligible' THEN 1 WHEN 'validate' THEN 2 WHEN 'possible_rejected' THEN 3 ELSE 4 END, "fullName" ASC
     `),
-    getHumanshipRoleRules(ownerId),
+    getHumanshipRoleRules(actorId),
   ]);
   return serializeEvent(event, participants.map(serializeParticipant), roleRules);
 }
@@ -140,7 +141,7 @@ export async function syncHumanshipRows(input: {
         "status" = 'source_ready',
         "lastSyncedAt" = CURRENT_TIMESTAMP,
         "updatedAt" = CURRENT_TIMESTAMP
-      WHERE "id" = ${input.eventId} AND "ownerId" = ${input.ownerId}
+      WHERE "id" = ${input.eventId}
     `);
   });
   return getHumanshipEvent(input.ownerId, input.eventId);
@@ -150,7 +151,7 @@ export async function runHumanshipLinkedinSearch(ownerId: string, eventId: strin
   const event = await getHumanshipEvent(ownerId, eventId);
   if (!event) return null;
   const roleRules = new Map((event.roleRules ?? []).map((rule) => [rule.normalizedTitle, rule.decision]));
-  await getPrisma().$executeRaw(Prisma.sql`UPDATE "HumanshipEvent" SET "status" = 'searching', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${eventId} AND "ownerId" = ${ownerId}`);
+  await getPrisma().$executeRaw(Prisma.sql`UPDATE "HumanshipEvent" SET "status" = 'searching', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${eventId}`);
   const targets = event.participants.filter((participant) => shouldSearchHumanshipParticipant(participant.searchStatus, options?.rescan));
 
   await concurrentMap(targets, 4, async (participant) => {
@@ -234,7 +235,7 @@ export async function runHumanshipLinkedinSearch(ownerId: string, eventId: strin
     }
   });
 
-  await getPrisma().$executeRaw(Prisma.sql`UPDATE "HumanshipEvent" SET "status" = 'results_ready', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${eventId} AND "ownerId" = ${ownerId}`);
+  await getPrisma().$executeRaw(Prisma.sql`UPDATE "HumanshipEvent" SET "status" = 'results_ready', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = ${eventId}`);
   return getHumanshipEvent(ownerId, eventId);
 }
 
@@ -244,34 +245,52 @@ export async function saveHumanshipRoleRule(input: {
   decision: HumanshipRoleRuleDecision;
   decidedByName: string;
 }) {
-  const participants = await getPrisma().$queryRaw<ParticipantRow[]>(Prisma.sql`
-    SELECT p."id", p."eventId", p."sourceKey", p."sourceRow", p."active", p."fullName", p."email", p."company", p."jobTitle", p."phone", p."linkedinUrl", p."linkedinName", p."linkedinTitle", p."linkedinCompany", p."linkedinLocation", p."searchStatus", p."classification", p."classificationReason", p."roleReference", p."roleScore", p."companyRestriction", p."humanDecision", p."decisionByName", p."decisionAt", p."message1CopiedAt", p."message2CopiedAt", p."createdAt", p."updatedAt"
+  const participants = await getPrisma().$queryRaw<Array<ParticipantRow & { eventOwnerId: string }>>(Prisma.sql`
+    SELECT p."id", p."eventId", p."sourceKey", p."sourceRow", p."active", p."fullName", p."email", p."company", p."jobTitle", p."phone",
+           p."linkedinUrl", p."linkedinName", p."linkedinTitle", p."linkedinCompany", p."linkedinLocation", p."searchStatus",
+           p."classification", p."classificationReason", p."roleReference", p."roleScore", p."companyRestriction", p."humanDecision",
+           p."decisionByName", p."decisionAt", p."message1CopiedAt", p."message2CopiedAt", p."createdAt", p."updatedAt",
+           e."ownerId" AS "eventOwnerId"
     FROM "HumanshipParticipant" p
     JOIN "HumanshipEvent" e ON e."id" = p."eventId"
-    WHERE p."id" = ${input.participantId} AND e."ownerId" = ${input.ownerId}
+    WHERE p."id" = ${input.participantId}
     LIMIT 1
   `);
   const participant = participants[0];
   if (!participant) return false;
+
   const title = (participant.linkedinTitle || participant.jobTitle || "").trim();
   const normalizedTitle = normalizeHumanshipRoleTitle(title);
   if (!normalizedTitle) return false;
 
-  await getPrisma().$executeRaw(Prisma.sql`
-    INSERT INTO "HumanshipRoleRule" ("id", "ownerId", "normalizedTitle", "title", "decision", "decidedByName", "createdAt", "updatedAt")
-    VALUES (${`hsr_${randomUUID()}`}, ${input.ownerId}, ${normalizedTitle}, ${title}, ${input.decision}, ${input.decidedByName}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    ON CONFLICT ("ownerId", "normalizedTitle") DO UPDATE SET
-      "title" = EXCLUDED."title",
-      "decision" = EXCLUDED."decision",
-      "decidedByName" = EXCLUDED."decidedByName",
-      "updatedAt" = CURRENT_TIMESTAMP
+  const existing = await getPrisma().$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT "id"
+    FROM "HumanshipRoleRule"
+    WHERE "normalizedTitle" = ${normalizedTitle}
+    ORDER BY "updatedAt" DESC
+    LIMIT 1
   `);
 
+  if (existing[0]) {
+    await getPrisma().$executeRaw(Prisma.sql`
+      UPDATE "HumanshipRoleRule"
+      SET "title" = ${title}, "decision" = ${input.decision}, "decidedByName" = ${input.decidedByName}, "updatedAt" = CURRENT_TIMESTAMP
+      WHERE "id" = ${existing[0].id}
+    `);
+  } else {
+    await getPrisma().$executeRaw(Prisma.sql`
+      INSERT INTO "HumanshipRoleRule" ("id", "ownerId", "normalizedTitle", "title", "decision", "decidedByName", "createdAt", "updatedAt")
+      VALUES (${`hsr_${randomUUID()}`}, ${participant.eventOwnerId}, ${normalizedTitle}, ${title}, ${input.decision}, ${input.decidedByName}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `);
+  }
+
   const related = await getPrisma().$queryRaw<ParticipantRow[]>(Prisma.sql`
-    SELECT p."id", p."eventId", p."sourceKey", p."sourceRow", p."active", p."fullName", p."email", p."company", p."jobTitle", p."phone", p."linkedinUrl", p."linkedinName", p."linkedinTitle", p."linkedinCompany", p."linkedinLocation", p."searchStatus", p."classification", p."classificationReason", p."roleReference", p."roleScore", p."companyRestriction", p."humanDecision", p."decisionByName", p."decisionAt", p."message1CopiedAt", p."message2CopiedAt", p."createdAt", p."updatedAt"
+    SELECT p."id", p."eventId", p."sourceKey", p."sourceRow", p."active", p."fullName", p."email", p."company", p."jobTitle", p."phone",
+           p."linkedinUrl", p."linkedinName", p."linkedinTitle", p."linkedinCompany", p."linkedinLocation", p."searchStatus",
+           p."classification", p."classificationReason", p."roleReference", p."roleScore", p."companyRestriction", p."humanDecision",
+           p."decisionByName", p."decisionAt", p."message1CopiedAt", p."message2CopiedAt", p."createdAt", p."updatedAt"
     FROM "HumanshipParticipant" p
-    JOIN "HumanshipEvent" e ON e."id" = p."eventId"
-    WHERE e."ownerId" = ${input.ownerId} AND p."active" = true
+    WHERE p."active" = true
   `);
 
   for (const row of related) {
@@ -310,7 +329,7 @@ export async function saveHumanshipLinkedin(input: { ownerId: string; participan
   const participants = await getPrisma().$queryRaw<Array<{ company: string | null; jobTitle: string | null }>>(Prisma.sql`
     SELECT p."company", p."jobTitle" FROM "HumanshipParticipant" p
     JOIN "HumanshipEvent" e ON e."id" = p."eventId"
-    WHERE p."id" = ${input.participantId} AND e."ownerId" = ${input.ownerId} AND p."active" = true
+    WHERE p."id" = ${input.participantId} AND p."active" = true
     LIMIT 1
   `);
   const participant = participants[0];
@@ -332,7 +351,7 @@ export async function saveHumanshipLinkedin(input: { ownerId: string; participan
       "companyRestriction" = ${classification.companyAssessment.restricted ? classification.companyAssessment.reason : null},
       "updatedAt" = CURRENT_TIMESTAMP
     FROM "HumanshipEvent" e
-    WHERE p."eventId" = e."id" AND p."id" = ${input.participantId} AND e."ownerId" = ${input.ownerId} AND p."active" = true
+    WHERE p."eventId" = e."id" AND p."id" = ${input.participantId} AND p."active" = true
   `);
   return count > 0;
 }
@@ -347,7 +366,7 @@ export async function updateHumanshipDecision(input: { ownerId: string; particip
       "decisionAt" = ${input.decision === "pending" ? Prisma.sql`NULL` : Prisma.sql`CURRENT_TIMESTAMP`},
       "updatedAt" = CURRENT_TIMESTAMP
     FROM "HumanshipEvent" e
-    WHERE p."eventId" = e."id" AND p."id" = ${input.participantId} AND e."ownerId" = ${input.ownerId}
+    WHERE p."eventId" = e."id" AND p."id" = ${input.participantId}
   `);
   return count > 0;
 }
