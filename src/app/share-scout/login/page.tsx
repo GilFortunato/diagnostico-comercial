@@ -1,16 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { CheckCircle2, Search, TrendingUp } from "lucide-react";
 
 export default function ShareScoutLoginPage() {
-  const [next, setNext] = useState("/sharevisualscout");
-
-  useEffect(() => {
+  function callbackUrl() {
     const requested = new URLSearchParams(window.location.search).get("next");
-    if (requested?.startsWith("/")) setNext(requested);
-  }, []);
+    return requested?.startsWith("/") ? requested : "/sharevisualscout";
+  }
 
   return (
     <main className="share-shell min-h-screen text-[var(--share-ink)]">
@@ -55,7 +52,7 @@ export default function ShareScoutLoginPage() {
 
               <button
                 type="button"
-                onClick={() => signIn("google", { callbackUrl: next })}
+                onClick={() => signIn("google", { callbackUrl: callbackUrl() })}
                 className="rounded-lg bg-[var(--share-lime)] px-4 py-3 text-sm font-bold text-[var(--share-green-950)] hover:bg-[#b6ff2e]"
               >
                 Continuar com Google
