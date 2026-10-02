@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Building2, Download, ExternalLink, LoaderCircle, Plus, Search, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { BookmarkPlus, Building2, Database, Download, ExternalLink, FolderSearch, ListChecks, LoaderCircle, Plus, Search, Trash2, Users } from "lucide-react";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
 import { defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
 import { getSuggestedRoles } from "@/lib/decision-makers/roleIntelligence";
@@ -9,6 +9,23 @@ import { splitTerms, type DecisionMakerResult, type HuntingCompany, type Hunting
 
 type SearchMode = "companies" | "people";
 type PeopleSearchTarget = { companyLinkedinUrls: string[]; companyNames: string[] };
+type WorkspaceView = "search" | "all" | "mine" | "leads" | "list";
+type SavedB2BSearch = {
+  id: string; title: string; mode: string; ownerId: string; ownerName: string; mine: boolean;
+  resultCount: number; reused: boolean; updatedAt: string;
+};
+type WorkspaceLead = {
+  id: string; kind: string; name: string; companyName?: string | null; title?: string | null;
+  linkedinUrl?: string | null; domain?: string | null; website?: string | null; location?: string | null;
+  firstSeenByName: string; updatedAt: string; payload: unknown;
+};
+type WorkspaceList = {
+  id: string; name: string; ownerId: string; ownerName: string; mine: boolean; shared: boolean; itemCount: number; updatedAt: string;
+};
+type WorkspaceListDetail = {
+  id: string; name: string; ownerId: string; ownerName: string;
+  items: Array<{ id: string; addedByName: string; createdAt: string; lead: WorkspaceLead }>;
+};
 
 export function DecisionMakerMapExperienceV2() {
   const units = useMemo(() => demoBusinessUnits.filter((unit) => unit.contextType === "business"), []);
@@ -22,6 +39,14 @@ export function DecisionMakerMapExperienceV2() {
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("search");
+  const [savedSearches, setSavedSearches] = useState<SavedB2BSearch[]>([]);
+  const [workspaceLeads, setWorkspaceLeads] = useState<WorkspaceLead[]>([]);
+  const [workspaceLists, setWorkspaceLists] = useState<WorkspaceList[]>([]);
+  const [activeList, setActiveList] = useState<WorkspaceListDetail | null>(null);
+  const [selectedListId, setSelectedListId] = useState("");
+  const [newListName, setNewListName] = useState("");
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
 
   const [industries, setIndustries] = useState("");
   const [country, setCountry] = useState("Brazil");
@@ -45,6 +70,131 @@ export function DecisionMakerMapExperienceV2() {
   const canSearch = mode === "companies"
     ? Boolean(splitTerms(industries).length || splitTerms(companyKeywords).length || splitTerms(domains).length)
     : Boolean(splitTerms(companyLinkedinUrls).length && splitTerms(rolesText).length);
+
+  useEffect(() => {
+    void refreshWorkspace();
+  }, []);
+
+  async function refreshWorkspace() {
+    try {
+      const response = await fetch("/api/decision-makers/workspace", { cache: "no-store" });
+      const body = await response.json() as { searches?: SavedB2BSearch[]; leads?: WorkspaceLead[]; lists?: WorkspaceList[] };
+      if (!response.ok) return;
+      setSavedSearches(body.searches || []);
+      setWorkspaceLeads(body.leads || []);
+      setWorkspaceLists(body.lists || []);
+      setSelectedListId((current) => current || body.lists?.[0]?.id || "");
+    } catch {
+      // O motor de busca continua disponível mesmo se o workspace estiver temporariamente indisponível.
+    }
+  }
+
+  async function openSavedSearch(id: string) {
+    setWorkspaceLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/decision-makers/workspace/${id}`, { cache: "no-store" });
+      const body = await response.json() as { search?: { input: import("@/lib/decision-makers/search").DecisionMakerSearchInput; result: DecisionMakerResult }; error?: string };
+      if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível abrir a pesquisa.");
+      applyWorkspaceInput(body.search.input);
+      setResult(body.search.result);
+      setSelectedCompanyIds([]);
+      setWorkspaceView("search");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível abrir a pesquisa.");
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  }
+
+  async function deleteSavedSearch(item: SavedB2BSearch) {
+    if (!item.mine || !window.confirm(`Excluir a pesquisa "${item.title}"? Os leads globais encontrados nela serão preservados.`)) return;
+    setWorkspaceLoading(true);
+    try {
+      const response = await fetch(`/api/decision-makers/workspace/${item.id}`, { method: "DELETE" });
+      const body = await response.json() as { deleted?: boolean; error?: string };
+      if (!response.ok || !body.deleted) throw new Error(body.error || "Não foi possível excluir a pesquisa.");
+      await refreshWorkspace();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível excluir a pesquisa.");
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  }
+
+  async function createSharedList() {
+    if (newListName.trim().length < 2) return;
+    setWorkspaceLoading(true);
+    try {
+      const response = await fetch("/api/decision-makers/lists", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newListName.trim() }),
+      });
+      const body = await response.json() as { list?: { id: string }; error?: string };
+      if (!response.ok || !body.list) throw new Error(body.error || "Não foi possível criar a lista.");
+      setNewListName("");
+      setSelectedListId(body.list.id);
+      await refreshWorkspace();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível criar a lista.");
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  }
+
+  async function openSharedList(id: string) {
+    setWorkspaceLoading(true);
+    try {
+      const response = await fetch(`/api/decision-makers/lists/${id}`, { cache: "no-store" });
+      const body = await response.json() as { list?: WorkspaceListDetail; error?: string };
+      if (!response.ok || !body.list) throw new Error(body.error || "Não foi possível abrir a lista.");
+      setActiveList(body.list);
+      setSelectedListId(id);
+      setWorkspaceView("list");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível abrir a lista.");
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  }
+
+  async function saveLeadToList(leadId?: string) {
+    if (!leadId) return setError("Este resultado ainda não possui um registro de lead no workspace.");
+    if (!selectedListId) return setError("Crie ou selecione uma lista compartilhada antes de salvar o lead.");
+    try {
+      const response = await fetch(`/api/decision-makers/lists/${selectedListId}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId }),
+      });
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error || "Não foi possível salvar o lead na lista.");
+      await refreshWorkspace();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível salvar o lead na lista.");
+    }
+  }
+
+  function applyWorkspaceInput(input: import("@/lib/decision-makers/search").DecisionMakerSearchInput) {
+    setBusinessUnitId(input.businessUnitId);
+    setObjective(input.objective);
+    setMode(input.mode);
+    if (input.mode === "companies") {
+      setIndustries(input.filters.industries.join(", "));
+      setCountry(input.filters.country);
+      setStates(input.filters.states.join(", "));
+      setCompanyKeywords(input.filters.keywords.join(", "));
+      setDomains(input.filters.domains.join(", "));
+      setCompanyQuantity(input.filters.quantity);
+    } else {
+      setCompanyLinkedinUrls(input.filters.companyLinkedinUrls.join("\n"));
+      setCompanyNames(input.filters.companyNames.join(", "));
+      setRolesText(input.filters.roles.join(", "));
+      setLocations(input.filters.locations.join(", "));
+      setProfileKeywords(input.filters.profileKeywords.join(", "));
+      setPeopleQuantity(input.filters.quantity);
+      setIncludeBroadDiscovery(input.filters.includeBroadDiscovery);
+    }
+  }
 
   async function runSearch({
     loadMore = false,
@@ -132,6 +282,7 @@ export function DecisionMakerMapExperienceV2() {
         setResult(next);
         setSelectedCompanyIds([]);
       }
+      await refreshWorkspace();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível concluir a busca.");
     } finally {
@@ -204,8 +355,8 @@ export function DecisionMakerMapExperienceV2() {
       <section className="rounded-lg border border-[var(--share-line)] bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--share-line)] p-3">
           <div className="flex gap-2">
-            <Mode active={mode === "companies"} icon={Building2} label="Encontrar empresas" onClick={() => { setMode("companies"); setResult(null); }} />
-            <Mode active={mode === "people"} icon={Users} label="Encontrar pessoas" onClick={() => { setMode("people"); setResult(null); }} />
+            <Mode active={mode === "companies"} icon={Building2} label="Encontrar empresas" onClick={() => { setWorkspaceView("search"); setMode("companies"); setResult(null); }} />
+            <Mode active={mode === "people"} icon={Users} label="Encontrar pessoas" onClick={() => { setWorkspaceView("search"); setMode("people"); setResult(null); }} />
           </div>
           <div className="grid min-w-[520px] gap-2 sm:grid-cols-[200px_1fr]">
             <label className="grid gap-1 text-xs font-semibold text-zinc-600">Contexto de negócio<select value={businessUnitId} onChange={(event) => changeContext(event.target.value)} className="h-10 border border-[var(--share-line)] bg-white px-3 text-sm">{units.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></label>
@@ -260,7 +411,11 @@ export function DecisionMakerMapExperienceV2() {
                 onContinue={continueWithSelectedCompanies}
                 onSearchCompany={(company) => { void searchPeopleForCompanies([company]); }}
                 isSearching={isSearching}
-              /> : <PeopleTable people={result.people} />}
+                selectedListId={selectedListId}
+                lists={workspaceLists}
+                onSelectList={setSelectedListId}
+                onSaveLead={(leadId) => void saveLeadToList(leadId)}
+              /> : <PeopleTable people={result.people} selectedListId={selectedListId} lists={workspaceLists} onSelectList={setSelectedListId} onSaveLead={(leadId) => void saveLeadToList(leadId)} />}
 
               <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-md bg-[#fbfdf8] p-4">
                 <p className="text-sm text-zinc-600">{result.mode === "companies" ? "Novas contas são deduplicadas por LinkedIn, domínio e nome normalizado." : "Novas pessoas são deduplicadas pela URL real do LinkedIn e ID da fonte."}</p>
