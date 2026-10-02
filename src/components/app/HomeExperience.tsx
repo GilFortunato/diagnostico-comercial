@@ -1,6 +1,6 @@
 "use client";
 
-// deploy-refresh: nexus-wordmark-v2
+// deploy-refresh: nexus-label-geometry
 
 import Link from "next/link";
 import Image from "next/image";
