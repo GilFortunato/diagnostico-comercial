@@ -20,6 +20,7 @@ A branch B2B contém as correções de HR, além do workspace compartilhado e do
 Os arquivos Scout e autenticação não divergem entre a base e o head B2B.
 Admin, Humanship, permissões e Diagnóstico também não divergem nessa comparação.
 Nenhuma dessas branches foi movida ou sobrescrita.
+Simulação de integração via `git merge-tree --write-tree` entre o commit MKT `6257884` e B2B `7983028`: nenhum conflito de Git. A árvore simulada preserva os arquivos de B2B/Home/HR e os modelos B2B junto de MktScoutRecord. Essa checagem não executou merge, não moveu refs e não substitui os testes funcionais futuros da árvore consolidada.
 
 A branch MKT não incorpora os novos commits de B2B/Home/HR: eles permanecem em suas branches até a consolidação autorizada.
 Prisma é o ponto compartilhado: B2B acrescenta modelos perto de HrCandidateReview; MKT acrescenta MktScoutRecord ao fim. Preservar ambos.
