@@ -19,6 +19,8 @@ const moduleLabels: Record<PlatformModule, string> = {
   "authority.company": "Diagnóstico de empresas",
   "authority.leader": "Diagnóstico de líderes",
   "content.intelligence": "Inteligência de conteúdo",
+  "creative.visual-scout": "Share Visual Scout",
+  "creative.trend-intelligence": "Share Trend Intelligence",
   "decision.makers": "Mapa de decisores",
   "hr.hunting": "HR Hunting",
   "humanship.r1ship": "Humanship · R1 Ship",
