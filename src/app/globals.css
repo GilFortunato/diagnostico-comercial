@@ -288,7 +288,7 @@ textarea {
 .share-hub-nexus-wrap { display:grid; place-items:center; min-width:0; padding:10px 0; }
 .share-hub-nexus {
   position:relative;
-  width:min(560px,40vw,72dvh);
+  width:min(610px,42vw,calc(100vh - 190px));
   max-width:100%;
   aspect-ratio:1;
 }
@@ -301,7 +301,7 @@ textarea {
 
 .share-hub-sector-label {
   position:absolute; z-index:5; transform:translate(-50%,-50%);
-  width:104px; min-height:86px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  width:96px; min-height:80px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
   color:rgb(255 255 255 / .95); border:0; background:transparent; text-align:center; cursor:pointer; line-height:1.08;
 }
 .share-hub-sector-label.is-selected { color:white; }
@@ -350,7 +350,7 @@ textarea {
 .share-hub-sector-title {
   display:flex;
   flex-direction:column;
-  font-size:10.5px;
+  font-size:10px;
   font-weight:800;
   line-height:1.05;
   letter-spacing:-.01em;
@@ -359,7 +359,7 @@ textarea {
   display:flex;
   flex-direction:column;
   margin-top:2px;
-  font-size:7.8px;
+  font-size:7.4px;
   font-weight:500;
   line-height:1.18;
   color:rgb(255 255 255 / .58);
@@ -455,7 +455,7 @@ textarea {
   .share-hub-intro { padding-top:20px; }
   .share-hub-intro h1 { max-width:520px; }
   .share-hub-nexus {
-    width:min(520px,84vw,70dvh);
+    width:min(570px,90vw);
   }
   .share-hub-detail { grid-column:auto; display:block; }
   .share-hub-detail-body { display:block; }
@@ -473,7 +473,7 @@ textarea {
     width:min(460px,82vw,68dvh);
     margin:12px auto 18px;
   }
-  .share-hub-sector-label { width:76px; min-height:62px; gap:1px; }
+  .share-hub-sector-label { width:74px; min-height:60px; gap:1px; }
   .share-hub-sector-icon { width:26px; height:26px; border-radius:8px; margin-bottom:1px; }
   .share-hub-sector-icon svg { width:14px; height:14px; }
   .share-hub-sector-title { font-size:8.5px; line-height:1.02; }
@@ -493,8 +493,8 @@ textarea {
   .share-hub-header { height:68px; }
   .share-hub-main-grid { min-height:0; }
   .share-hub-nexus-wrap { padding:0; }
-  .share-hub-nexus { width:min(500px,78vw,66dvh); }
-  .share-hub-sector-label { width:96px; min-height:74px; }
+  .share-hub-nexus { width:min(540px,84vw,calc(100dvh - 92px)); }
+  .share-hub-sector-label { width:90px; min-height:70px; }
   .share-hub-sector-icon { width:28px; height:28px; }
   .share-hub-sector-icon svg { width:15px; height:15px; }
   .share-hub-sector-title { font-size:10px; }
@@ -502,23 +502,6 @@ textarea {
 }
 
 
-/* Final viewport guard: the circular nexus must never touch the top/bottom edge. */
-.share-hub-nexus-wrap {
-  min-height:0;
-  overflow:visible;
-}
-.share-hub-nexus {
-  max-height:72dvh;
-}
-@media (max-height: 760px) {
-  .share-hub-nexus { width:min(500px,38vw,66dvh); }
-}
-@media (max-width: 900px) and (max-height: 760px) {
-  .share-hub-nexus { width:min(470px,78vw,64dvh); }
-}
-@media (max-width: 600px) {
-  .share-hub-nexus { max-height:68dvh; }
-}
 
 
 /* Keep labels visually inside their annular sectors. */
@@ -529,4 +512,15 @@ textarea {
 }
 .share-hub-sector-label {
   padding-inline:4px;
+}
+
+.share-hub-sector-title,
+.share-hub-sector-description {
+  width:100%;
+  text-align:center;
+}
+.share-hub-sector-description span,
+.share-hub-sector-title span {
+  display:block;
+  max-width:100%;
 }
