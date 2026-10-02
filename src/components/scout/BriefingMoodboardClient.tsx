@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Check, ExternalLink, LoaderCircle, Palette, Search, Sparkles, X } from "lucide-react";
+import { ArrowRight, Check, ExternalLink, LoaderCircle, Search, Sparkles } from "lucide-react";
 import { BRANDS } from "@/lib/scout/mkt/brands";
 import type { BrandId } from "@/lib/scout/mkt/types";
 
@@ -47,8 +47,20 @@ export function BriefingMoodboardClient() {
       const transfer = JSON.parse(raw) as { query?: string; images?: ScoutImage[] };
       if (transfer.query) setBriefing((current) => current || transfer.query || "");
       if (transfer.images?.length) {
+        const transferQuery = transfer.query || "Referências selecionadas no Visual Scout";
         setImages(transfer.images);
         setSelectedImageIds(transfer.images.map((image) => image.id));
+        setSelectedDirection({
+          id: "visual-scout-transfer",
+          name: "Seleção do Visual Scout",
+          concept: "Referências selecionadas diretamente no Visual Scout para compor e validar o moodboard.",
+          composition: "A composição será refinada a partir das referências selecionadas.",
+          photographicStyle: "Derivado da seleção visual atual.",
+          typography: "A definir após validação da direção.",
+          palette: [{ name: "Verde", hex: "#0B4A39" }, { name: "Lime", hex: "#D8F04A" }, { name: "Neutro", hex: "#F4F7EF" }],
+          keywords: transferQuery.split(/[|,]/).map((item) => item.trim()).filter(Boolean).slice(0, 8),
+          searchQuery: transferQuery.slice(0, 300),
+        });
       }
       sessionStorage.removeItem(visualTransferKey);
     } catch {
