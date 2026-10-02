@@ -33,7 +33,7 @@ export async function GET() {
       ...user,
       bootstrapAdmin: isAdminEmail(user.email),
     })),
-    modules: platformModules,
+    modules: platformModules.filter((moduleKey) => moduleKey !== "creative.visual-scout"),
   });
 }
 
