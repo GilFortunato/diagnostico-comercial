@@ -376,7 +376,7 @@ export async function markHumanshipMessageCopied(input: { ownerId: string; parti
   const count = await getPrisma().$executeRaw(Prisma.sql`
     UPDATE "HumanshipParticipant" p SET ${field} = CURRENT_TIMESTAMP, "updatedAt" = CURRENT_TIMESTAMP
     FROM "HumanshipEvent" e
-    WHERE p."eventId" = e."id" AND p."id" = ${input.participantId} AND e."ownerId" = ${input.ownerId}
+    WHERE p."eventId" = e."id" AND p."id" = ${input.participantId}
   `);
   return count > 0;
 }
