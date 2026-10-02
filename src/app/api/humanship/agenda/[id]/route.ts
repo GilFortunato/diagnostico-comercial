@@ -5,6 +5,7 @@ import {
   deleteHumanshipAgendaEvent,
   updateHumanshipAgendaEvent,
 } from "@/lib/humanship/agenda";
+import { writeAppAuditLog } from "@/lib/audit/appAudit";
 
 const updateSchema = z.object({
   title: z.string().trim().min(2).max(180).optional(),
@@ -39,10 +40,27 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   try {
-    const event = await updateHumanshipAgendaEvent((await params).id, input);
-    return event
-      ? NextResponse.json({ event })
-      : NextResponse.json({ error: "Evento não encontrado." }, { status: 404 });
+    const id = (await params).id;
+    const event = await updateHumanshipAgendaEvent(id, input);
+    if (event) {
+      await writeAppAuditLog({
+        actor: access.user,
+        moduleKey: "humanship",
+        action: "agenda.event.updated",
+        entityType: "agenda-event",
+        entityId: id,
+        severity: "attention",
+        retentionDays: 30,
+        metadata: {
+          title: event.title,
+          status: event.status,
+          featured: event.featured,
+          changedFields: Object.keys(parsed.data),
+        },
+      });
+      return NextResponse.json({ event });
+    }
+    return NextResponse.json({ error: "Evento não encontrado." }, { status: 404 });
   } catch {
     return NextResponse.json({ error: "Não foi possível atualizar o evento." }, { status: 500 });
   }
@@ -53,10 +71,21 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
   try {
-    const deleted = await deleteHumanshipAgendaEvent((await params).id);
-    return deleted
-      ? NextResponse.json({ deleted: true })
-      : NextResponse.json({ error: "Evento não encontrado." }, { status: 404 });
+    const id = (await params).id;
+    const deleted = await deleteHumanshipAgendaEvent(id);
+    if (deleted) {
+      await writeAppAuditLog({
+        actor: access.user,
+        moduleKey: "humanship",
+        action: "agenda.event.deleted",
+        entityType: "agenda-event",
+        entityId: id,
+        severity: "security",
+        retentionDays: 30,
+      });
+      return NextResponse.json({ deleted: true });
+    }
+    return NextResponse.json({ error: "Evento não encontrado." }, { status: 404 });
   } catch {
     return NextResponse.json({ error: "Não foi possível excluir o evento." }, { status: 500 });
   }
