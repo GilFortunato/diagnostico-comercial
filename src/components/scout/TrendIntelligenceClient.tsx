@@ -49,7 +49,7 @@ export function TrendIntelligenceClient({ initialGenerationId, initialQuery = ""
         <div className={styles.context}>
           <label htmlFor="scout-brand">Contexto da marca</label>
           <select id="scout-brand" value={brandId} onChange={(event) => setBrandId(event.target.value as BrandId)}>
-            {BRANDS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            {BRANDS.filter((item) => item.id !== "ache").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
           <p>O mesmo sinal. Uma leitura para {brand.name}.</p>
         </div>
