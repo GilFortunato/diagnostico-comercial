@@ -329,6 +329,7 @@ textarea {
 .share-hub-detail-brand.is-humanship { background:linear-gradient(135deg,#d9ec4a,#c9f15d 58%,#aee981); justify-content:center; }
 .share-hub-detail-brand.is-humanship img { width:84%; height:auto; object-fit:contain; object-position:left center; }
 .share-hub-detail-body { padding:28px; }
+.share-hub-status-badge { display:inline-flex; align-items:center; width:max-content; margin-bottom:4px; padding:6px 10px; border:1px solid rgb(232 239 84 / .35); border-radius:999px; background:rgb(232 239 84 / .10); color:#edf37a; font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
 .share-hub-detail-body h2 { margin:0; font-family:Georgia,"Times New Roman",serif; font-size:34px; line-height:1; }
 .share-hub-detail-lead { margin:16px 0 0; font-size:17px; line-height:1.35; color:rgb(255 255 255 / .84); }
 .share-hub-detail-copy { margin:20px 0 0; font-size:14px; line-height:1.55; color:rgb(255 255 255 / .68); }

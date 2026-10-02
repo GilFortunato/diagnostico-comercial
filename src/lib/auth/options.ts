@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { ensureGoogleUser } from "@/lib/auth/userRepository";
 import { GOOGLE_SHEETS_SCOPE, saveHumanshipGoogleAuthorization } from "@/lib/humanship/googleAuthorization";
+import { writeAppAuditLog } from "@/lib/audit/appAudit";
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -31,6 +32,18 @@ export const authOptions: NextAuthOptions = {
       });
       token.userId = user.id;
       token.accountActive = user.active;
+
+      if (account) {
+        await writeAppAuditLog({
+          actor: { id: user.id, name: user.name, email: user.email },
+          moduleKey: "auth",
+          action: "login",
+          entityType: "session",
+          severity: "info",
+          retentionDays: 7,
+          metadata: { provider: account.provider },
+        });
+      }
 
       if (account?.provider === "google" && account.scope?.split(/\s+/).includes(GOOGLE_SHEETS_SCOPE)) {
         await saveHumanshipGoogleAuthorization(user.id, account).catch((error) => {

@@ -2,19 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ParticipantLinkedinCell } from "./ParticipantLinkedinCell";
-import { Check, Clipboard, ExternalLink, FileSpreadsheet, LoaderCircle, MessageCircle, Plus, Search, ShieldCheck, X } from "lucide-react";
+import { Check, Clipboard, ExternalLink, FileSpreadsheet, LoaderCircle, MessageCircle, Pencil, Plus, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
 import { humanshipCompanyRestrictionGroups, humanshipRestrictionVersion, humanshipRoleReferences } from "@/lib/humanship/restrictions";
 import type { HumanshipClassification, HumanshipDecision, HumanshipEvent, HumanshipParticipant, HumanshipRoleRule, HumanshipRoleRuleDecision } from "@/lib/humanship/types";
 import { buildWhatsAppLink } from "@/lib/humanship/whatsapp";
 
-type Pending = "load" | "create" | "upload" | "search" | "decision" | "role" | "copy" | null;
+type Pending = "load" | "create" | "rename" | "delete" | "upload" | "search" | "decision" | "role" | "copy" | null;
 type Tab = "source" | "results" | "restrictions";
 type Filter = "all" | HumanshipClassification | "approved" | "rejected";
 
-export function HumanshipR1ShipExperience({ accountName }: { accountName: string }) {
+export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false }: { accountName: string; canDeleteEvents?: boolean }) {
   const [events, setEvents] = useState<HumanshipEvent[]>([]);
   const [event, setEvent] = useState<HumanshipEvent | null>(null);
   const [eventName, setEventName] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [draftEventName, setDraftEventName] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [tab, setTab] = useState<Tab>("source");
   const [filter, setFilter] = useState<Filter>("all");
@@ -38,6 +40,7 @@ export function HumanshipR1ShipExperience({ accountName }: { accountName: string
     const body = await response.json() as { event?: HumanshipEvent; error?: string };
     if (!response.ok || !body.event) throw new Error(body.error || "Não foi possível abrir o evento.");
     setEvent(body.event);
+    setDraftEventName(body.event.name);
     setSelected((current) => current ? body.event?.participants.find((item) => item.id === current.id) || null : null);
   }
 
@@ -68,6 +71,45 @@ export function HumanshipR1ShipExperience({ accountName }: { accountName: string
       await loadEvents(body.event.id);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível criar o evento."); }
     finally { setPending(null); }
+  }
+
+  async function renameEvent() {
+    if (!event || draftEventName.trim().length < 2) return;
+    setPending("rename"); setError(null);
+    try {
+      const response = await fetch(`/api/humanship/events/${event.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: draftEventName }),
+      });
+      const body = await response.json() as { event?: HumanshipEvent; error?: string };
+      if (!response.ok || !body.event) throw new Error(body.error || "Não foi possível renomear o evento.");
+      setEvent(body.event);
+      setEditingName(false);
+      await loadEvents(body.event.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível renomear o evento.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function deleteEvent() {
+    if (!event || !canDeleteEvents) return;
+    if (!window.confirm(`Excluir definitivamente o evento "${event.name}" e todos os participantes vinculados? Essa ação não pode ser desfeita.`)) return;
+    setPending("delete"); setError(null);
+    try {
+      const response = await fetch(`/api/humanship/events/${event.id}`, { method: "DELETE" });
+      const body = await response.json() as { deleted?: boolean; error?: string };
+      if (!response.ok || !body.deleted) throw new Error(body.error || "Não foi possível excluir o evento.");
+      setSelected(null);
+      setEvent(null);
+      await loadEvents();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível excluir o evento.");
+    } finally {
+      setPending(null);
+    }
   }
 
   function chooseSpreadsheet(nextFile: File | null) {
@@ -170,43 +212,183 @@ export function HumanshipR1ShipExperience({ accountName }: { accountName: string
   }, [event, filter]);
 
   return (
-    <main className="share-shell min-h-screen text-[var(--share-ink)]">
-      <div className="mx-auto max-w-7xl px-5 py-8">
-        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--share-line)] pb-5">
-          <div><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">Humanship</p><h1 className="mt-1 text-3xl font-semibold text-[var(--share-green-950)]">R1 Ship</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Centralize eventos, confirme participantes no LinkedIn, aplique as restrições vigentes e deixe a decisão final com o time.</p></div>
-          {events.length ? <select value={event?.id || ""} onChange={(e) => { setPending("load"); loadEvent(e.target.value).catch((cause) => setError(cause instanceof Error ? cause.message : "Erro ao abrir evento.")).finally(() => setPending(null)); }} className="h-10 rounded-md border border-[var(--share-line)] bg-white px-3 text-sm"><option value="">Escolha um evento</option>{events.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select> : null}
+    <main className="min-h-screen bg-[#eef4e9] text-[var(--share-ink)]">
+      <div className="mx-auto max-w-[1440px] px-5 py-7">
+        <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--share-green-800)]">Humanship</p>
+            <h1 className="mt-1 text-3xl font-semibold text-[var(--share-green-950)]">R1 Ship</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
+              Organize os eventos, importe participantes e acompanhe a validação em um único fluxo.
+            </p>
+          </div>
+          {events.length ? (
+            <select
+              value={event?.id || ""}
+              onChange={(e) => {
+                setPending("load");
+                loadEvent(e.target.value)
+                  .catch((cause) => setError(cause instanceof Error ? cause.message : "Erro ao abrir evento."))
+                  .finally(() => setPending(null));
+              }}
+              className="h-11 min-w-[240px] rounded-xl border border-[#cbdcc9] bg-white px-4 text-sm font-semibold text-[#003f2c] shadow-sm"
+            >
+              <option value="">Escolha um evento</option>
+              {events.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          ) : null}
         </header>
 
-        {error ? <p className="mt-5 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</p> : null}
+        {error ? <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</p> : null}
 
-        <section className="mt-6 rounded-lg border border-[var(--share-line)] bg-white p-5">
-          <div className="flex flex-wrap items-end gap-3"><div className="min-w-[260px] flex-1"><label className="text-sm font-semibold text-zinc-700">Novo evento</label><input value={eventName} onChange={(e) => setEventName(e.target.value)} placeholder="Ex.: Humanship Talks · Ipiranga" className="mt-1 h-10 w-full rounded-md border border-[var(--share-line)] px-3" /></div><button type="button" onClick={createEvent} disabled={pending === "create" || eventName.trim().length < 2} className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--share-green-950)] px-4 text-sm font-semibold text-white disabled:opacity-60">{pending === "create" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Criar evento</button></div>
-        </section>
+        <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <aside className="self-start rounded-3xl border border-[#cbdcc9] bg-[#003f2c] p-4 text-white shadow-sm lg:sticky lg:top-24">
+            <div className="px-2 pb-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#d8ef55]">Workspace</p>
+              <h2 className="mt-1 text-lg font-semibold">Operação do evento</h2>
+            </div>
 
-        {pending === "load" ? <p className="mt-8 inline-flex items-center gap-2 text-sm text-zinc-600"><LoaderCircle className="h-4 w-4 animate-spin" /> Carregando R1 Ship...</p> : null}
+            <nav className="space-y-1">
+              {([
+                ["source", "Importar base", FileSpreadsheet],
+                ["results", "Participantes", UsersRound],
+                ["restrictions", "Restrições", ShieldCheck],
+              ] as const).map(([key, label, Icon]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setTab(key)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
+                    tab === key ? "bg-[#dcef55] text-[#173b28]" : "text-white/75 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              ))}
+            </nav>
 
-        {event ? <>
-          <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--share-line)] bg-white p-4"><div><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Evento atual</p><h2 className="text-xl font-semibold text-[var(--share-green-950)]">{event.name}</h2><p className="text-sm text-zinc-500">{event.sourceRowCount} participante(s) · restrições {event.restrictionVersion}</p></div><div className="flex gap-2">{(["source", "results", "restrictions"] as Tab[]).map((item) => <button key={item} type="button" onClick={() => setTab(item)} className={`rounded-md px-3 py-2 text-sm font-semibold ${tab === item ? "bg-[var(--share-green-950)] text-white" : "border border-[var(--share-line)] text-zinc-700"}`}>{item === "source" ? "Fonte de dados" : item === "results" ? "Resultados" : "Restrições"}</button>)}</div></section>
+            <div className="my-5 h-px bg-white/10" />
 
-          {tab === "source" ? <SourceTab event={event} file={file} onFile={chooseSpreadsheet} pending={pending} onUpload={uploadExcel} /> : null}
-          {tab === "results" ? <ResultsTab event={event} visible={visible} counts={counts} filter={filter} setFilter={setFilter} pending={pending} onSearch={searchLinkedin} onDecision={decide} onRoleRule={decideRole} onMessages={setSelected} onLinkedinSaved={() => loadEvent(event.id)} /> : null}
-          {tab === "restrictions" ? <RestrictionsTab event={event} /> : null}
-        </> : null}
+            <div className="px-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Novo evento</p>
+              <input
+                value={eventName}
+                onChange={(e) => setEventName(e.target.value)}
+                placeholder="Nome do evento"
+                className="mt-2 h-10 w-full rounded-xl border border-white/15 bg-white/10 px-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-[#dcef55]"
+              />
+              <button
+                type="button"
+                onClick={createEvent}
+                disabled={pending === "create" || eventName.trim().length < 2}
+                className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-white px-3 text-sm font-bold text-[#003f2c] disabled:opacity-40"
+              >
+                {pending === "create" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Criar evento
+              </button>
+            </div>
+          </aside>
+
+          <section className="min-w-0">
+            {pending === "load" ? (
+              <div className="rounded-3xl border border-[#cbdcc9] bg-white p-8">
+                <p className="inline-flex items-center gap-2 text-sm text-zinc-600"><LoaderCircle className="h-4 w-4 animate-spin" /> Carregando R1 Ship...</p>
+              </div>
+            ) : null}
+
+            {event ? (
+              <>
+                <article className="rounded-3xl border border-[#cbdcc9] bg-white p-6 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--share-green-800)]">Evento atual</p>
+                      {editingName ? (
+                        <div className="mt-2 flex max-w-2xl flex-wrap gap-2">
+                          <input
+                            autoFocus
+                            value={draftEventName}
+                            onChange={(e) => setDraftEventName(e.target.value)}
+                            className="h-11 min-w-[260px] flex-1 rounded-xl border border-[#b8ceb5] px-4 text-lg font-semibold text-[#003f2c] outline-none focus:border-[#006142]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void renameEvent()}
+                            disabled={pending === "rename" || draftEventName.trim().length < 2}
+                            className="rounded-xl bg-[#006142] px-4 text-sm font-bold text-white disabled:opacity-50"
+                          >
+                            {pending === "rename" ? "Salvando..." : "Salvar"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setEditingName(false); setDraftEventName(event.name); }}
+                            className="rounded-xl border border-[#d6e2d4] px-4 text-sm font-semibold text-zinc-600"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="mt-1 flex items-center gap-2">
+                          <h2 className="truncate text-2xl font-semibold text-[var(--share-green-950)]">{event.name}</h2>
+                          <button
+                            type="button"
+                            onClick={() => { setDraftEventName(event.name); setEditingName(true); }}
+                            className="rounded-lg p-2 text-[#006142] hover:bg-[#eef6ea]"
+                            aria-label="Editar nome do evento"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-zinc-500">
+                        <span><strong className="text-[#003f2c]">{event.sourceRowCount}</strong> participantes</span>
+                        <span>Restrições {event.restrictionVersion}</span>
+                        {event.sourceName ? <span>Base: {event.sourceName}</span> : null}
+                      </div>
+                    </div>
+
+                    {canDeleteEvents ? (
+                      <button
+                        type="button"
+                        onClick={() => void deleteEvent()}
+                        disabled={pending === "delete"}
+                        className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {pending === "delete" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        Excluir evento
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+
+                <div className="mt-5">
+                  {tab === "source" ? <SourceTab event={event} file={file} onFile={chooseSpreadsheet} pending={pending} onUpload={uploadExcel} /> : null}
+                  {tab === "results" ? <ResultsTab event={event} visible={visible} counts={counts} filter={filter} setFilter={setFilter} pending={pending} onSearch={searchLinkedin} onDecision={decide} onRoleRule={decideRole} onMessages={setSelected} onLinkedinSaved={() => loadEvent(event.id)} /> : null}
+                  {tab === "restrictions" ? <RestrictionsTab event={event} /> : null}
+                </div>
+              </>
+            ) : pending !== "load" ? (
+              <div className="rounded-3xl border border-dashed border-[#b9ceb6] bg-white/65 px-6 py-14 text-center">
+                <p className="text-sm font-semibold text-[#003f2c]">Nenhum evento selecionado.</p>
+                <p className="mt-1 text-sm text-zinc-500">Crie um evento pelo menu lateral para começar.</p>
+              </div>
+            ) : null}
+          </section>
+        </div>
 
         {selected && event ? <MessageDrawer participant={selected} event={event} accountName={accountName} pending={pending === "copy"} onClose={() => setSelected(null)} onCopy={copyMessage} /> : null}
       </div>
     </main>
-  );
-}
+  );}
 
 function SourceTab({ event, file, onFile, pending, onUpload }: { event: HumanshipEvent; file: File | null; onFile: (v: File | null) => void; pending: Pending; onUpload: () => void }) {
-  return <section className="mt-5">
-    <article className="rounded-lg border border-[var(--share-line)] bg-white p-5">
+  return <section>
+    <article className="rounded-3xl border border-[#cbdcc9] bg-white p-6 shadow-sm">
       <div className="flex items-start gap-3">
         <span className="rounded-md bg-[#edf7eb] p-2 text-[var(--share-green-900)]"><FileSpreadsheet className="h-5 w-5" /></span>
         <div>
           <h3 className="font-semibold text-[var(--share-green-950)]">Importar planilha</h3>
-          <p className="mt-1 text-sm leading-6 text-zinc-600">Escolha um arquivo .xlsx ou .csv de até 12 MB. A conexão com Google Sheets fica somente no bloco superior da página.</p>
+          <p className="mt-1 text-sm leading-6 text-zinc-600">Escolha um arquivo .xlsx ou .csv de até 12 MB para alimentar os participantes deste evento.</p>
         </div>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3">

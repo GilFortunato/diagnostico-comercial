@@ -104,6 +104,7 @@ model HrHuntingSearch {
 model HrHuntingCandidate {
   id                    String                       @id @default(cuid())
   searchId              String
+  profileId             String?
   sourcePersonId        String?
   name                  String
   currentTitle          String?
@@ -127,6 +128,7 @@ model HrHuntingCandidate {
 
   @@unique([searchId, profileUrl])
   @@index([searchId, fitScore])
+  @@index([profileId])
 }
 
 model HrHuntingCandidateEvidence {
@@ -162,6 +164,44 @@ model HrHuntingShortlist {
   candidate             HrHuntingCandidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
+}
+
+model HrCandidateProfile {
+  id                    String          @id @default(cuid())
+  profileKey            String          @unique
+  linkedinUrl           String?         @unique
+  sourcePersonId        String?
+  name                  String
+  currentTitle          String?
+  currentCompany        String?
+  location              String?
+  professionalSummary   String?
+  sourceName            String?
+  confidence            ConfidenceLevel @default(UNVERIFIED)
+  rawSnapshot           Json            @default("{}")
+  lastExternalLookupAt  DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  @@index([currentTitle])
+  @@index([currentCompany])
+  @@index([lastExternalLookupAt])
+}
+
+model HrCandidateReview {
+  id                    String   @id @default(cuid())
+  profileId             String
+  reviewerId            String
+  reviewerName          String
+  verdict               String
+  note                  String?
+  searchId              String?
+  searchTitle           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([profileId, createdAt])
+  @@index([reviewerId, createdAt])
 }
 
 model ProfessionalProfile {
@@ -618,6 +658,26 @@ model ApprovalRequest {
   approvedBy  String?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+}
+
+model AppAuditLog {
+  id            String   @id @default(cuid())
+  actorUserId   String?
+  actorName     String?
+  actorEmail    String?
+  moduleKey     String
+  action        String
+  entityType    String?
+  entityId      String?
+  severity      String   @default("info")
+  retentionDays Int      @default(7)
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([moduleKey, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([severity, createdAt])
 }
 
 model AuditLog {

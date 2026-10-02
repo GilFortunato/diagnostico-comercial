@@ -52,12 +52,22 @@ export const executeSearchSchema = z.object({
 
 export type HrCandidateEvidence = { criterion: string; criterionType: CriterionKind; result: "atende" | "parcial" | "não verificado"; evidence?: string; source: string; confidence: EvidenceState };
 export type HrCandidateContact = { value: string; type: typeof contactTypes[number]; source: string; confidence: EvidenceState; obtainedAt?: string };
+export type HrCandidateTeamReview = {
+  id: string;
+  verdict: "recommended" | "alert";
+  reviewerName: string;
+  note?: string;
+  searchTitle?: string;
+  createdAt: string;
+};
+
 export type HrCandidate = {
-  id: string; name: string; currentTitle?: string; currentCompany?: string; location?: string; profileUrl?: string; professionalSummary?: string;
+  id: string; profileId?: string; name: string; currentTitle?: string; currentCompany?: string; location?: string; profileUrl?: string; professionalSummary?: string;
   fitScore: number; fitClassification: "Muito alta" | "Alta" | "Boa" | "Parcial" | "Baixa aderência inicial"; mainSignal?: string; pointsToValidate: string[];
   sourceName: string; confidence: EvidenceState; evidence: HrCandidateEvidence[]; contacts: HrCandidateContact[]; shortlisted: boolean; shortlist?: { nextStep?: string; notes?: string };
+  knownByShare?: boolean; lastExternalLookupAt?: string; teamReviews?: HrCandidateTeamReview[];
 };
 export type HrHuntingSearchSnapshot = {
-  id: string; title: string; jobDescription: string; jobUrl?: string; companyName?: string; recruiterName?: string; jobDna: JobDna; searchTerms: string[];
+  id: string; ownerId?: string; ownerName?: string; mine?: boolean; title: string; jobDescription: string; jobUrl?: string; companyName?: string; recruiterName?: string; jobDna: JobDna; searchTerms: string[];
   status: string; connectorWarnings: string[]; createdAt: string; updatedAt: string; candidates: HrCandidate[];
 };

@@ -13,6 +13,7 @@ import {
 } from "@/lib/hr-hunting/service";
 import type { EvidenceState, HrCandidate, HrHuntingSearchSnapshot } from "@/lib/hr-hunting/types";
 import { candidateKey, collectHrDiscovery, readDiscoveryState, type HrDiscoveryState } from "@/lib/hr-hunting/pagedDiscovery";
+import { findReusableCandidateProfiles, profileKeyForCandidate, upsertCandidateProfiles } from "@/lib/hr-hunting/candidateMemory";
 import { collectionMessage } from "@/lib/hunting/pagination";
 
 type SearchInput = {
@@ -47,10 +48,23 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
   if (!search) return null;
 
   const fingerprint = createHash("sha256").update(JSON.stringify({ currentTitle: input.currentTitle, seniority: input.seniority, location: input.location, keywords: input.keywords, dna: search.jobDna })).digest("hex");
-  const previous = options.append ? await getPrisma().hrHuntingSearch.findFirst({ where: { id, ownerId }, select: { sourceSnapshot: true } }) : null;
+  const previous = options.append ? await getPrisma().hrHuntingSearch.findFirst({ where: { id }, select: { sourceSnapshot: true } }) : null;
   let state = readDiscoveryState(previous?.sourceSnapshot, fingerprint);
   const warnings: string[] = [];
-  if (!state) {
+  const evalInput = evaluationInput(search, input);
+
+  const knownKeys = new Set(options.append ? search.candidates.map(candidateKey) : []);
+  const reusable = (await findReusableCandidateProfiles())
+    .filter((candidate) => !knownKeys.has(candidateKey(candidate)));
+  const reusableQuality = applyCandidateQualityGate(reusable, search.jobDna, evalInput);
+  const cachedPool = reusableQuality.eligible;
+  const cachedRanked = rankCandidates(cachedPool, search.jobDna, evalInput).slice(0, input.quantity);
+  if (cachedRanked.length) {
+    warnings.push(`${cachedRanked.length} perfil(is) compatível(is) foram reaproveitados do banco Share antes de consultar fontes externas.`);
+  }
+
+  const externalTarget = Math.max(0, input.quantity - cachedRanked.length);
+  if (!state && externalTarget > 0) {
     const manus = await createPlanWithManus(search, input, fallbackPlan(search, input));
     warnings.push(...manus.warnings);
     const rounds = buildRounds(search, input, manus.plan).map((round) => compact({
@@ -62,36 +76,48 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
         .map((actorInput) => ({ input: actorInput, nextPage: 1, exhausted: false })),
     };
   }
-  const collected = await collectHrDiscovery({
-    state, target: input.quantity,
-    excludedKeys: options.append ? new Set(search.candidates.map(candidateKey)) : undefined,
-    normalize: normalizeCandidates,
-    fetchPage: (actorInput, page) => runApifyActor("linkedinProfileSearch", {
-      ...actorInput, startPage: page.startPage, takePages: page.takePages, maxItems: page.maxItems,
-    }, { timeoutMs: page.timeoutMs, allowFallback: false }),
-  });
-  let pool = collected.items;
-  if (pool.length < input.quantity && !collected.state.fallbackComplete) {
+  if (!state) {
+    state = { version: 1, fingerprint, pending: [], rounds: [], fallbackComplete: true };
+  }
+
+  const excludedKeys = new Set([...knownKeys, ...cachedPool.map(candidateKey)]);
+  const collected = externalTarget > 0
+    ? await collectHrDiscovery({
+        state, target: externalTarget,
+        excludedKeys,
+        normalize: normalizeCandidates,
+        fetchPage: (actorInput, page) => runApifyActor("linkedinProfileSearch", {
+          ...actorInput, startPage: page.startPage, takePages: page.takePages, maxItems: page.maxItems,
+        }, { timeoutMs: page.timeoutMs, allowFallback: false }),
+      })
+    : {
+        items: [] as HrCandidate[],
+        state,
+        summary: { requested: 0, unique: 0, requests: 0, duplicates: 0, stopReason: "target_reached" as const, nextPage: 1 },
+      };
+
+  let externalPool = collected.items;
+  if (externalPool.length < externalTarget && !collected.state.fallbackComplete) {
     try {
       const raw = await runApifyActor("linkedinProfileSearchFallback", compact({
         searchQuery: input.currentTitle?.trim() || search.jobDna.title || search.title,
         locations: (input.location?.trim() || search.jobDna.location) ? [input.location?.trim() || search.jobDna.location] : [],
         maxItems: 50,
       }), { timeoutMs: 15_000 });
-      const existing = new Set(options.append ? search.candidates.map(candidateKey) : []);
-      pool = [...new Map([...pool, ...normalizeCandidates(raw)].filter((candidate) => !existing.has(candidateKey(candidate))).map((candidate) => [candidateKey(candidate), candidate])).values()];
+      const existing = new Set([...excludedKeys, ...externalPool.map(candidateKey)]);
+      externalPool = [...new Map([...externalPool, ...normalizeCandidates(raw)].filter((candidate) => !existing.has(candidateKey(candidate))).map((candidate) => [candidateKey(candidate), candidate])).values()];
       collected.state.fallbackComplete = true;
     } catch {
       warnings.push("A fonte complementar Apify ficou indisponível; os perfis já encontrados foram preservados.");
     }
   }
-  collected.summary.unique = pool.length;
-  if (pool.length >= input.quantity) collected.summary.stopReason = "target_reached";
+  collected.summary.unique = externalPool.length;
+  if (externalPool.length >= externalTarget) collected.summary.stopReason = "target_reached";
   warnings.push(collectionMessage(collected.summary));
   console.info("[hr-hunting] collection completed", { ...collected.summary });
-  if (pool.length) pool = await enrich(pool, input, warnings);
+  if (externalPool.length) externalPool = await enrich(externalPool, input, warnings);
 
-  const evalInput = evaluationInput(search, input);
+  const pool = dedupe([...cachedPool, ...externalPool]);
   const quality = applyCandidateQualityGate(pool, search.jobDna, evalInput);
   const strictRanked = rankCandidates(quality.eligible, search.jobDna, evalInput);
   const expandedRanked = rankCandidates(quality.rejected, search.jobDna, evalInput);
@@ -200,6 +226,7 @@ async function persistResult({ id, ownerId, candidates, discoveryState, warnings
   status: string;
 }) {
   await getPrisma().$transaction(async (tx) => {
+    const profileIds = await upsertCandidateProfiles(tx, candidates);
     const existing = await tx.hrHuntingCandidate.findMany({ where: { searchId: id }, select: { id: true, profileUrl: true } });
     const knownUrls = new Set(existing.map((row) => row.profileUrl?.split("?")[0].replace(/\/$/, "").toLowerCase()).filter(Boolean));
     const persisted = candidates.filter((candidate) => !knownUrls.has(candidateKey(candidate)))
@@ -212,6 +239,7 @@ async function persistResult({ id, ownerId, candidates, discoveryState, warnings
         data: persisted.map(({ candidate, rowId }) => ({
           id: rowId,
           searchId: id,
+          profileId: profileIds.get(profileKeyForCandidate(candidate)) || null,
           sourcePersonId: candidate.id,
           name: candidate.name,
           currentTitle: candidate.currentTitle || null,
@@ -254,7 +282,7 @@ async function persistResult({ id, ownerId, candidates, discoveryState, warnings
     if (contactData.length) await tx.hrHuntingCandidateContact.createMany({ data: contactData });
 
     await tx.hrHuntingSearch.updateMany({
-      where: { id, ownerId },
+      where: { id },
       data: {
         status,
         sourceSnapshot: discoveryState as unknown as Prisma.InputJsonValue,

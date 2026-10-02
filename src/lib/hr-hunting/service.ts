@@ -4,11 +4,15 @@ import { runApifyActor } from "@/lib/connectors/apifyClient";
 import { getPrisma } from "@/lib/db/prisma";
 import { createJobDna } from "@/lib/hr-hunting/jobDna";
 import type { CriterionKind, EvidenceState, HrCandidate, HrHuntingSearchSnapshot, JobDna, MessageFormat } from "@/lib/hr-hunting/types";
+import { attachCandidateMemory } from "@/lib/hr-hunting/candidateMemory";
 
 type SearchInput = { quantity: number; currentTitle?: string; seniority: string[]; location?: string; keywords: string[] };
 type UnknownRecord = Record<string, unknown>;
 type HrHuntingSearchWithCandidates = Prisma.HrHuntingSearchGetPayload<{
-  include: { candidates: { include: { evidence: true; contacts: true; shortlist: true } } };
+  include: {
+    owner: { select: { id: true; name: true; email: true } };
+    candidates: { include: { evidence: true; contacts: true; shortlist: true } };
+  };
 }>;
 
 const hrHarvestSeniorityIds: Record<string, string[]> = {
@@ -38,7 +42,7 @@ export async function createHrHuntingSearch(ownerId: string, input: { title?: st
 }
 
 export async function updateHrHuntingJobDna(id: string, ownerId: string, jobDna: JobDna) {
-  await getPrisma().hrHuntingSearch.updateMany({ where: { id, ownerId }, data: { title: jobDna.title, jobDna: jobDna as unknown as Prisma.InputJsonValue, searchTerms: deriveTerms(jobDna), status: "job_dna_ready" } });
+  await getPrisma().hrHuntingSearch.updateMany({ where: { id }, data: { title: jobDna.title, jobDna: jobDna as unknown as Prisma.InputJsonValue, searchTerms: deriveTerms(jobDna), status: "job_dna_ready" } });
   return findOwnedHrHuntingSearch(id, ownerId);
 }
 
@@ -145,18 +149,45 @@ export async function executeHrHuntingSearch(id: string, ownerId: string, input:
   return findOwnedHrHuntingSearch(id, ownerId);
 }
 
-export async function findOwnedHrHuntingSearch(id: string, ownerId: string): Promise<HrHuntingSearchSnapshot | null> {
-  const row = await getPrisma().hrHuntingSearch.findFirst({ where: { id, ownerId }, include: { candidates: { include: { evidence: true, contacts: true, shortlist: true }, orderBy: { fitScore: "desc" } } } });
-  return row ? serializeSearch(row) : null;
+export async function findOwnedHrHuntingSearch(id: string, actorId: string): Promise<HrHuntingSearchSnapshot | null> {
+  const row = await getPrisma().hrHuntingSearch.findFirst({
+    where: { id },
+    include: {
+      owner: { select: { id: true, name: true, email: true } },
+      candidates: { include: { evidence: true, contacts: true, shortlist: true }, orderBy: { fitScore: "desc" } },
+    },
+  });
+  if (!row) return null;
+  const snapshot = serializeSearch(row, actorId);
+  return attachCandidateMemory(snapshot);
 }
 
-export async function listHrHuntingSearches(ownerId: string) {
-  const rows = await getPrisma().hrHuntingSearch.findMany({ where: { ownerId }, orderBy: { updatedAt: "desc" }, take: 20, include: { candidates: { select: { id: true, shortlist: true } } } });
-  return rows.map((row) => ({ id: row.id, title: row.title, status: row.status, updatedAt: row.updatedAt.toISOString(), candidates: row.candidates.length, shortlist: row.candidates.filter((candidate) => candidate.shortlist).length }));
+export async function listHrHuntingSearches(actorId: string) {
+  const rows = await getPrisma().hrHuntingSearch.findMany({
+    orderBy: { updatedAt: "desc" },
+    take: 100,
+    include: {
+      owner: { select: { id: true, name: true, email: true } },
+      candidates: { select: { id: true, shortlist: true } },
+    },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    companyName: row.companyName,
+    recruiterName: row.recruiterName,
+    status: row.status,
+    updatedAt: row.updatedAt.toISOString(),
+    candidates: row.candidates.length,
+    shortlist: row.candidates.filter((candidate) => candidate.shortlist).length,
+    ownerId: row.ownerId,
+    ownerName: row.owner.name || row.owner.email || "Usuário",
+    mine: row.ownerId === actorId,
+  }));
 }
 
 export async function toggleHrShortlist(candidateId: string, ownerId: string, shortlisted: boolean, nextStep?: string, notes?: string) {
-  const candidate = await getPrisma().hrHuntingCandidate.findFirst({ where: { id: candidateId, search: { ownerId } }, select: { id: true } });
+  const candidate = await getPrisma().hrHuntingCandidate.findFirst({ where: { id: candidateId }, select: { id: true } });
   if (!candidate) return false;
   if (!shortlisted) { await getPrisma().hrHuntingShortlist.deleteMany({ where: { candidateId } }); return true; }
   await getPrisma().hrHuntingShortlist.upsert({ where: { candidateId }, create: { candidateId, nextStep: nextStep || null, notes: notes || null }, update: { nextStep: nextStep || null, notes: notes || null } });
@@ -173,16 +204,16 @@ export function buildApproachMessage(search: HrHuntingSearchSnapshot, candidate:
   return `${opening}\n\nSou ${recruiter}. Estamos conduzindo uma oportunidade${company}: ${search.jobDna.shortSummary}\n\n${channel} Se fizer sentido para você, podemos conversar?${link}`;
 }
 
-function serializeSearch(row: HrHuntingSearchWithCandidates): HrHuntingSearchSnapshot {
+function serializeSearch(row: HrHuntingSearchWithCandidates, actorId?: string): HrHuntingSearchSnapshot {
   const candidates: HrCandidate[] = row.candidates.map((candidate) => ({
-    id: candidate.id, name: candidate.name, currentTitle: candidate.currentTitle || undefined, currentCompany: candidate.currentCompany || undefined, location: candidate.location || undefined,
+    id: candidate.id, profileId: candidate.profileId || undefined, name: candidate.name, currentTitle: candidate.currentTitle || undefined, currentCompany: candidate.currentCompany || undefined, location: candidate.location || undefined,
     profileUrl: candidate.profileUrl || undefined, professionalSummary: candidate.professionalSummary || undefined, fitScore: candidate.fitScore, fitClassification: candidate.fitClassification as HrCandidate["fitClassification"],
     mainSignal: candidate.mainSignal || undefined, pointsToValidate: candidate.pointsToValidate, sourceName: candidate.sourceName, confidence: fromPrismaConfidence(candidate.confidence),
     evidence: candidate.evidence.map((item) => ({ criterion: item.criterion, criterionType: item.criterionType as HrCandidate["evidence"][number]["criterionType"], result: item.result as HrCandidate["evidence"][number]["result"], evidence: item.evidence || undefined, source: item.source, confidence: fromPrismaConfidence(item.confidence) })),
     contacts: candidate.contacts.map((item) => ({ value: item.value, type: item.type as HrCandidate["contacts"][number]["type"], source: item.source, confidence: fromPrismaConfidence(item.confidence), obtainedAt: item.obtainedAt?.toISOString() })),
     shortlisted: Boolean(candidate.shortlist), shortlist: candidate.shortlist ? { nextStep: candidate.shortlist.nextStep || undefined, notes: candidate.shortlist.notes || undefined } : undefined,
   }));
-  return { id: row.id, title: row.title, jobDescription: row.jobDescription, jobUrl: row.jobUrl || undefined, companyName: row.companyName || undefined, recruiterName: row.recruiterName || undefined, jobDna: row.jobDna as JobDna, searchTerms: row.searchTerms, status: row.status, connectorWarnings: row.connectorWarnings, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), candidates };
+  return { id: row.id, ownerId: row.ownerId, ownerName: row.owner.name || row.owner.email || "Usuário", mine: actorId ? row.ownerId === actorId : undefined, title: row.title, jobDescription: row.jobDescription, jobUrl: row.jobUrl || undefined, companyName: row.companyName || undefined, recruiterName: row.recruiterName || undefined, jobDna: row.jobDna as JobDna, searchTerms: row.searchTerms, status: row.status, connectorWarnings: row.connectorWarnings, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), candidates };
 }
 
 export function normalizeCandidates(items: unknown[]): HrCandidate[] {
