@@ -56,8 +56,8 @@ const workspaces: Workspace[] = [
   },
   {
     key: "b2b",
-    title: "Diagnóstico B2B",
-    shortTitle: "Diagnóstico\nB2B",
+    title: "B2B Hunting",
+    shortTitle: "B2B\nHunting",
     category: "Comercial",
     href: "/mapa-decisores",
     module: "decision.makers",
