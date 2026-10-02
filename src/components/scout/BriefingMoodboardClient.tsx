@@ -202,7 +202,7 @@ export function BriefingMoodboardClient() {
           const active=selectedImageIds.includes(image.id);
           return <article key={image.id} className={`overflow-hidden rounded-xl border bg-white ${active ? "border-[var(--share-green-700)] ring-2 ring-[var(--share-mint)]" : "border-[var(--share-line)]"}`}>
             <button type="button" onClick={()=>toggleImage(image.id)} className="block w-full text-left">
-              <div className="relative h-40 bg-[#e9efe7] bg-cover bg-center" style={{backgroundImage:`url("${image.previewUrl.replace(/"/g,"%22")}")`}}>{active ? <span className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-[var(--share-green-950)] text-white"><Check className="h-4 w-4" /></span> : null}</div>
+              <div className="relative h-40 bg-[#e9efe7]"><MoodboardPreview image={image} className="h-full w-full object-cover" />{active ? <span className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-[var(--share-green-950)] text-white"><Check className="h-4 w-4" /></span> : null}</div>
               <div className="p-3"><p className="line-clamp-2 text-xs font-semibold text-[var(--share-green-950)]">{image.title}</p><p className="mt-1 text-[10px] text-zinc-400">{image.providerLabel} · {image.score}%</p></div>
             </button>
           </article>;
@@ -219,7 +219,7 @@ export function BriefingMoodboardClient() {
           <p className="mt-5 text-xs leading-5 text-zinc-500">{selectedDirection.composition}</p>
         </aside>
         <div className="grid auto-rows-[180px] grid-cols-2 gap-2 p-2 md:grid-cols-3">
-          {selectedImages.map((image,index)=><figure key={image.id} className={`group relative overflow-hidden rounded-lg ${index===0 ? "col-span-2 row-span-2" : ""}`}><img src={image.previewUrl} alt={image.title} className="h-full w-full object-cover" /><figcaption className="absolute inset-x-0 bottom-0 translate-y-full bg-black/70 p-2 text-[10px] text-white transition group-hover:translate-y-0"><span>{image.attribution}</span><a href={image.sourceUrl} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-1 underline">Fonte <ExternalLink className="h-3 w-3"/></a></figcaption></figure>)}
+          {selectedImages.map((image,index)=><figure key={image.id} className={`group relative overflow-hidden rounded-lg ${index===0 ? "col-span-2 row-span-2" : ""}`}><MoodboardPreview image={image} className="h-full w-full object-cover" /><figcaption className="absolute inset-x-0 bottom-0 translate-y-full bg-black/70 p-2 text-[10px] text-white transition group-hover:translate-y-0"><span>{image.attribution}</span><a href={image.sourceUrl} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-1 underline">Fonte <ExternalLink className="h-3 w-3"/></a></figcaption></figure>)}
         </div>
       </div>
     </section> : null}
@@ -234,3 +234,30 @@ function TextArea({label,value,onChange,placeholder}:{label:string;value:string;
 }
 function SummaryCard({title,text}:{title:string;text:string}) { return <div className="rounded-xl bg-[#f5f8f2] p-4"><p className="text-[10px] font-bold uppercase tracking-wide text-[var(--share-green-800)]">{title}</p><p className="mt-2 text-sm leading-6 text-zinc-600">{text}</p></div>; }
 function Info({label,value}:{label:string;value:string}) { return <div><dt className="font-bold uppercase tracking-wide text-[var(--share-green-800)]">{label}</dt><dd className="mt-1 leading-5 text-zinc-600">{value}</dd></div>; }
+
+
+function MoodboardPreview({ image, className }: { image: ScoutImage; className: string }) {
+  const [src, setSrc] = useState(image.previewUrl);
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return <div className={`${className} grid place-items-center bg-[#e9efe7] p-4 text-center text-[10px] text-zinc-500`}>Prévia indisponível</div>;
+  }
+
+  return (
+    <img
+      src={src}
+      alt={image.title}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      className={className}
+      onError={() => {
+        if (src !== image.fullUrl) {
+          setSrc(image.fullUrl);
+          return;
+        }
+        setFailed(true);
+      }}
+    />
+  );
+}
