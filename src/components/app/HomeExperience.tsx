@@ -290,7 +290,7 @@ export function HomeExperience({
               {available.map((workspace,index) => {
                 const step = 360 / available.length;
                 const angle = NEXUS_ROTATION + index * step + step / 2;
-                const p = polar(50,50,37.2,angle);
+                const p = polar(50,50,35.8,angle);
                 const Icon = workspace.icon;
                 const selectedNow = workspace.key === selected.key;
                 return (
