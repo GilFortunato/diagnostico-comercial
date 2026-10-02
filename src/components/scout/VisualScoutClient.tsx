@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { Bookmark, Check, ExternalLink, LoaderCircle, Search } from "lucide-react";
 
 type ScoutImage = {
@@ -45,14 +45,25 @@ const providerNames = {
   pixabay: "Pixabay",
 } as const;
 
-export function VisualScoutClient({ initialQuery = "" }: { initialQuery?: string }) {
-  const initial = initialQuery;
-  const [query, setQuery] = useState(initial);
-  const [data, setData] = useState<SearchResponse | null>(null);
+export function VisualScoutClient({
+  initialQuery = "",
+  initialData = null,
+}: {
+  initialQuery?: string;
+  initialData?: SearchResponse | null;
+}) {
+  const [query, setQuery] = useState(initialQuery);
+  const [data, setData] = useState<SearchResponse | null>(initialData);
   const [selected, setSelected] = useState<string[]>([]);
   const [visibleCount, setVisibleCount] = useState(12);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(() => {
+    if (!initialData) return null;
+    const configured = initialData.providers.filter((provider) => provider.configured);
+    if (!configured.length) return "O motor está pronto, mas nenhum banco de imagens tem chave configurada neste ambiente ainda.";
+    if (!initialData.results.length) return "Os bancos responderam, mas nenhuma imagem passou pelos filtros desta busca. Tente um briefing um pouco mais amplo.";
+    return null;
+  });
 
   async function runSearch(value: string) {
     const briefing = value.trim();
@@ -89,11 +100,6 @@ export function VisualScoutClient({ initialQuery = "" }: { initialQuery?: string
     }
   }
 
-  useEffect(() => {
-    if (initial.trim().length >= 3) void runSearch(initial);
-    // Executa somente quando o briefing chega pela URL do Trend Intelligence.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initial]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
