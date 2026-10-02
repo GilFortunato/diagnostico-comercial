@@ -12,6 +12,7 @@ export default async function Home() {
 
   return (
     <HomeExperience
+      authenticated={Boolean(user)}
       isAdmin={isAdmin}
       access={access}
       userName={user?.name || user?.email || null}
