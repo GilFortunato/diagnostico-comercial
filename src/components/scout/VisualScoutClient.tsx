@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { Bookmark, Check, ExternalLink, LoaderCircle, Search } from "lucide-react";
+import { Check, ExternalLink, LoaderCircle, Palette, Search } from "lucide-react";
 
 type ScoutImage = {
   id: string;
@@ -121,6 +121,13 @@ export function VisualScoutClient({
 
   const visible = useMemo(() => data?.results.slice(0, visibleCount) ?? [], [data, visibleCount]);
   const hasMore = Boolean(data && visibleCount < data.results.length);
+
+  function sendToMoodboard() {
+    if (!data || !selected.length) return;
+    const images = data.results.filter((item) => selected.includes(item.id));
+    sessionStorage.setItem("share:mkt-scout:visual-selection", JSON.stringify({ query, images }));
+    window.location.href = "/sharemoodboard?from=visual";
+  }
 
   return (
     <>
@@ -252,10 +259,11 @@ export function VisualScoutClient({
               <span className="text-sm font-semibold">{selected.length} referências selecionadas</span>
               <button
                 type="button"
+                onClick={sendToMoodboard}
                 disabled={!selected.length}
                 className="inline-flex items-center gap-2 rounded-lg bg-[var(--share-lime)] px-4 py-2 text-sm font-bold text-[var(--share-green-950)] disabled:opacity-50"
               >
-                <Bookmark className="h-4 w-4" /> Salvar coleção
+                <Palette className="h-4 w-4" /> Usar no Moodboard
               </button>
             </div>
           ) : null}
