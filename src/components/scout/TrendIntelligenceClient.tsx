@@ -55,11 +55,16 @@ export function TrendIntelligenceClient({ initialGenerationId, initialQuery = ""
           <p>O mesmo sinal. Uma leitura para {brand.name}.</p>
         </div>
       </section>
-      <div className={styles.radarTabs} role="tablist" aria-label="Tipo de radar">\n        <button type="button" role="tab" aria-selected={radarMode === "general"} className={radarMode === "general" ? styles.radarTabActive : styles.radarTab} onClick={() => setRadarMode("general")}>Radar Geral</button>\n        <button type="button" role="tab" aria-selected={radarMode === "social"} className={radarMode === "social" ? styles.radarTabActive : styles.radarTab} onClick={() => setRadarMode("social")}>Radar Social</button>\n      </div>\n      <div className={styles.toolbar}>
+      <div className={styles.radarTabs} role="tablist" aria-label="Tipo de radar">
+        <button type="button" role="tab" aria-selected={radarMode === "general"} className={radarMode === "general" ? styles.radarTabActive : styles.radarTab} onClick={() => setRadarMode("general")}>Radar Geral</button>
+        <button type="button" role="tab" aria-selected={radarMode === "social"} className={radarMode === "social" ? styles.radarTabActive : styles.radarTab} onClick={() => setRadarMode("social")}>Radar Social</button>
+      </div>
+      <div className={styles.toolbar}>
         <span className={styles.meta}><span className={styles.dot} /> Fontes públicas · Evidências rastreáveis</span>
         <button type="button" className={styles.secondary} onClick={() => setRevision((value) => value + 1)}><RefreshCw size={13} aria-hidden="true" /> Atualizar radar</button>
       </div>
-      {radarMode === "general" ? <>\n        <details className={styles.search}>
+      {radarMode === "general" ? <>
+        <details className={styles.search}>
           <summary><Search size={13} aria-hidden="true" className="mr-2 inline" />Pesquisar um tema específico</summary>
           <form onSubmit={search}>
             <label htmlFor="scout-query">Tema para investigar<input id="scout-query" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={120} placeholder="Ex.: inteligência artificial no trabalho" aria-describedby={searchError ? "scout-search-error" : undefined} /></label>
@@ -68,7 +73,8 @@ export function TrendIntelligenceClient({ initialGenerationId, initialQuery = ""
           {searchError ? <p id="scout-search-error" role="alert" className={styles.notice}>{searchError}</p> : null}
         </details>
         {query ? <div className={styles.searchActive}><span>Investigando: <strong>{query}</strong></span><button className={styles.back} onClick={() => { setQuery(""); setDraft(""); }} type="button">Voltar ao radar geral</button></div> : null}
-        <RadarWorkspace key={`${brandId}:${query}:${revision}`} brandId={brandId} query={query} retry={() => setRevision((value) => value + 1)} />\n      </> : <SocialRadar initialQuery={draft || query} />}
+        <RadarWorkspace key={`${brandId}:${query}:${revision}`} brandId={brandId} query={query} retry={() => setRevision((value) => value + 1)} />
+      </> : <SocialRadar initialQuery={draft || query} />}
       <footer className={styles.footer}><span>MKT Scout · Da evidência à criação.</span><span>Horários de Brasília · Relevância editorial não comprova crescimento.</span></footer>
     </div>
   );
@@ -174,7 +180,7 @@ function SocialRadar({ initialQuery = "" }: { initialQuery?: string }) {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(\`/api/scout/trends/search?q=\${encodeURIComponent(term)}&days=\${days}\`, { cache: "no-store" });
+      const response = await fetch(`/api/scout/trends/search?q=${encodeURIComponent(term)}&days=${days}`, { cache: "no-store" });
       const payload = await response.json() as SocialTrendResponse & { error?: string };
       if (!response.ok) throw new Error(payload.error || "Não foi possível consultar os sinais sociais.");
       setData(payload);
