@@ -307,7 +307,7 @@ export function HomeExperience({
                       }
                       if (workspace.allowed) router.push(workspace.href);
                     }}
-                    className={`share-hub-sector-label ${selectedNow ? "is-selected" : ""} ${workspace.allowed ? "" : "is-locked"}`}
+                    className={`share-hub-sector-label is-${workspace.key} ${selectedNow ? "is-selected" : ""} ${workspace.allowed ? "" : "is-locked"}`}
                     style={{ left:`${p.x}%`, top:`${p.y}%` }}
                     aria-label={workspace.allowed ? `Selecionar ${workspace.title}` : `${workspace.title} bloqueado`}
                   >
