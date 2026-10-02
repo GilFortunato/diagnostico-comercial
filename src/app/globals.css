@@ -128,3 +128,109 @@ textarea {
   color: #b91c1c;
   font-weight: 600;
 }
+
+
+/* Share AI Home: rede neural abstrata e discreta para comunicar inteligência
+   conectada sem recorrer à estética genérica de "cérebro de IA". */
+.share-neural {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.share-neural::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgb(0 63 46 / 0.16), transparent 45%, rgb(0 63 46 / 0.12)),
+    radial-gradient(circle at 48% 50%, transparent 0 24%, rgb(0 63 46 / 0.18) 72%);
+}
+
+.share-neural-lines line {
+  stroke: url(#shareNeuralLine);
+  stroke-width: 0.34;
+  stroke-dasharray: 2.4 2.8;
+  animation: share-neural-flow 8s linear infinite;
+}
+
+.share-neural-node {
+  fill: url(#shareNeuralNode);
+  filter: drop-shadow(0 0 3px rgb(156 255 0 / 0.7));
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: share-neural-pulse 3.6s ease-in-out infinite;
+}
+
+.share-neural-glow {
+  position: absolute;
+  width: 20rem;
+  height: 20rem;
+  border-radius: 999px;
+  background: rgb(156 255 0 / 0.12);
+  filter: blur(58px);
+  animation: share-neural-drift 10s ease-in-out infinite alternate;
+}
+
+.share-neural-glow-a {
+  right: 5%;
+  top: -18%;
+}
+
+.share-neural-glow-b {
+  left: 34%;
+  bottom: -40%;
+  animation-delay: -4s;
+}
+
+.share-product-card {
+  box-shadow: 0 16px 50px rgb(0 63 46 / 0.06);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.share-product-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--share-lime);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform 180ms ease;
+}
+
+.share-product-card:hover {
+  transform: translateY(-3px);
+  border-color: rgb(0 138 77 / 0.45);
+  box-shadow: 0 22px 64px rgb(0 63 46 / 0.12);
+}
+
+.share-product-card:hover::before {
+  transform: scaleY(1);
+}
+
+@keyframes share-neural-flow {
+  to { stroke-dashoffset: -28; }
+}
+
+@keyframes share-neural-pulse {
+  0%, 100% { opacity: 0.46; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.32); }
+}
+
+@keyframes share-neural-drift {
+  from { transform: translate3d(-3%, -2%, 0) scale(0.92); }
+  to { transform: translate3d(8%, 7%, 0) scale(1.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-neural-lines line,
+  .share-neural-node,
+  .share-neural-glow,
+  .share-product-card {
+    animation: none;
+    transition: none;
+  }
+}
