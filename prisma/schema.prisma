@@ -293,6 +293,47 @@ model B2BLeadListItem {
   @@index([leadId])
 }
 
+model WhatsCampaign {
+  id              String          @id @default(cuid())
+  ownerId         String
+  ownerName       String
+  title           String
+  baseText        String
+  tone            String          @default("Profissional e acolhedor")
+  status          String          @default("draft")
+  sourceFileName  String?
+  mapping         Json            @default("{}")
+  totalRecipients Int             @default(0)
+  generatedCount  Int             @default(0)
+  sentCount       Int             @default(0)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  recipients      WhatsRecipient[]
+
+  @@index([ownerId, updatedAt])
+  @@index([status, updatedAt])
+}
+
+model WhatsRecipient {
+  id          String        @id @default(cuid())
+  campaignId  String
+  rowNumber   Int
+  name        String
+  phone       String
+  job         String
+  rawData     Json          @default("{}")
+  message     String?
+  status      String        @default("pending")
+  generatedAt DateTime?
+  sentAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  campaign    WhatsCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, rowNumber])
+  @@index([campaignId, status])
+}
+
 model ProfessionalProfile {
   id                      String   @id @default(cuid())
   userId                  String   @unique
