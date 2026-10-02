@@ -2,16 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ParticipantLinkedinCell } from "./ParticipantLinkedinCell";
-import { Check, Clipboard, ExternalLink, FileSpreadsheet, LoaderCircle, MessageCircle, Pencil, Plus, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
+import { CalendarDays, Check, Clipboard, ExternalLink, FileSpreadsheet, LoaderCircle, MessageCircle, Pencil, Plus, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
 import { humanshipCompanyRestrictionGroups, humanshipRestrictionVersion, humanshipRoleReferences } from "@/lib/humanship/restrictions";
-import type { HumanshipClassification, HumanshipDecision, HumanshipEvent, HumanshipParticipant, HumanshipRoleRule, HumanshipRoleRuleDecision } from "@/lib/humanship/types";
+import type { HumanshipClassification, HumanshipDecision, HumanshipEvent, HumanshipParticipant, HumanshipRestrictionSnapshot, HumanshipRoleRule, HumanshipRoleRuleDecision } from "@/lib/humanship/types";
 import { buildWhatsAppLink } from "@/lib/humanship/whatsapp";
 
-type Pending = "load" | "create" | "rename" | "delete" | "upload" | "search" | "decision" | "role" | "copy" | null;
+type Pending = "load" | "create" | "rename" | "delete" | "upload" | "search" | "decision" | "role" | "copy" | "restrictions" | "apply_restrictions" | null;
 type Tab = "source" | "results" | "restrictions";
 type Filter = "all" | HumanshipClassification | "approved" | "rejected";
+type RestrictionConfig = HumanshipRestrictionSnapshot & { updatedByName?: string; createdAt?: string };
 
-export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false }: { accountName: string; canDeleteEvents?: boolean }) {
+export function HumanshipR1ShipExperience({ accountName, canManageHumanship = false }: { accountName: string; canManageHumanship?: boolean }) {
   const [events, setEvents] = useState<HumanshipEvent[]>([]);
   const [event, setEvent] = useState<HumanshipEvent | null>(null);
   const [eventName, setEventName] = useState("");
@@ -23,6 +24,7 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
   const [selected, setSelected] = useState<HumanshipParticipant | null>(null);
   const [pending, setPending] = useState<Pending>("load");
   const [error, setError] = useState<string | null>(null);
+  const [workspaceRestrictions, setWorkspaceRestrictions] = useState<RestrictionConfig | null>(null);
 
   async function loadEvents(selectId?: string) {
     const response = await fetch("/api/humanship/events", { cache: "no-store" });
@@ -35,12 +37,13 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
     else setEvent(null);
   }
 
-  async function loadEvent(id: string) {
+  async function loadEvent(id: string, resetTab = false) {
     const response = await fetch(`/api/humanship/events/${id}`, { cache: "no-store" });
     const body = await response.json() as { event?: HumanshipEvent; error?: string };
     if (!response.ok || !body.event) throw new Error(body.error || "Não foi possível abrir o evento.");
     setEvent(body.event);
     setDraftEventName(body.event.name);
+    if (resetTab) setTab(body.event.sourceRowCount > 0 ? "results" : "source");
     setSelected((current) => current ? body.event?.participants.find((item) => item.id === current.id) || null : null);
   }
 
@@ -53,7 +56,7 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
         if (!response.ok) throw new Error(body.error || "Não foi possível carregar os eventos.");
         const next = body.events || [];
         setEvents(next);
-        if (next[0]?.id) await loadEvent(next[0].id);
+        if (next[0]?.id) await loadEvent(next[0].id, true);
       })
       .catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : "Não foi possível carregar os eventos."); })
       .finally(() => { if (!cancelled) setPending(null); });
@@ -95,7 +98,7 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
   }
 
   async function deleteEvent() {
-    if (!event || !canDeleteEvents) return;
+    if (!event || !canManageHumanship) return;
     if (!window.confirm(`Excluir definitivamente o evento "${event.name}" e todos os participantes vinculados? Essa ação não pode ser desfeita.`)) return;
     setPending("delete"); setError(null);
     try {
@@ -190,6 +193,61 @@ export function HumanshipR1ShipExperience({ accountName, canDeleteEvents = false
       await loadEvent(event.id);
     } catch { setError("Não foi possível copiar a mensagem automaticamente. Selecione o texto e copie manualmente."); }
     finally { setPending(null); }
+  }
+
+  async function openRestrictions() {
+    setTab("restrictions");
+    if (workspaceRestrictions) return;
+    setPending("restrictions");
+    setError(null);
+    try {
+      const response = await fetch("/api/humanship/restrictions", { cache: "no-store" });
+      const body = await response.json() as { restrictions?: RestrictionConfig; error?: string };
+      if (!response.ok || !body.restrictions) throw new Error(body.error || "Não foi possível carregar as restrições.");
+      setWorkspaceRestrictions(body.restrictions);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível carregar as restrições.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function saveRestrictions(next: RestrictionConfig) {
+    if (!canManageHumanship) return;
+    setPending("restrictions");
+    setError(null);
+    try {
+      const response = await fetch("/api/humanship/restrictions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyGroups: next.companyGroups, roleReferences: next.roleReferences }),
+      });
+      const body = await response.json() as { restrictions?: RestrictionConfig; error?: string };
+      if (!response.ok || !body.restrictions) throw new Error(body.error || "Não foi possível salvar as restrições.");
+      setWorkspaceRestrictions(body.restrictions);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível salvar as restrições.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function applyRestrictionsToEvent() {
+    if (!event || !canManageHumanship) return;
+    setPending("apply_restrictions");
+    setError(null);
+    try {
+      const response = await fetch(`/api/humanship/events/${event.id}/restrictions`, { method: "POST" });
+      const body = await response.json() as { event?: HumanshipEvent; restrictions?: RestrictionConfig; error?: string };
+      if (!response.ok || !body.event) throw new Error(body.error || "Não foi possível aplicar as restrições ao evento.");
+      setEvent(body.event);
+      if (body.restrictions) setWorkspaceRestrictions(body.restrictions);
+      await loadEvents(body.event.id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível aplicar as restrições ao evento.");
+    } finally {
+      setPending(null);
+    }
   }
 
   const counts = useMemo(() => {
