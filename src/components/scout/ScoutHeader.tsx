@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { LoginButton } from "@/components/auth/LoginButton";
 
 export function ScoutHeader({ active }: { active: "visual" | "trend" }) {
@@ -18,7 +19,14 @@ export function ScoutHeader({ active }: { active: "visual" | "trend" }) {
     <header className="border-b border-[var(--share-line)] bg-white">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-5">
         <Link href="/" className="flex items-end gap-2 py-3" aria-label="Voltar ao Share Hub">
-          <span className="share-wordmark text-4xl text-[var(--share-green-950)]">share</span>
+          <Image
+            src="/brand/share-wordmark-green.svg"
+            alt="Share"
+            width={118}
+            height={38}
+            className="h-auto w-[108px] md:w-[118px]"
+            priority
+          />
           <span className="pb-1 text-xs font-semibold uppercase text-[var(--share-green-800)]">AI</span>
         </Link>
         <nav className="flex items-center gap-5">
