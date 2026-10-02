@@ -8,6 +8,7 @@ export type SessionUser = {
   email: string | null;
   name: string | null;
   active: boolean;
+  isAdmin: boolean;
 };
 
 export async function getSessionUser(): Promise<SessionUser | null> {
@@ -17,5 +18,5 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   if (!sessionId && !email) return null;
   const user = await findActiveUserByIdentity(sessionId, email).catch(() => null);
   if (!user) return null;
-  return { id: user.id, email: user.email, name: user.name, active: user.active };
+  return { id: user.id, email: user.email, name: user.name, active: user.active, isAdmin: user.isAdmin };
 }
