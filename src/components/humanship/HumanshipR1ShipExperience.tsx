@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ParticipantLinkedinCell } from "./ParticipantLinkedinCell";
 import { CalendarDays, Check, Clipboard, ExternalLink, FileSpreadsheet, LoaderCircle, MessageCircle, Pencil, Plus, Search, ShieldCheck, Trash2, UsersRound, X } from "lucide-react";
-import { humanshipCompanyRestrictionGroups, humanshipRestrictionVersion, humanshipRoleReferences } from "@/lib/humanship/restrictions";
 import type { HumanshipClassification, HumanshipDecision, HumanshipEvent, HumanshipParticipant, HumanshipRestrictionSnapshot, HumanshipRoleRule, HumanshipRoleRuleDecision } from "@/lib/humanship/types";
 import { buildWhatsAppLink } from "@/lib/humanship/whatsapp";
 
@@ -517,18 +516,204 @@ function RoleCell({ participant, event, pending, onRoleRule }: { participant: Hu
   </td>;
 }
 
-function RestrictionsTab({ event }: { event: HumanshipEvent }) {
+function RestrictionsTab({
+  event,
+  current,
+  canManage,
+  pending,
+  onSave,
+  onApply,
+}: {
+  event: HumanshipEvent;
+  current: RestrictionConfig | null;
+  canManage: boolean;
+  pending: Pending;
+  onSave: (next: RestrictionConfig) => Promise<void>;
+  onApply: () => Promise<void>;
+}) {
+  const eventSnapshot = event.restrictionSnapshot;
+  const base: RestrictionConfig = current || eventSnapshot || {
+    version: event.restrictionVersion,
+    companyGroups: [],
+    roleReferences: [],
+  };
+  const [draft, setDraft] = useState<RestrictionConfig>(base);
+
+  useEffect(() => {
+    setDraft(current || event.restrictionSnapshot || {
+      version: event.restrictionVersion,
+      companyGroups: [],
+      roleReferences: [],
+    });
+  }, [current, event.id, event.restrictionVersion, event.restrictionSnapshot]);
+
   const accepted = (event.roleRules ?? []).filter((rule) => rule.decision === "accepted");
   const rejected = (event.roleRules ?? []).filter((rule) => rule.decision === "rejected");
-  return <section className="mt-5 grid gap-5">
-    <div className="rounded-lg border border-[var(--share-line)] bg-white p-5"><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-[var(--share-green-800)]" /><div><h2 className="font-semibold text-[var(--share-green-950)]">Restrições e regras vigentes</h2><p className="text-sm text-zinc-600">Versão {humanshipRestrictionVersion}. As decisões manuais de cargo ficam salvas e são reutilizadas nas próximas análises.</p></div></div></div>
-    <div className="rounded-lg border border-[var(--share-line)] bg-white p-5"><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Restrição 01</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Concorrentes e patrocinadores</h3><div className="mt-4 grid gap-3 md:grid-cols-2">{humanshipCompanyRestrictionGroups.map((group) => <article key={`${group.reference}-${group.category}`} className="rounded-md border border-[var(--share-line)] p-3"><p className="font-semibold">{group.reference}</p><p className="mt-1 text-xs text-zinc-500">{group.category}</p><p className="mt-2 text-sm text-zinc-700">{group.companies.join(" · ")}</p></article>)}</div></div>
-    <div className="rounded-lg border border-[var(--share-line)] bg-white p-5"><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Restrição 02</p><h3 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Cargos executivos de RH e Pessoas</h3><p className="mt-2 text-sm leading-6 text-zinc-600">Os títulos abaixo são a referência original. Cargos próximos podem ser ensinados pelo time diretamente na tabela de resultados.</p><div className="mt-4 flex flex-wrap gap-2">{humanshipRoleReferences.map((role) => <span key={role} className="rounded-full border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-1.5 text-xs font-medium text-zinc-700">{role}</span>)}</div></div>
-    <div className="grid gap-5 lg:grid-cols-2">
-      <RoleRuleList title={`Cargos aceitos · ${accepted.length}`} rules={accepted} empty="Nenhum cargo adicional foi aprovado ainda." tone="accepted" />
-      <RoleRuleList title={`Cargos reprovados · ${rejected.length}`} rules={rejected} empty="Nenhum cargo adicional foi reprovado ainda." tone="rejected" />
-    </div>
-  </section>;
+  const saving = pending === "restrictions";
+  const applying = pending === "apply_restrictions";
+  const currentVersion = current?.version || base.version;
+  const eventUsesCurrent = currentVersion === event.restrictionVersion;
+
+  function updateGroup(index: number, patch: Partial<RestrictionConfig["companyGroups"][number]>) {
+    setDraft((value) => ({
+      ...value,
+      companyGroups: value.companyGroups.map((group, position) => position === index ? { ...group, ...patch } : group),
+    }));
+  }
+
+  return (
+    <section className="grid gap-5">
+      <article className="rounded-2xl border border-[var(--share-line)] bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="rounded-xl bg-[#edf7eb] p-2 text-[var(--share-green-900)]"><ShieldCheck className="h-5 w-5" /></span>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#006142]">Restrições do Humanship</p>
+              <h2 className="mt-1 text-xl font-semibold text-[#003f2c]">Regras versionadas</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">
+                Cada evento mantém a versão usada na análise. Alterar a configuração cria uma nova versão e não muda eventos antigos automaticamente.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full bg-[#eef6e8] px-3 py-1.5 font-bold text-[#52712b]">Evento: {event.restrictionVersion}</span>
+            <span className="rounded-full bg-zinc-100 px-3 py-1.5 font-bold text-zinc-600">Atual: {currentVersion}</span>
+          </div>
+        </div>
+
+        {canManage ? (
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void onSave(draft)}
+              disabled={saving || !draft.companyGroups.length || !draft.roleReferences.length}
+              className="rounded-xl bg-[#006142] px-4 py-2 text-sm font-bold text-white disabled:opacity-45"
+            >
+              {saving ? "Salvando nova versão..." : "Salvar nova versão"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void onApply()}
+              disabled={applying || eventUsesCurrent}
+              className="rounded-xl border border-[#b8ceb5] px-4 py-2 text-sm font-bold text-[#006142] disabled:opacity-45"
+            >
+              {applying ? "Aplicando..." : eventUsesCurrent ? "Evento já usa a versão atual" : "Aplicar versão atual ao evento"}
+            </button>
+          </div>
+        ) : (
+          <p className="mt-5 rounded-xl border border-[#dce6d9] bg-[#f8fbf6] px-4 py-3 text-sm text-zinc-600">
+            Somente usuários com permissão <strong>ADM Humanship</strong> podem alterar as restrições. A equipe continua visualizando a versão aplicada ao evento.
+          </p>
+        )}
+      </article>
+
+      <article className="rounded-2xl border border-[var(--share-line)] bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#006142]">Restrição 01</p>
+            <h3 className="mt-1 text-xl font-semibold text-[#003f2c]">Empresas e grupos restritos</h3>
+          </div>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={() => setDraft((value) => ({
+                ...value,
+                companyGroups: [...value.companyGroups, { reference: "", category: "", companies: [] }],
+              }))}
+              className="inline-flex items-center gap-2 rounded-xl border border-[#b8ceb5] px-3 py-2 text-xs font-bold text-[#006142]"
+            >
+              <Plus className="h-3.5 w-3.5" /> Adicionar grupo
+            </button>
+          ) : null}
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {draft.companyGroups.map((group, index) => (
+            <div key={`${index}-${group.reference}-${group.category}`} className="rounded-xl border border-[#dce6d9] bg-[#fbfdf9] p-4">
+              {canManage ? (
+                <>
+                  <div className="flex items-start gap-2">
+                    <div className="grid min-w-0 flex-1 gap-2">
+                      <input
+                        value={group.reference}
+                        onChange={(e) => updateGroup(index, { reference: e.target.value })}
+                        placeholder="Referência / patrocinador"
+                        className="h-10 rounded-lg border border-[#cbdcc9] bg-white px-3 text-sm font-semibold text-[#003f2c]"
+                      />
+                      <input
+                        value={group.category}
+                        onChange={(e) => updateGroup(index, { category: e.target.value })}
+                        placeholder="Categoria da restrição"
+                        className="h-10 rounded-lg border border-[#cbdcc9] bg-white px-3 text-sm text-zinc-700"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDraft((value) => ({
+                        ...value,
+                        companyGroups: value.companyGroups.filter((_, position) => position !== index),
+                      }))}
+                      className="rounded-lg p-2 text-red-600 hover:bg-red-50"
+                      aria-label="Remover grupo"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={group.companies.join("\n")}
+                    onChange={(e) => updateGroup(index, {
+                      companies: e.target.value.split(/\n|,/).map((item) => item.trim()).filter(Boolean),
+                    })}
+                    placeholder="Uma empresa por linha"
+                    className="mt-3 w-full rounded-lg border border-[#cbdcc9] bg-white p-3 text-sm text-zinc-700"
+                  />
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-[#003f2c]">{group.reference}</p>
+                  <p className="mt-1 text-xs text-zinc-500">{group.category}</p>
+                  <p className="mt-3 text-sm leading-6 text-zinc-700">{group.companies.join(" · ")}</p>
+                </>
+              )}
+            </div>
+          ))}
+          {!draft.companyGroups.length ? <p className="text-sm text-zinc-500">Nenhum grupo restrito cadastrado.</p> : null}
+        </div>
+      </article>
+
+      <article className="rounded-2xl border border-[var(--share-line)] bg-white p-5 shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#006142]">Restrição 02</p>
+        <h3 className="mt-1 text-xl font-semibold text-[#003f2c]">Cargos executivos de RH e Pessoas</h3>
+        <p className="mt-2 text-sm leading-6 text-zinc-600">
+          Esta lista é usada como referência de senioridade e proximidade. Os cargos aprendidos manualmente continuam registrados separadamente.
+        </p>
+        {canManage ? (
+          <textarea
+            rows={10}
+            value={draft.roleReferences.join("\n")}
+            onChange={(e) => setDraft((value) => ({
+              ...value,
+              roleReferences: e.target.value.split("\n").map((item) => item.trim()).filter(Boolean),
+            }))}
+            className="mt-4 w-full rounded-xl border border-[#cbdcc9] bg-[#fbfdf9] p-4 text-sm leading-6 text-zinc-700"
+            placeholder="Um cargo por linha"
+          />
+        ) : (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {draft.roleReferences.map((role) => (
+              <span key={role} className="rounded-full border border-[var(--share-line)] bg-[#fbfdf8] px-3 py-1.5 text-xs font-medium text-zinc-700">{role}</span>
+            ))}
+          </div>
+        )}
+      </article>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <RoleRuleList title={`Cargos aceitos · ${accepted.length}`} rules={accepted} empty="Nenhum cargo adicional foi aprovado ainda." tone="accepted" />
+        <RoleRuleList title={`Cargos reprovados · ${rejected.length}`} rules={rejected} empty="Nenhum cargo adicional foi reprovado ainda." tone="rejected" />
+      </div>
+    </section>
+  );
 }
 
 function RoleRuleList({ title, rules, empty, tone }: { title: string; rules: HumanshipRoleRule[]; empty: string; tone: HumanshipRoleRuleDecision }) {
