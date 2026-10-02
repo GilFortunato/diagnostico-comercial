@@ -151,7 +151,7 @@ export function WhatsGeneratorExperience() {
 
   async function generateAll() {
     if (!active) return;
-    const recipients = active.recipients.filter((recipient) => recipient.status !== "do_not_contact");
+    const recipients = active.recipients.filter((recipient) => recipient.status !== "do_not_contact" && recipient.status !== "sent");
     if (!recipients.length) return;
     setBusy("generate-all");
     setGenerationProgress({ done: 0, total: recipients.length });
@@ -369,7 +369,7 @@ function NewCampaign(props: {
         <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[var(--share-line)] bg-[#fbfdf8] p-6 text-center hover:border-[var(--share-green-700)]">
           {busy === "import" ? <LoaderCircle className="h-7 w-7 animate-spin text-[var(--share-green-800)]" /> : <Upload className="h-7 w-7 text-[var(--share-green-800)]" />}
           <strong className="mt-2 text-sm">{imported ? imported.fileName : "Selecionar .xlsx ou .csv"}</strong>
-          <span className="mt-1 text-xs text-zinc-500">Primeira linha deve conter os nomes das colunas</span>
+          <span className="mt-1 text-xs text-zinc-500">Primeira linha deve conter os nomes das colunas · até 1.500 contatos</span>
           <input type="file" accept=".xlsx,.csv" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) onFile(file); }} />
         </label>
 
@@ -421,7 +421,7 @@ function CampaignWorkspace(props: {
       </div>
       <button type="button" onClick={onGenerateAll} disabled={busy === "generate-all"} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--share-green-950)] px-5 text-sm font-bold text-white disabled:opacity-50">
         {busy === "generate-all" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <MessageCircleMore className="h-4 w-4" />}
-        {campaign.generatedCount ? "Gerar novamente para todos" : "Gerar mensagens"}
+        {campaign.generatedCount ? "Gerar mensagens pendentes" : "Gerar mensagens"}
       </button>
     </div>
 
@@ -441,14 +441,14 @@ function CampaignWorkspace(props: {
           <div>
             <textarea value={draft} disabled={recipient.status === "do_not_contact"} onChange={(event) => setDrafts((current) => ({ ...current, [recipient.id]: event.target.value }))} rows={5} placeholder="A mensagem individual aparecerá aqui após a geração." className="w-full rounded-xl border border-[var(--share-line)] p-3 text-sm leading-6 disabled:bg-zinc-100" />
             <div className="mt-2 flex flex-wrap gap-2">
-              <SmallButton icon={RefreshCw} label={regenerateBusy ? "Gerando..." : "Regenerar"} disabled={Boolean(busy) || recipient.status === "do_not_contact"} onClick={() => onRegenerate(recipient.id)} />
-              <SmallButton icon={Check} label={patchBusy ? "Salvando..." : "Salvar edição"} disabled={patchBusy || !draft.trim() || recipient.status === "do_not_contact"} onClick={() => onSave(recipient.id)} />
+              <SmallButton icon={RefreshCw} label={regenerateBusy ? "Gerando..." : "Regenerar"} disabled={Boolean(busy) || recipient.status === "do_not_contact" || recipient.status === "sent"} onClick={() => onRegenerate(recipient.id)} />
+              <SmallButton icon={Check} label={patchBusy ? "Salvando..." : "Salvar edição"} disabled={patchBusy || !draft.trim() || recipient.status === "do_not_contact" || recipient.status === "sent"} onClick={() => onSave(recipient.id)} />
               <SmallButton icon={Clipboard} label="Copiar" disabled={!draft.trim()} onClick={() => void navigator.clipboard.writeText(draft)} />
             </div>
           </div>
           <div className="flex flex-col gap-2">
-            <button type="button" disabled={!draft.trim() || recipient.status === "do_not_contact"} onClick={() => openWhatsApp(recipient.phone, draft)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#25D366] px-3 text-xs font-bold text-white disabled:opacity-40"><Send className="h-4 w-4" /> Abrir WhatsApp</button>
-            <button type="button" disabled={patchBusy || recipient.status === "do_not_contact"} onClick={() => onSent(recipient.id)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[var(--share-line)] px-3 text-xs font-bold text-[var(--share-green-900)] disabled:opacity-40"><CheckCircle2 className="h-4 w-4" /> Marcar enviado</button>
+            <button type="button" disabled={!draft.trim() || recipient.status === "do_not_contact" || recipient.status === "sent"} onClick={() => openWhatsApp(recipient.phone, draft)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#25D366] px-3 text-xs font-bold text-white disabled:opacity-40"><Send className="h-4 w-4" /> Abrir WhatsApp</button>
+            <button type="button" disabled={patchBusy || recipient.status === "do_not_contact" || recipient.status === "sent"} onClick={() => onSent(recipient.id)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[var(--share-line)] px-3 text-xs font-bold text-[var(--share-green-900)] disabled:opacity-40"><CheckCircle2 className="h-4 w-4" /> Marcar enviado</button>
             <button type="button" disabled={patchBusy || recipient.status === "do_not_contact"} onClick={() => onDoNotContact(recipient.id)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold text-zinc-500 hover:bg-zinc-100 disabled:opacity-40"><UserRoundX className="h-4 w-4" /> Não contatar</button>
           </div>
         </article>;
