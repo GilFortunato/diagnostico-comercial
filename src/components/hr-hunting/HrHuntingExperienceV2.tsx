@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, Copy, Download, ExternalLink, LoaderCircle, Plus, Search, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { BriefcaseBusiness, Check, Copy, Download, ExternalLink, FolderSearch, ListChecks, LoaderCircle, Plus, Search, UserRoundSearch, X } from "lucide-react";
 import { buildLinkedInOutreachMessage } from "@/components/hr-hunting/outreachMessage";
 import type { HrCandidate, HrHuntingSearchSnapshot, JobDna } from "@/lib/hr-hunting/types";
 
@@ -12,6 +12,32 @@ type Pending = "job" | "dna" | "search" | "more" | "export" | null;
 const emptyForm: JobForm = { description: "", jobUrl: "", companyName: "", recruiterName: "" };
 const emptyFilters: SearchFilters = { quantity: 50, currentTitle: "", location: "", keywords: "", seniority: [] };
 
+type WorkspaceView = "new" | "all" | "mine" | "shortlists" | "candidates" | "search";
+type SavedSearchSummary = {
+  id: string;
+  title: string;
+  companyName?: string | null;
+  recruiterName?: string | null;
+  status: string;
+  updatedAt: string;
+  candidates: number;
+  shortlist: number;
+  ownerId: string;
+  ownerName: string;
+  mine: boolean;
+};
+type CandidateBankItem = {
+  id: string;
+  name: string;
+  currentTitle?: string | null;
+  currentCompany?: string | null;
+  location?: string | null;
+  linkedinUrl?: string | null;
+  lastExternalLookupAt?: string | null;
+  updatedAt: string;
+  reviews: Array<{ id: string; verdict: string; reviewerName: string; note?: string | null; searchTitle?: string | null; createdAt: string }>;
+};
+
 export function HrHuntingExperienceV2({ accountName }: { accountName?: string | null }) {
   const [search, setSearch] = useState<HrHuntingSearchSnapshot | null>(null);
   const [form, setForm] = useState<JobForm>(emptyForm);
@@ -20,9 +46,71 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
   const [candidate, setCandidate] = useState<HrCandidate | null>(null);
   const [pending, setPending] = useState<Pending>(null);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<WorkspaceView>("new");
+  const [savedSearches, setSavedSearches] = useState<SavedSearchSummary[]>([]);
+  const [candidateBank, setCandidateBank] = useState<CandidateBankItem[]>([]);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
 
   const sorted = useMemo(() => [...(search?.candidates || [])].sort((a, b) => b.fitScore - a.fitScore || a.name.localeCompare(b.name, "pt-BR")), [search]);
   const selectedCandidates = sorted.filter((item) => selected.includes(item.id));
+  const visibleSearches = useMemo(() => {
+    if (view === "mine") return savedSearches.filter((item) => item.mine);
+    if (view === "shortlists") return savedSearches.filter((item) => item.mine && item.shortlist > 0);
+    return savedSearches;
+  }, [savedSearches, view]);
+
+  useEffect(() => {
+    void refreshSavedSearches();
+  }, []);
+
+  async function refreshSavedSearches() {
+    try {
+      const response = await fetch("/api/hr-hunting", { cache: "no-store" });
+      const body = await response.json() as { searches?: SavedSearchSummary[] };
+      if (response.ok) setSavedSearches(body.searches || []);
+    } catch {
+      // A navegação continua funcional mesmo se a lista compartilhada estiver temporariamente indisponível.
+    }
+  }
+
+  async function openSavedSearch(id: string) {
+    setWorkspaceLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/hr-hunting/${id}`, { cache: "no-store" });
+      const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
+      if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível abrir a vaga.");
+      setSearch(body.search);
+      setFilters({
+        ...emptyFilters,
+        currentTitle: body.search.jobDna.title || "",
+        location: body.search.jobDna.location || "",
+      });
+      setSelected([]);
+      setCandidate(null);
+      setView("search");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível abrir a vaga.");
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  }
+
+  async function openCandidateBank() {
+    setView("candidates");
+    setWorkspaceLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/hr-hunting/candidates", { cache: "no-store" });
+      const body = await response.json() as { candidates?: CandidateBankItem[]; error?: string };
+      if (!response.ok) throw new Error(body.error || "Não foi possível carregar o banco de candidatos.");
+      setCandidateBank(body.candidates || []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível carregar o banco de candidatos.");
+    } finally {
+      setWorkspaceLoading(false);
+    }
+  }
 
   function resetSearch() {
     setSearch(null);
@@ -32,6 +120,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
     setCandidate(null);
     setError(null);
     setPending(null);
+    setView("new");
     if (typeof window !== "undefined") {
       window.sessionStorage.removeItem("hr-hunting:draft");
       window.localStorage.removeItem("hr-hunting:draft");
@@ -48,6 +137,8 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       setSearch(body.search);
       setFilters({ ...emptyFilters, currentTitle: body.search.jobDna.title || "", location: body.search.jobDna.location || "" });
       setSelected([]);
+      setView("search");
+      await refreshSavedSearches();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível analisar a vaga.");
     } finally { setPending(null); }
@@ -62,6 +153,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível salvar o Job DNA.");
       setSearch(body.search);
       setFilters((current) => ({ ...current, currentTitle: jobDna.title || current.currentTitle, location: jobDna.location || current.location }));
+      await refreshSavedSearches();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível salvar o Job DNA."); }
     finally { setPending(null); }
   }
@@ -77,6 +169,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível buscar candidatos.");
       setSearch(body.search); setSelected([]); setCandidate(null);
+      await refreshSavedSearches();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível buscar candidatos."); }
     finally { setPending(null); }
   }
@@ -95,6 +188,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       setSearch(body.search);
       const added = Math.max(0, body.search.candidates.length - before);
       if (added === 0) setError("Não encontramos novos perfis elegíveis sem repetir os atuais. Você pode ampliar os critérios e fazer uma nova busca.");
+      await refreshSavedSearches();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível carregar mais candidatos."); }
     finally { setPending(null); }
   }
@@ -109,6 +203,16 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       setSearch(body.search);
       setCandidate(body.search.candidates.find((current) => current.id === item.id) || null);
     }
+    await refreshSavedSearches();
+  }
+
+  async function refreshCurrentCandidate(candidateId: string) {
+    if (!search) return;
+    const response = await fetch(`/api/hr-hunting/${search.id}`, { cache: "no-store" });
+    const body = await response.json() as { search?: HrHuntingSearchSnapshot };
+    if (!body.search) return;
+    setSearch(body.search);
+    setCandidate(body.search.candidates.find((current) => current.id === candidateId) || null);
   }
 
   async function exportSnapshot(scope: "all" | "shortlist") {
@@ -125,38 +229,200 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
   }
 
   return (
-    <main className="share-shell min-h-screen text-[var(--share-ink)]">
-      <div className="mx-auto max-w-7xl px-5 py-8">
-        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--share-line)] pb-5">
-          <div><p className="text-xs font-semibold uppercase tracking-wide text-[var(--share-green-800)]">HR Hunting</p><h1 className="mt-1 text-3xl font-semibold text-[var(--share-green-950)]">Encontre e priorize talentos com evidências</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Busca estruturada, enriquecimento progressivo e ranking por critérios profissionais. A decisão final é humana.</p></div>
-          {search ? <button type="button" onClick={resetSearch} className="rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)]">Nova vaga</button> : null}
+    <main className="min-h-screen bg-[#eef4e9] text-[var(--share-ink)]">
+      <div className="mx-auto max-w-[1440px] px-5 py-7">
+        <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--share-green-800)]">HR Hunting</p>
+            <h1 className="mt-1 text-3xl font-semibold text-[var(--share-green-950)]">Workspace de talentos</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Vagas, shortlists e memória de candidatos compartilhadas com toda a equipe autorizada.</p>
+          </div>
+          {search && view === "search" ? (
+            <span className="rounded-full border border-[#cbdcc9] bg-white px-4 py-2 text-xs font-bold text-[#006142]">
+              {huntingLabel(search.ownerName)}
+            </span>
+          ) : null}
         </header>
 
-        {error ? <p className="mt-5 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</p> : null}
+        {error ? <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error}</p> : null}
 
-        {!search ? <Intake form={form} setForm={setForm} pending={pending === "job"} onSubmit={createJob} /> : <>
-          <DnaEditor initial={search.jobDna} pending={pending === "dna"} onSave={saveDna} />
-          <section className="mt-6 rounded-lg border border-[var(--share-line)] bg-white p-5">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Busca de candidatos</p><h2 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Defina o recorte da descoberta</h2><p className="mt-1 text-sm text-zinc-600">Cargo e localização orientam a coleta; palavras-chave ajudam na avaliação, sem abrir a busca para perfis irrelevantes.</p></div>
-              <button type="button" onClick={runSearch} disabled={pending === "search" || pending === "more"} className="inline-flex items-center gap-2 rounded-md bg-[var(--share-green-950)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{pending === "search" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{pending === "search" ? "Buscando candidatos" : "Buscar candidatos"}</button>
-            </div>
-            <div className="mt-5 grid gap-4 md:grid-cols-4"><Field label="Cargo atual" value={filters.currentTitle} setValue={(currentTitle) => setFilters({ ...filters, currentTitle })} placeholder="Ex.: Product Manager" /><Field label="Localização" value={filters.location} setValue={(location) => setFilters({ ...filters, location })} placeholder="Ex.: Jundiaí, SP" /><Field label="Palavras-chave" value={filters.keywords} setValue={(keywords) => setFilters({ ...filters, keywords })} placeholder="Separe por vírgulas" /><label className="grid gap-1 text-sm font-medium text-zinc-700">Resultados iniciais<input type="number" min="5" max="50" value={filters.quantity} onChange={(event) => setFilters({ ...filters, quantity: Number(event.target.value) })} className="h-10 rounded-md border border-[var(--share-line)] px-3 font-normal" /></label></div>
+        <div className="grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]">
+          <WorkspaceSidebar
+            view={view}
+            searches={savedSearches}
+            onNew={resetSearch}
+            onView={(next) => { setView(next); setCandidate(null); }}
+            onCandidates={() => void openCandidateBank()}
+          />
+
+          <section className="min-w-0">
+            {workspaceLoading ? (
+              <div className="rounded-3xl border border-[#cbdcc9] bg-white p-8 text-sm text-zinc-600 shadow-sm">
+                <span className="inline-flex items-center gap-2"><LoaderCircle className="h-4 w-4 animate-spin" /> Carregando workspace...</span>
+              </div>
+            ) : null}
+
+            {!workspaceLoading && view === "new" ? <Intake form={form} setForm={setForm} pending={pending === "job"} onSubmit={createJob} /> : null}
+
+            {!workspaceLoading && ["all", "mine", "shortlists"].includes(view) ? (
+              <SavedSearchList
+                title={view === "all" ? "Todas as vagas" : view === "mine" ? "Minhas vagas" : "Minhas shortlists"}
+                searches={visibleSearches}
+                onOpen={(id) => void openSavedSearch(id)}
+              />
+            ) : null}
+
+            {!workspaceLoading && view === "candidates" ? <CandidateBank candidates={candidateBank} /> : null}
+
+            {!workspaceLoading && view === "search" && search ? (
+              <>
+                <article className="rounded-3xl border border-[#cbdcc9] bg-white p-6 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#006142]">{huntingLabel(search.ownerName)}</p>
+                      <h2 className="mt-1 text-2xl font-semibold text-[#003f2c]">{search.title}</h2>
+                      <p className="mt-2 text-sm text-zinc-500">{search.companyName || "Empresa não informada"} · {search.candidates.length} candidato(s) · {search.candidates.filter((item) => item.shortlisted).length} na shortlist</p>
+                    </div>
+                    <button type="button" onClick={resetSearch} className="rounded-xl border border-[#cbdcc9] px-4 py-2 text-sm font-semibold text-[#006142]">Nova vaga</button>
+                  </div>
+                </article>
+
+                <DnaEditor initial={search.jobDna} pending={pending === "dna"} onSave={saveDna} />
+                <section className="mt-6 rounded-3xl border border-[#cbdcc9] bg-white p-5 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Busca de candidatos</p><h2 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Defina o recorte da descoberta</h2><p className="mt-1 text-sm text-zinc-600">O banco Share é consultado primeiro. Somente a lacuna de perfis segue para fontes externas.</p></div>
+                    <button type="button" onClick={runSearch} disabled={pending === "search" || pending === "more"} className="inline-flex items-center gap-2 rounded-xl bg-[var(--share-green-950)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{pending === "search" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{pending === "search" ? "Buscando candidatos" : "Buscar candidatos"}</button>
+                  </div>
+                  <div className="mt-5 grid gap-4 md:grid-cols-4"><Field label="Cargo atual" value={filters.currentTitle} setValue={(currentTitle) => setFilters({ ...filters, currentTitle })} placeholder="Ex.: Product Manager" /><Field label="Localização" value={filters.location} setValue={(location) => setFilters({ ...filters, location })} placeholder="Ex.: Jundiaí, SP" /><Field label="Palavras-chave" value={filters.keywords} setValue={(keywords) => setFilters({ ...filters, keywords })} placeholder="Separe por vírgulas" /><label className="grid gap-1 text-sm font-medium text-zinc-700">Resultados iniciais<input type="number" min="5" max="50" value={filters.quantity} onChange={(event) => setFilters({ ...filters, quantity: Number(event.target.value) })} className="h-10 rounded-md border border-[var(--share-line)] px-3 font-normal" /></label></div>
+                </section>
+
+                <ConnectorNotice status={search.status} warnings={search.connectorWarnings} />
+                {search.status === "job_dna_ready" ? <State title="Job DNA pronto para revisão" text="Revise o cargo e os critérios profissionais antes de iniciar a busca." /> : null}
+                {search.status === "no_results" ? <State title="Nenhum candidato elegível neste recorte" text="Amplie a família de cargo ou a localização. Falha de fonte é tratada separadamente e não vira falso zero." /> : null}
+                {search.status === "connector_error" ? <State title="A pesquisa não pôde ser concluída" text="Os resultados existentes foram preservados. Teste a conexão e tente novamente." /> : null}
+
+                {sorted.length ? <Results candidates={sorted} selected={selected} setSelected={setSelected} onOpen={setCandidate} onShortlist={toggleShortlist} onExport={exportSnapshot} exporting={pending === "export"} onLoadMore={loadMore} loadingMore={pending === "more"} /> : null}
+                {selectedCandidates.length >= 2 ? <Compare candidates={selectedCandidates} /> : null}
+              </>
+            ) : null}
           </section>
+        </div>
 
-          <ConnectorNotice status={search.status} warnings={search.connectorWarnings} />
-          {search.status === "job_dna_ready" ? <State title="Job DNA pronto para revisão" text="Revise o cargo e os critérios profissionais antes de iniciar a busca." /> : null}
-          {search.status === "no_results" ? <State title="Nenhum candidato elegível neste recorte" text="Amplie a família de cargo ou a localização. Falha de fonte é tratada separadamente e não vira falso zero." /> : null}
-          {search.status === "connector_error" ? <State title="A pesquisa não pôde ser concluída" text="Os resultados existentes foram preservados. Teste a conexão e tente novamente." /> : null}
-
-          {sorted.length ? <Results candidates={sorted} selected={selected} setSelected={setSelected} onOpen={setCandidate} onShortlist={toggleShortlist} onExport={exportSnapshot} exporting={pending === "export"} onLoadMore={loadMore} loadingMore={pending === "more"} /> : null}
-          {selectedCandidates.length >= 2 ? <Compare candidates={selectedCandidates} /> : null}
-        </>}
-
-        {candidate && search ? <CandidateDrawer candidate={candidate} search={search} accountName={accountName} onClose={() => setCandidate(null)} onShortlist={toggleShortlist} /> : null}
+        {candidate && search ? <CandidateDrawer candidate={candidate} search={search} accountName={accountName} onClose={() => setCandidate(null)} onShortlist={toggleShortlist} onReviewed={() => void refreshCurrentCandidate(candidate.id)} /> : null}
       </div>
     </main>
   );
+}
+
+function WorkspaceSidebar({
+  view,
+  searches,
+  onNew,
+  onView,
+  onCandidates,
+}: {
+  view: WorkspaceView;
+  searches: SavedSearchSummary[];
+  onNew: () => void;
+  onView: (view: WorkspaceView) => void;
+  onCandidates: () => void;
+}) {
+  const mine = searches.filter((item) => item.mine).length;
+  const shortlist = searches.filter((item) => item.mine && item.shortlist > 0).length;
+  const items = [
+    { key: "all" as const, label: "Todas as vagas", icon: BriefcaseBusiness, count: searches.length },
+    { key: "mine" as const, label: "Minhas vagas", icon: FolderSearch, count: mine },
+    { key: "shortlists" as const, label: "Minhas shortlists", icon: ListChecks, count: shortlist },
+  ];
+
+  return (
+    <aside className="self-start rounded-3xl border border-[#cbdcc9] bg-[#003f2c] p-4 text-white shadow-sm lg:sticky lg:top-24">
+      <p className="px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#dcef55]">HR Workspace</p>
+      <button type="button" onClick={onNew} className={`mt-3 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold ${view === "new" ? "bg-[#dcef55] text-[#173b28]" : "bg-white text-[#003f2c]"}`}>
+        <Plus className="h-4 w-4" /> Nova busca
+      </button>
+      <nav className="mt-4 space-y-1">
+        {items.map(({ key, label, icon: Icon, count }) => (
+          <button key={key} type="button" onClick={() => onView(key)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold ${view === key ? "bg-white/15 text-white" : "text-white/75 hover:bg-white/10 hover:text-white"}`}>
+            <Icon className="h-4 w-4" /><span className="flex-1">{label}</span><span className="text-xs text-white/55">{count}</span>
+          </button>
+        ))}
+        <button type="button" onClick={onCandidates} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold ${view === "candidates" ? "bg-white/15 text-white" : "text-white/75 hover:bg-white/10 hover:text-white"}`}>
+          <UserRoundSearch className="h-4 w-4" /><span className="flex-1">Todos os candidatos</span>
+        </button>
+      </nav>
+      <div className="mt-5 border-t border-white/10 pt-4 px-2">
+        <p className="text-[10px] uppercase tracking-[0.14em] text-white/40">Memória Share</p>
+        <p className="mt-2 text-xs leading-5 text-white/60">Perfis conhecidos são consultados antes de novas chamadas externas.</p>
+      </div>
+    </aside>
+  );
+}
+
+function SavedSearchList({ title, searches, onOpen }: { title: string; searches: SavedSearchSummary[]; onOpen: (id: string) => void }) {
+  return (
+    <section className="rounded-3xl border border-[#cbdcc9] bg-white p-6 shadow-sm">
+      <div className="mb-5">
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#006142]">Workspace compartilhado</p>
+        <h2 className="mt-1 text-2xl font-semibold text-[#003f2c]">{title}</h2>
+      </div>
+      {!searches.length ? <p className="rounded-2xl border border-dashed border-[#cbdcc9] px-5 py-10 text-center text-sm text-zinc-500">Nenhuma vaga nesta área ainda.</p> : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {searches.map((item) => (
+            <button key={item.id} type="button" onClick={() => onOpen(item.id)} className="rounded-2xl border border-[#d8e3d6] bg-[#fbfdf9] p-5 text-left transition hover:border-[#8caf83] hover:bg-white">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#006142]">{huntingLabel(item.ownerName)}</p>
+                  <h3 className="mt-1 text-lg font-semibold text-[#003f2c]">{item.title}</h3>
+                  <p className="mt-1 text-xs text-zinc-500">{item.companyName || "Empresa não informada"}</p>
+                </div>
+                {item.mine ? <span className="rounded-full bg-[#e9f5dc] px-2.5 py-1 text-[10px] font-bold uppercase text-[#47651a]">Minha</span> : null}
+              </div>
+              <div className="mt-4 flex gap-4 text-xs text-zinc-500">
+                <span>{item.candidates} candidatos</span>
+                <span>{item.shortlist} shortlist</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CandidateBank({ candidates }: { candidates: CandidateBankItem[] }) {
+  return (
+    <section className="rounded-3xl border border-[#cbdcc9] bg-white p-6 shadow-sm">
+      <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#006142]">Memória da equipe</p>
+      <h2 className="mt-1 text-2xl font-semibold text-[#003f2c]">Todos os candidatos</h2>
+      <p className="mt-2 text-sm text-zinc-500">Perfis já encontrados pela Share e disponíveis para reaproveitamento em novas vagas.</p>
+      <div className="mt-5 divide-y divide-[#e4ebe2]">
+        {candidates.map((item) => {
+          const latest = item.reviews[0];
+          return (
+            <div key={item.id} className="flex flex-wrap items-start justify-between gap-4 py-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <strong className="text-[#003f2c]">{item.name}</strong>
+                  {latest ? <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${latest.verdict === "recommended" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{latest.verdict === "recommended" ? "Recomendado" : "Alerta"}</span> : null}
+                </div>
+                <p className="mt-1 text-sm text-zinc-600">{item.currentTitle || "Cargo não informado"}{item.currentCompany ? ` · ${item.currentCompany}` : ""}</p>
+                {latest ? <p className="mt-2 text-xs text-zinc-500">{latest.reviewerName}{latest.searchTitle ? ` · ${latest.searchTitle}` : ""}{latest.note ? ` · ${latest.note}` : ""}</p> : null}
+              </div>
+              {item.linkedinUrl ? <a href={item.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-[#006142]">LinkedIn <ExternalLink className="h-3.5 w-3.5" /></a> : null}
+            </div>
+          );
+        })}
+        {!candidates.length ? <p className="py-10 text-center text-sm text-zinc-500">O banco de candidatos ainda está vazio.</p> : null}
+      </div>
+    </section>
+  );
+}
+
+function huntingLabel(ownerName?: string) {
+  const first = (ownerName || "Equipe").trim().split(/\s+/)[0] || "Equipe";
+  if (first.toLocaleLowerCase("pt-BR") === "gil") return "Hunting da Gil";
+  return `Hunting de ${first}`;
 }
 
 function Intake({ form, setForm, pending, onSubmit }: { form: JobForm; setForm: (value: JobForm) => void; pending: boolean; onSubmit: () => void }) {
