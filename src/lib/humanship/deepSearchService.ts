@@ -9,7 +9,7 @@ import { runHumanshipManusDeepSearch } from "@/lib/humanship/manusDeepSearch";
 import { classifyHumanshipParticipant, normalizeHumanshipRoleTitle } from "@/lib/humanship/restrictions";
 import type { HumanshipEvent, HumanshipParticipant } from "@/lib/humanship/types";
 
-export async function enhanceHumanshipEventWithDeepSearch(ownerId: string, event: HumanshipEvent) {
+export async function enhanceHumanshipEventWithDeepSearch(_actorId: string, event: HumanshipEvent) {
   const unresolved = event.participants.filter((participant) => ["not_found", "probable", "error"].includes(participant.searchStatus));
   if (!unresolved.length) return { attempted: 0, improved: 0, warnings: [] as string[] };
 
@@ -117,7 +117,6 @@ export async function enhanceHumanshipEventWithDeepSearch(ownerId: string, event
           "companyRestriction" = ${classification.companyAssessment.restricted ? classification.companyAssessment.reason : null},
           "updatedAt" = CURRENT_TIMESTAMP
         WHERE "id" = ${participant.id} AND "searchStatus" <> 'manual'
-          AND EXISTS (SELECT 1 FROM "HumanshipEvent" e WHERE e."id" = "HumanshipParticipant"."eventId" AND e."ownerId" = ${ownerId})
       `);
       improved += 1;
     }
