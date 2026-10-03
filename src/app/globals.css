@@ -535,69 +535,66 @@ textarea {
 
 
 
-/* Nexus labels: icon and copy are positioned independently inside each wedge. */
+  .share-hub-sector-icon { width:26px; height:26px; }
+  .share-hub-sector-icon svg { width:14px; height:14px; }
+  .share-hub-sector-title { font-size:8.5px; }
+  .share-hub-sector-description { display:none; }
+}
+
+
+/* Final Nexus label model: icon + title as one compact centered unit. */
 .share-hub-sector-label {
-  width:92px;
-  min-height:58px;
-  padding:0;
+  width:88px;
+  min-height:72px;
+  padding:0 3px;
   transform:translate(-50%,-50%);
-  overflow:visible;
-  justify-content:center;
-}
-.share-hub-sector-icon-anchor {
-  position:absolute;
-  z-index:2;
-  transform:translate(-50%,-50%);
-  pointer-events:none;
-}
-.share-hub-sector-copy {
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  width:100%;
-  gap:2px;
-  pointer-events:none;
+  gap:4px;
+  overflow:visible;
 }
-.share-hub-sector-title {
-  font-size:10px;
-  line-height:1.02;
-}
-.share-hub-sector-description {
-  font-size:7.2px;
-  line-height:1.12;
-  margin-top:1px;
-}
-.share-hub-sector-badge {
-  margin:0 0 2px;
-}
-
-/* Keep the icon comfortably between the inner and outer rings. */
 .share-hub-sector-icon {
   width:30px;
   height:30px;
   margin:0;
+  flex:0 0 auto;
 }
 .share-hub-sector-icon svg {
   width:16px;
   height:16px;
 }
+.share-hub-sector-title {
+  width:100%;
+  font-size:10px;
+  line-height:1.04;
+  text-align:center;
+  font-weight:800;
+}
+.share-hub-sector-description {
+  display:none !important;
+}
+.share-hub-sector-badge {
+  margin:-1px 0 0;
+  font-size:6px;
+  padding:2px 5px;
+}
 
-/* Small optical nudges for the copy only; icons stay on the sector radial axis. */
-.share-hub-sector-label.is-humanship .share-hub-sector-copy { transform:translateX(3px); }
-.share-hub-sector-label.is-whats-generator .share-hub-sector-copy { transform:translateX(-3px); }
-.share-hub-sector-label.is-diagnostico .share-hub-sector-copy { transform:translateX(2px); }
-.share-hub-sector-label.is-mkt-scout .share-hub-sector-copy { transform:translateX(-2px); }
-.share-hub-sector-label.is-rapport .share-hub-sector-copy { transform:translate(2px,-2px); }
-.share-hub-sector-label.is-events .share-hub-sector-copy { transform:translate(-2px,-2px); }
-.share-hub-sector-label.is-meetings .share-hub-sector-copy { transform:translateY(-4px); }
-.share-hub-sector-label.is-hr .share-hub-sector-copy,
-.share-hub-sector-label.is-b2b .share-hub-sector-copy { transform:translateY(3px); }
+/* Slight optical centering only where the wedge geometry needs it. */
+.share-hub-sector-label.is-humanship { transform:translate(-44%,-50%); }
+.share-hub-sector-label.is-whats-generator { transform:translate(-56%,-50%); }
+.share-hub-sector-label.is-diagnostico { transform:translate(-46%,-50%); }
+.share-hub-sector-label.is-mkt-scout { transform:translate(-54%,-50%); }
+.share-hub-sector-label.is-rapport { transform:translate(-47%,-52%); }
+.share-hub-sector-label.is-events { transform:translate(-53%,-52%); }
+.share-hub-sector-label.is-meetings { transform:translate(-50%,-56%); }
+.share-hub-sector-label.is-hr,
+.share-hub-sector-label.is-b2b { transform:translate(-50%,-46%); }
 
 @media (max-width:600px) {
-  .share-hub-sector-label { width:74px; min-height:48px; }
+  .share-hub-sector-label { width:70px; min-height:60px; gap:2px; }
   .share-hub-sector-icon { width:26px; height:26px; }
   .share-hub-sector-icon svg { width:14px; height:14px; }
   .share-hub-sector-title { font-size:8.5px; }
-  .share-hub-sector-description { display:none; }
 }
