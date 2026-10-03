@@ -304,10 +304,13 @@ textarea {
   position:absolute; z-index:5; transform:translate(-50%,-50%);
   width:max-content; max-width:20cqw; padding:0;
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:clamp(3px,.7cqw,4px);
-  color:rgb(255 255 255 / .95); border:0; background:transparent; text-align:center; cursor:pointer;
+  color:#eaf2ed; border:0; background:transparent; text-align:center; cursor:pointer;
 }
 .share-hub-sector-label.is-selected { color:white; }
-.share-hub-sector-label.is-locked { opacity:.34; cursor:not-allowed; }
+.share-hub-sector-label.is-locked { cursor:not-allowed; }
+.share-hub-sector-label.is-locked .share-hub-sector-icon { opacity:.85; }
+.share-hub-sector-label.is-whats-generator { translate:-.6cqw -.1cqw; }
+.share-hub-sector-label.is-events { translate:-.45cqw -.55cqw; }
 
 .share-hub-sector-icon {
   width:clamp(18px,5.5cqw,30px);
@@ -315,20 +318,20 @@ textarea {
   flex:0 0 auto;
   display:grid;
   place-items:center;
-  border:1px solid rgb(111 232 157 / .38);
+  border:1px solid rgb(196 225 207 / .56);
   border-radius:9px;
   color:rgb(255 255 255 / .96);
   background:
     radial-gradient(circle at 35% 20%, rgb(142 255 150 / .18), transparent 45%),
     linear-gradient(145deg, rgb(18 112 78 / .92), rgb(3 59 44 / .96));
   box-shadow:
-    inset 0 0 0 1px rgb(255 255 255 / .05),
+    inset 0 0 0 1px rgb(235 247 239 / .12),
     inset 0 7px 16px rgb(125 255 171 / .06),
     0 3px 8px rgb(0 0 0 / .24),
     0 0 9px rgb(44 219 124 / .12);
   transition:transform .2s ease,border-color .2s ease,background .2s ease,box-shadow .2s ease,color .2s ease;
 }
-.share-hub-sector-icon svg { width:56%; height:56%; stroke-width:1.75; }
+.share-hub-sector-icon svg { width:56%; height:56%; stroke-width:1.9; }
 .share-hub-sector-label:hover:not(.is-locked) .share-hub-sector-icon {
   border-color:rgb(147 255 179 / .58);
   box-shadow:
@@ -382,12 +385,21 @@ textarea {
 .share-hub-core-node { fill:#eef7b0; filter:drop-shadow(0 0 2px rgb(232 239 84 / .62)); animation:share-core-pulse 3.6s ease-in-out infinite; transform-origin:center; transform-box:fill-box; }
 .share-hub-core-brand { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none; }
 .share-hub-core-wordmark {
-  font-family:Georgia,"Times New Roman",serif;
-  font-size:clamp(38px,4vw,58px);
-  line-height:.78;
-  font-weight:800;
-  letter-spacing:-.045em;
-  color:white;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  font-size:clamp(46px,5.2vw,66px);
+  width:3em;
+  height:.78em;
+}
+.share-hub-core-logo {
+  width:100%;
+  height:auto;
+  max-width:none;
+  object-fit:contain;
+  /* Balance the original PNG's transparent margins without editing the asset. */
+  transform:translate(1.27%,-.96%);
 }
 .share-hub-core-brand span { margin-top:8px; font-size:clamp(17px,1.5vw,25px); font-weight:800; letter-spacing:.01em; text-transform:lowercase; color:white; }
 

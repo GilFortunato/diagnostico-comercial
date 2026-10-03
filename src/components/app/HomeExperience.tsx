@@ -313,19 +313,17 @@ export function HomeExperience({
               <div className="share-hub-core">
                 <NexusCore />
                 <div className="share-hub-core-brand">
-                  <strong
-                    aria-label="share"
-                    style={{
-                      fontFamily: 'Georgia, "Times New Roman", serif',
-                      fontSize: "clamp(46px, 5.2vw, 66px)",
-                      lineHeight: 0.78,
-                      fontWeight: 800,
-                      letterSpacing: "-0.045em",
-                      color: "white",
-                    }}
-                  >
-                    share
-                  </strong>
+                  <div className="share-hub-core-wordmark">
+                    <Image
+                      src="/brand/share-nexus-logo.png"
+                      alt="share"
+                      width={6226}
+                      height={2189}
+                      sizes="(max-width: 884px) 138px, (max-width: 1270px) 16vw, 198px"
+                      className="share-hub-core-logo"
+                      preload
+                    />
+                  </div>
                   <span
                     style={{
                       marginTop: 10,
