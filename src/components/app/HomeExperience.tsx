@@ -34,7 +34,6 @@ type Workspace = {
   key: string;
   title: string;
   shortTitle: string;
-  ringDescription: string;
   category: string;
   href?: string;
   module: PlatformModule;
@@ -52,7 +51,6 @@ const workspaces: Workspace[] = [
     key: "diagnostico",
     title: "Diagnóstico Comercial",
     shortTitle: "Diagnóstico\nComercial",
-    ringDescription: "Análises e insights\nde mercado",
     category: "Autoridade",
     href: "/diagnostico",
     module: "authority.personal",
@@ -64,8 +62,7 @@ const workspaces: Workspace[] = [
   {
     key: "hr",
     title: "HR Hunting",
-    shortTitle: "HR\nHunting",
-    ringDescription: "Talentos para\no seu time",
+    shortTitle: "HR Hunting",
     category: "Pessoas",
     href: "/hr-hunting",
     module: "hr.hunting",
@@ -77,8 +74,7 @@ const workspaces: Workspace[] = [
   {
     key: "b2b",
     title: "B2B Hunting",
-    shortTitle: "B2B\nHunting",
-    ringDescription: "Empresas e decisores\npara novos negócios",
+    shortTitle: "B2B Hunting",
     category: "Comercial",
     href: "/mapa-decisores",
     module: "decision.makers",
@@ -91,7 +87,6 @@ const workspaces: Workspace[] = [
     key: "mkt-scout",
     title: "MKT Scout",
     shortTitle: "MKT Scout",
-    ringDescription: "Tendências e\ninspiração",
     category: "Marketing",
     href: "/sharetrendintelligence",
     module: "creative.trend-intelligence",
@@ -104,8 +99,7 @@ const workspaces: Workspace[] = [
   {
     key: "whats-generator",
     title: "Gerador Whats",
-    shortTitle: "Gerador Whats",
-    ringDescription: "Mensagens individualizadas\npara WhatsApp",
+    shortTitle: "Gerador\nWhats",
     category: "Marketing",
     href: "/gerador-whats",
     module: "communication.whats-generator",
@@ -118,8 +112,7 @@ const workspaces: Workspace[] = [
   {
     key: "events",
     title: "Eventos & Comunidade",
-    shortTitle: "Eventos\ne Comunidade",
-    ringDescription: "Agenda, encontros\ne networking",
+    shortTitle: "Eventos e\nComunidade",
     category: "Pessoas",
     href: "/humanship/eventos",
     module: "humanship.r1ship",
@@ -132,7 +125,6 @@ const workspaces: Workspace[] = [
     key: "meetings",
     title: "Inteligência de Reuniões",
     shortTitle: "Inteligência\nde Reuniões",
-    ringDescription: "Transcrições e insights\nautomáticos",
     category: "Relacionamento",
     module: "meeting.intelligence",
     icon: Camera,
@@ -145,7 +137,6 @@ const workspaces: Workspace[] = [
     key: "rapport",
     title: "Rapport",
     shortTitle: "Rapport",
-    ringDescription: "Relatórios e\napresentações",
     category: "Relacionamento",
     module: "rapport",
     icon: MessageSquareText,
@@ -157,7 +148,6 @@ const workspaces: Workspace[] = [
     key: "humanship",
     title: "Humanship",
     shortTitle: "Humanship",
-    ringDescription: "Pessoas, cultura\ne desenvolvimento",
     category: "Pessoas",
     href: "/humanship",
     module: "humanship.r1ship",
@@ -292,7 +282,8 @@ export function HomeExperience({
               {available.map((workspace,index) => {
                 const step = 360 / available.length;
                 const angle = NEXUS_ROTATION + index * step + step / 2;
-                const p = polar(50,50,39.8,angle);
+                // Center the entire icon/title block midway between the sector radii (31 and 47).
+                const p = polar(50, 50, 39, angle);
                 const Icon = workspace.icon;
                 const selectedNow = workspace.key === selected.key;
                 return (
@@ -314,7 +305,6 @@ export function HomeExperience({
                     aria-label={workspace.allowed ? `Selecionar ${workspace.title}` : `${workspace.title} bloqueado`}
                   >
                     <span className="share-hub-sector-icon">{workspace.allowed ? <Icon /> : <LockKeyhole />}</span>
-                    {workspace.status === "construction" ? <span className="share-hub-sector-badge">Em construção</span> : null}
                     <span className="share-hub-sector-title">{workspace.shortTitle.split("\n").map((line,i)=><span key={i}>{line}</span>)}</span>
                   </button>
                 );

@@ -289,6 +289,7 @@ textarea {
 .share-hub-nexus {
   position:relative;
   width:min(610px,42vw,calc(100vh - 190px));
+  container-type:inline-size;
   max-width:100%;
   aspect-ratio:1;
 }
@@ -301,16 +302,17 @@ textarea {
 
 .share-hub-sector-label {
   position:absolute; z-index:5; transform:translate(-50%,-50%);
-  width:96px; min-height:80px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
-  color:rgb(255 255 255 / .95); border:0; background:transparent; text-align:center; cursor:pointer; line-height:1.08;
+  width:max-content; max-width:20cqw; padding:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:clamp(3px,.7cqw,4px);
+  color:rgb(255 255 255 / .95); border:0; background:transparent; text-align:center; cursor:pointer;
 }
 .share-hub-sector-label.is-selected { color:white; }
 .share-hub-sector-label.is-locked { opacity:.34; cursor:not-allowed; }
 
 .share-hub-sector-icon {
-  width:32px;
-  height:32px;
-  margin-bottom:2px;
+  width:clamp(18px,5.5cqw,30px);
+  height:clamp(18px,5.5cqw,30px);
+  flex:0 0 auto;
   display:grid;
   place-items:center;
   border:1px solid rgb(111 232 157 / .38);
@@ -326,9 +328,8 @@ textarea {
     0 0 9px rgb(44 219 124 / .12);
   transition:transform .2s ease,border-color .2s ease,background .2s ease,box-shadow .2s ease,color .2s ease;
 }
-.share-hub-sector-icon svg { width:17px; height:17px; stroke-width:1.75; }
+.share-hub-sector-icon svg { width:56%; height:56%; stroke-width:1.75; }
 .share-hub-sector-label:hover:not(.is-locked) .share-hub-sector-icon {
-  transform:translateY(-1px);
   border-color:rgb(147 255 179 / .58);
   box-shadow:
     inset 0 0 0 1px rgb(255 255 255 / .07),
@@ -350,40 +351,22 @@ textarea {
 .share-hub-sector-title {
   display:flex;
   flex-direction:column;
-  font-size:10px;
+  align-items:center;
+  font-size:clamp(8px,1.8cqw,10px);
   font-weight:800;
-  line-height:1.05;
+  line-height:1.15;
   letter-spacing:-.01em;
 }
-.share-hub-sector-description {
-  display:flex;
-  flex-direction:column;
-  margin-top:2px;
-  font-size:7.4px;
-  font-weight:500;
-  line-height:1.18;
-  color:rgb(255 255 255 / .58);
-}
-.share-hub-sector-label.is-selected .share-hub-sector-description {
-  color:rgb(255 255 255 / .72);
-}
-.share-hub-sector-badge {
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  margin:-1px 0 1px;
-  padding:3px 7px;
-  border-radius:5px;
-  background:linear-gradient(180deg,#f9dc4e,#e9c631);
-  color:#17311f;
-  box-shadow:0 2px 8px rgb(0 0 0 / .22);
-  font-size:7px;
-  line-height:1;
-  font-weight:900;
-  letter-spacing:.01em;
-  white-space:nowrap;
-}
+.share-hub-sector-title span { white-space:nowrap; }
 
+/* Optical corrections move the whole block only on the narrowest rings. */
+@container (max-width: 420px) {
+  .share-hub-sector-icon { width:clamp(12px,4.5cqw,16px); height:clamp(12px,4.5cqw,16px); }
+  .share-hub-sector-title { font-size:clamp(6.5px,2.3cqw,8px); line-height:1.05; }
+  .share-hub-sector-label.is-diagnostico { translate:-.45cqw -.2cqw; }
+  .share-hub-sector-label.is-mkt-scout { translate:.25cqw -.15cqw; }
+  .share-hub-sector-label.is-events { translate:-1.1cqw -1.15cqw; }
+}
 .share-hub-core {
   position:absolute; left:50%; top:50%; width:55%; aspect-ratio:1; transform:translate(-50%,-50%);
   border-radius:50%; overflow:hidden;
@@ -480,12 +463,6 @@ textarea {
     width:min(460px,82vw,68dvh);
     margin:12px auto 18px;
   }
-  .share-hub-sector-label { width:74px; min-height:60px; gap:1px; }
-  .share-hub-sector-icon { width:26px; height:26px; border-radius:8px; margin-bottom:1px; }
-  .share-hub-sector-icon svg { width:14px; height:14px; }
-  .share-hub-sector-title { font-size:8.5px; line-height:1.02; }
-  .share-hub-sector-description { display:none; }
-  .share-hub-sector-badge { padding:2px 5px; font-size:5.5px; }
   .share-hub-core-brand span { font-size:16px; }
   .share-hub-detail-body { padding:22px; }
 }
@@ -501,100 +478,4 @@ textarea {
   .share-hub-main-grid { min-height:0; }
   .share-hub-nexus-wrap { padding:0; }
   .share-hub-nexus { width:min(540px,84vw,calc(100dvh - 92px)); }
-  .share-hub-sector-label { width:90px; min-height:70px; }
-  .share-hub-sector-icon { width:28px; height:28px; }
-  .share-hub-sector-icon svg { width:15px; height:15px; }
-  .share-hub-sector-title { font-size:10px; }
-  .share-hub-sector-description { font-size:7.5px; }
-}
-
-
-
-
-/* Keep labels visually inside their annular sectors. */
-.share-hub-sector-title,
-.share-hub-sector-description {
-  max-width:100%;
-  overflow-wrap:anywhere;
-}
-.share-hub-sector-label {
-  padding-inline:4px;
-}
-
-.share-hub-sector-title,
-.share-hub-sector-description {
-  width:100%;
-  text-align:center;
-}
-.share-hub-sector-description span,
-.share-hub-sector-title span {
-  display:block;
-  max-width:100%;
-}
-
-
-
-
-  .share-hub-sector-icon { width:26px; height:26px; }
-  .share-hub-sector-icon svg { width:14px; height:14px; }
-  .share-hub-sector-title { font-size:8.5px; }
-  .share-hub-sector-description { display:none; }
-}
-
-
-/* Final Nexus label model: icon + title as one compact centered unit. */
-.share-hub-sector-label {
-  width:88px;
-  min-height:72px;
-  padding:0 3px;
-  transform:translate(-50%,-50%);
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  gap:4px;
-  overflow:visible;
-}
-.share-hub-sector-icon {
-  width:30px;
-  height:30px;
-  margin:0;
-  flex:0 0 auto;
-}
-.share-hub-sector-icon svg {
-  width:16px;
-  height:16px;
-}
-.share-hub-sector-title {
-  width:100%;
-  font-size:10px;
-  line-height:1.04;
-  text-align:center;
-  font-weight:800;
-}
-.share-hub-sector-description {
-  display:none !important;
-}
-.share-hub-sector-badge {
-  margin:-1px 0 0;
-  font-size:6px;
-  padding:2px 5px;
-}
-
-/* Slight optical centering only where the wedge geometry needs it. */
-.share-hub-sector-label.is-humanship { transform:translate(-44%,-50%); }
-.share-hub-sector-label.is-whats-generator { transform:translate(-56%,-50%); }
-.share-hub-sector-label.is-diagnostico { transform:translate(-46%,-50%); }
-.share-hub-sector-label.is-mkt-scout { transform:translate(-54%,-50%); }
-.share-hub-sector-label.is-rapport { transform:translate(-47%,-52%); }
-.share-hub-sector-label.is-events { transform:translate(-53%,-52%); }
-.share-hub-sector-label.is-meetings { transform:translate(-50%,-56%); }
-.share-hub-sector-label.is-hr,
-.share-hub-sector-label.is-b2b { transform:translate(-50%,-46%); }
-
-@media (max-width:600px) {
-  .share-hub-sector-label { width:70px; min-height:60px; gap:2px; }
-  .share-hub-sector-icon { width:26px; height:26px; }
-  .share-hub-sector-icon svg { width:14px; height:14px; }
-  .share-hub-sector-title { font-size:8.5px; }
 }
