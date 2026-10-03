@@ -292,8 +292,7 @@ export function HomeExperience({
               {available.map((workspace,index) => {
                 const step = 360 / available.length;
                 const angle = NEXUS_ROTATION + index * step + step / 2;
-                const textPoint = polar(50,50,39.4,angle);
-                const iconPoint = polar(50,50,45.2,angle);
+                const p = polar(50,50,39.8,angle);
                 const Icon = workspace.icon;
                 const selectedNow = workspace.key === selected.key;
                 return (
@@ -311,23 +310,12 @@ export function HomeExperience({
                       if (workspace.allowed) router.push(workspace.href);
                     }}
                     className={`share-hub-sector-label is-${workspace.key} ${selectedNow ? "is-selected" : ""} ${workspace.allowed ? "" : "is-locked"}`}
-                    style={{ left:`${textPoint.x}%`, top:`${textPoint.y}%` }}
+                    style={{ left:`${p.x}%`, top:`${p.y}%` }}
                     aria-label={workspace.allowed ? `Selecionar ${workspace.title}` : `${workspace.title} bloqueado`}
                   >
-                    <span
-                      className="share-hub-sector-icon-anchor"
-                      style={{
-                        left: `calc(${iconPoint.x}% - ${textPoint.x}% + 50%)`,
-                        top: `calc(${iconPoint.y}% - ${textPoint.y}% + 50%)`,
-                      }}
-                    >
-                      <span className="share-hub-sector-icon">{workspace.allowed ? <Icon /> : <LockKeyhole />}</span>
-                    </span>
-                    <span className="share-hub-sector-copy">
-                      {workspace.status === "construction" ? <span className="share-hub-sector-badge">Em construção</span> : null}
-                      <span className="share-hub-sector-title">{workspace.shortTitle.split("\n").map((line,i)=><span key={i}>{line}</span>)}</span>
-                      <span className="share-hub-sector-description">{workspace.ringDescription.split("\n").map((line,i)=><span key={i}>{line}</span>)}</span>
-                    </span>
+                    <span className="share-hub-sector-icon">{workspace.allowed ? <Icon /> : <LockKeyhole />}</span>
+                    {workspace.status === "construction" ? <span className="share-hub-sector-badge">Em construção</span> : null}
+                    <span className="share-hub-sector-title">{workspace.shortTitle.split("\n").map((line,i)=><span key={i}>{line}</span>)}</span>
                   </button>
                 );
               })}
