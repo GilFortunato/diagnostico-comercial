@@ -31,7 +31,7 @@ export function ShareAiLoginPoc() {
 
       <div className={styles.layout}>
         <section className={styles.intro} aria-labelledby="login-poc-headline">
-          <Image className={styles.heroLogo} src={logo} alt={logoAlt} width={6226} height={2189} sizes="(max-width: 760px) 225px, 320px" preload />
+          <Image className={styles.heroLogo} src="/brand/share-people-hub-original.png" alt="Share People Hub" width={8000} height={4500} sizes="(max-width: 760px) 384px, 528px" preload />
           <h1 id="login-poc-headline">Inteligência para<br /><span>pessoas e negócios</span></h1>
           <p className={styles.description}>
             Um hub unificado com IA para potencializar pessoas, equipes e resultados, conectando todos os nossos workspaces em um só lugar.
@@ -44,16 +44,19 @@ export function ShareAiLoginPoc() {
         </section>
 
         <section className={styles.card} aria-labelledby="login-poc-title">
-          <Image className={styles.cardLogo} src={logo} alt={logoAlt} width={6226} height={2189} sizes="(max-width: 760px) 225px, 320px" preload />
+          <div className={styles.cardBrand}>
+            <Image className={styles.cardLogo} src={logo} alt={logoAlt} width={6226} height={2189} sizes="(max-width: 760px) 175px, 200px" preload />
+            <span className={styles.ai}>AI</span>
+          </div>
           <div className={styles.sparkle} aria-hidden="true">
             <svg viewBox="0 0 48 48" fill="currentColor"><path d="M24 3C21 16 16 21 3 24c13 3 18 8 21 21 3-13 8-18 21-21C32 21 27 16 24 3Z" /></svg>
           </div>
-          <h2 id="login-poc-title">Entrar na Share AI</h2>
-          <p className={styles.cardDescription}>Use sua conta Google autorizada para acessar os workspaces liberados para você.</p>
+          <h2 id="login-poc-title">Entrar</h2>
           <button className={styles.googleButton} type="button" onClick={() => signIn("google", { callbackUrl: "/" })}>
             <Image src="/brand/google-g.png" alt="" width={22} height={22} />
             Continuar com Google
           </button>
+          <p className={styles.cardDescription}>Use sua conta Google autorizada para acessar os workspaces liberados para você.</p>
         </section>
       </div>
     </main>

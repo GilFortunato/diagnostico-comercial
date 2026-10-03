@@ -4,7 +4,7 @@ Rota de login: `/login-poc`. Visitantes sem sessão que acessam `/` são encamin
 
 ## Branding
 
-A tela usa a imagem original enviada pelo usuário, já disponível em `/brand/share-nexus-logo.png`, nos dois espaços de marca. O arquivo é idêntico ao original, com proporção 6226 × 2189 preservada e `object-fit: contain`. A identificação provisória de POC foi removida da interface e do título da página.
+A introdução usa `/brand/share-people-hub-original.png` (8000 × 4500), original Share People Hub enviado pelo usuário, ampliado 20% com a borda direita visual preservada. O card usa `/brand/share-nexus-logo.png` (6226 × 2189) com AI em verde claro à direita. Os dois assets preservam proporção e transparência. O título é Entrar, com o texto explicativo abaixo do botão Google. Não há avisos de POC na interface.
 
 O Google G foi obtido de https://developers.google.com/static/identity/images/g-logo.png, vinculado nas diretrizes oficiais: https://developers.google.com/identity/branding-guidelines.
 
