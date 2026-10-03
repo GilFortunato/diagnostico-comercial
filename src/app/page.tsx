@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { HomeExperience } from "@/components/app/HomeExperience";
 import { isAdminUser } from "@/lib/auth/admin";
 import { listUserModuleAccess } from "@/lib/auth/modulePermissions";
@@ -6,6 +7,7 @@ import { getNextHumanshipAgendaEvent } from "@/lib/humanship/agenda";
 
 export default async function Home() {
   const user = await getSessionUser();
+  if (!user) redirect("/login-poc");
   const isAdmin = isAdminUser(user);
   const access = user
     ? await listUserModuleAccess(user).catch(() => ({}))

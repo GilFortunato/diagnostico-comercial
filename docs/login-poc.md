@@ -1,6 +1,6 @@
 # Login POC
 
-Rota independente: `/login-poc`. A home, a configuração de autenticação e as permissões existentes permanecem inalteradas.
+Rota de login: `/login-poc`. Visitantes sem sessão que acessam `/` são encaminhados a essa tela. Após o login Google, o callback retorna a `/`, que mantém o Nexus para usuários autenticados. A configuração de autenticação e as permissões existentes permanecem inalteradas.
 
 ## Branding
 
