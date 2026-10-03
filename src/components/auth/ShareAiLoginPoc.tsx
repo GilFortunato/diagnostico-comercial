@@ -15,9 +15,9 @@ const workspaces = [
   { name: "Diagnóstico Comercial", icon: FileText },
 ];
 
-export function ShareAiLoginPoc({ hasShareAiLogo = false }: { hasShareAiLogo?: boolean }) {
-  const logo = hasShareAiLogo ? "/brand/share-ai-logo.png" : "/brand/share-people-hub-white.svg";
-  const logoAlt = hasShareAiLogo ? "Share AI — People Hub" : "Share People Hub";
+export function ShareAiLoginPoc() {
+  const logo = "/brand/share-nexus-logo.png";
+  const logoAlt = "Share";
 
   return (
     <main className={styles.page}>
@@ -31,10 +31,7 @@ export function ShareAiLoginPoc({ hasShareAiLogo = false }: { hasShareAiLogo?: b
 
       <div className={styles.layout}>
         <section className={styles.intro} aria-labelledby="login-poc-headline">
-          <Image className={styles.heroLogo} src={logo} alt={logoAlt} width={360} height={181} preload />
-          {!hasShareAiLogo && (
-            <p className={styles.brandNote}>POC · logo Share AI pendente · usando Share People Hub</p>
-          )}
+          <Image className={styles.heroLogo} src={logo} alt={logoAlt} width={6226} height={2189} sizes="(max-width: 760px) 225px, 320px" preload />
           <h1 id="login-poc-headline">Inteligência para<br /><span>pessoas e negócios</span></h1>
           <p className={styles.description}>
             Um hub unificado com IA para potencializar pessoas, equipes e resultados, conectando todos os nossos workspaces em um só lugar.
@@ -47,7 +44,7 @@ export function ShareAiLoginPoc({ hasShareAiLogo = false }: { hasShareAiLogo?: b
         </section>
 
         <section className={styles.card} aria-labelledby="login-poc-title">
-          <Image className={styles.cardLogo} src={logo} alt={logoAlt} width={360} height={181} preload />
+          <Image className={styles.cardLogo} src={logo} alt={logoAlt} width={6226} height={2189} sizes="(max-width: 760px) 225px, 320px" preload />
           <div className={styles.sparkle} aria-hidden="true">
             <svg viewBox="0 0 48 48" fill="currentColor"><path d="M24 3C21 16 16 21 3 24c13 3 18 8 21 21 3-13 8-18 21-21C32 21 27 16 24 3Z" /></svg>
           </div>

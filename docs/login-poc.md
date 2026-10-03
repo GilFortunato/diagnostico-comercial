@@ -4,7 +4,7 @@ Rota de login: `/login-poc`. Visitantes sem sessão que acessam `/` são encamin
 
 ## Branding
 
-Não existe um asset Share AI no projeto. A POC usa o asset real `/brand/share-people-hub-white.svg` como substituição provisória, identificada na introdução. Para validar a marca final, adicione `public/brand/share-ai-logo.png` com transparência e reinicie/recompile. A página detecta o arquivo no servidor e o aplica nos dois espaços de marca usando `object-fit: contain`; não há reconstrução tipográfica da logo.
+A tela usa a imagem original enviada pelo usuário, já disponível em `/brand/share-nexus-logo.png`, nos dois espaços de marca. O arquivo é idêntico ao original, com proporção 6226 × 2189 preservada e `object-fit: contain`. A identificação provisória de POC foi removida da interface e do título da página.
 
 O Google G foi obtido de https://developers.google.com/static/identity/images/g-logo.png, vinculado nas diretrizes oficiais: https://developers.google.com/identity/branding-guidelines.
 
