@@ -211,6 +211,7 @@ export function HomeExperience({
     ?? available.find((workspace) => workspace.allowed)?.key
     ?? "humanship";
   const [selectedKey, setSelectedKey] = useState(defaultKey);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const selected = available.find((workspace) => workspace.key === selectedKey) ?? available[0];
 
   const name = firstName(userName || "Gil");
@@ -264,19 +265,43 @@ export function HomeExperience({
           <section className="share-hub-nexus-wrap" aria-label="Workspaces Share Hub">
             <div className="share-hub-nexus">
               <svg viewBox="0 0 100 100" className="share-hub-ring" aria-hidden="true">
+                <defs>
+                  <linearGradient id="nexus-sector-surface" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="white" stopOpacity=".035" />
+                    <stop offset="1" stopColor="black" stopOpacity=".08" />
+                  </linearGradient>
+                  <filter id="nexus-sector-depth" x="-8%" y="-8%" width="116%" height="116%" colorInterpolationFilters="sRGB">
+                    <feDropShadow dx="0" dy=".16" stdDeviation=".16" floodColor="black" floodOpacity=".16" result="base" />
+                    <feOffset in="SourceAlpha" dy=".12" result="topOffset" />
+                    <feComposite in="SourceAlpha" in2="topOffset" operator="out" result="topEdge" />
+                    <feFlood floodColor="#d7eee0" floodOpacity=".12" />
+                    <feComposite in2="topEdge" operator="in" result="highlight" />
+                    <feOffset in="SourceAlpha" dy="-.16" result="bottomOffset" />
+                    <feComposite in="SourceAlpha" in2="bottomOffset" operator="out" result="bottomEdge" />
+                    <feFlood floodColor="#001b12" floodOpacity=".24" />
+                    <feComposite in2="bottomEdge" operator="in" result="insetShadow" />
+                    <feMerge><feMergeNode in="base" /><feMergeNode in="highlight" /><feMergeNode in="insetShadow" /></feMerge>
+                  </filter>
+                </defs>
                 <circle cx="50" cy="50" r="49" className="share-hub-ring-outer" />
                 <circle cx="50" cy="50" r="30" className="share-hub-ring-inner" />
                 {available.map((workspace,index) => (
                   <path
                     key={workspace.key}
                     d={annularSectorPath(index, available.length)}
+                    onPointerEnter={(event) => { if (event.pointerType !== "touch" && workspace.allowed) setHoveredKey(workspace.key); }}
+                    onPointerLeave={() => setHoveredKey(null)}
                     className={[
                       "share-hub-sector",
                       workspace.key === selected.key ? "is-selected" : "",
                       workspace.allowed ? "is-enabled" : "is-locked",
+                      workspace.allowed && hoveredKey === workspace.key && workspace.key !== selected.key ? "is-hovered" : "",
                     ].join(" ")}
                   />
                 ))}
+                {available.map((workspace,index) => workspace.allowed && workspace.key !== selected.key ? (
+                  <path key={workspace.key} d={annularSectorPath(index, available.length)} className="share-hub-sector-surface" />
+                ) : null)}
               </svg>
 
               {available.map((workspace,index) => {
@@ -291,6 +316,8 @@ export function HomeExperience({
                     key={workspace.key}
                     type="button"
                     disabled={!workspace.allowed && authenticated}
+                    onPointerEnter={(event) => { if (event.pointerType !== "touch" && workspace.allowed) setHoveredKey(workspace.key); }}
+                    onPointerLeave={() => setHoveredKey(null)}
                     onClick={() => setSelectedKey(workspace.key)}
                     onDoubleClick={() => {
                       if (!workspace.href) return;
@@ -300,7 +327,7 @@ export function HomeExperience({
                       }
                       if (workspace.allowed) router.push(workspace.href);
                     }}
-                    className={`share-hub-sector-label is-${workspace.key} ${selectedNow ? "is-selected" : ""} ${workspace.allowed ? "" : "is-locked"}`}
+                    className={`share-hub-sector-label is-${workspace.key} ${workspace.allowed && hoveredKey === workspace.key && !selectedNow ? "is-hovered" : ""} ${selectedNow ? "is-selected" : ""} ${workspace.allowed ? "" : "is-locked"}`}
                     style={{ left:`${p.x}%`, top:`${p.y}%` }}
                     aria-label={workspace.allowed ? `Selecionar ${workspace.title}` : `${workspace.title} bloqueado`}
                   >

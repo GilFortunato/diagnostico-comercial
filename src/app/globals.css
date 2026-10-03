@@ -491,3 +491,40 @@ textarea {
   .share-hub-nexus-wrap { padding:0; }
   .share-hub-nexus { width:min(540px,84vw,calc(100dvh - 92px)); }
 }
+
+/* Nexus interaction proof: visual states only; no geometry or layout changes. */
+.share-hub-sector {
+  transition:fill 180ms ease-out,stroke 180ms ease-out,filter 180ms ease-out;
+}
+.share-hub-sector.is-enabled:not(.is-selected) {
+  fill:#04392a;
+  filter:url("#nexus-sector-depth");
+}
+.share-hub-sector-surface {
+  fill:url("#nexus-sector-surface");
+  stroke:none;
+  pointer-events:none;
+}
+.share-hub-sector.is-enabled.is-hovered:not(.is-selected) {
+  fill:#0b5943;
+  stroke:rgb(165 211 185 / .48);
+}
+.share-hub-sector-label:not(.is-locked):not(.is-selected) {
+  transition:filter 180ms ease-out;
+}
+.share-hub-sector-label.is-hovered:not(.is-locked):not(.is-selected) {
+  filter:brightness(1.07);
+}
+/* The same response applies when hovering the path or its label. */
+.share-hub-sector-label.is-hovered:not(.is-locked):not(.is-selected) .share-hub-sector-icon {
+  border-color:rgb(214 235 222 / .7);
+  box-shadow:inset 0 0 0 1px rgb(235 247 239 / .15),0 3px 8px rgb(0 0 0 / .24);
+}
+.share-hub-sector.is-locked { cursor:not-allowed; }
+/* No new highlight on an already-selected sector. */
+.share-hub-sector-label:hover.is-selected:not(.is-locked) .share-hub-sector-icon {
+  border-color:rgb(205 244 67 / .72);
+}
+@media (prefers-reduced-motion: reduce) {
+  .share-hub-sector,.share-hub-sector-label:not(.is-locked):not(.is-selected) { transition:none; }
+}
