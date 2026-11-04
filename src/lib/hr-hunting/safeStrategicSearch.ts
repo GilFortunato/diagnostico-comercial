@@ -15,6 +15,7 @@ import type { EvidenceState, HrCandidate, HrHuntingSearchSnapshot } from "@/lib/
 import { candidateKey, collectHrDiscovery, readDiscoveryState, type HrDiscoveryState } from "@/lib/hr-hunting/pagedDiscovery";
 import { findReusableCandidateProfiles, profileKeyForCandidate, upsertCandidateProfiles } from "@/lib/hr-hunting/candidateMemory";
 import { collectionMessage } from "@/lib/hunting/pagination";
+import { buildAffirmativeProfileQueries, hasPublicAffirmativeMention, type AffirmativeFocus } from "@/lib/hr-hunting/affirmativeSourcing";
 
 type SearchInput = {
   quantity: number;
@@ -23,6 +24,9 @@ type SearchInput = {
   location?: string;
   keywords: string[];
   alternateTitles?: string[];
+  affirmativeFocus?: AffirmativeFocus[];
+  affirmativeInitiative?: string;
+  affirmativeMode?: boolean;
 };
 
 type SourcingPlan = {
@@ -41,6 +45,7 @@ type Round = {
   label: "precisa" | "ampliada" | "descoberta";
   titles: string[];
   keywords: string[];
+  query?: string;
   location?: string;
 };
 
@@ -48,34 +53,40 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
   const search = await findOwnedHrHuntingSearch(id, ownerId);
   if (!search) return null;
 
-  const fingerprint = createHash("sha256").update(JSON.stringify({ currentTitle: input.currentTitle, seniority: input.seniority, location: input.location, keywords: input.keywords, alternateTitles: input.alternateTitles || [], dna: search.jobDna })).digest("hex");
+  const fingerprint = createHash("sha256").update(JSON.stringify({ currentTitle: input.currentTitle, seniority: input.seniority, location: input.location, keywords: input.keywords, alternateTitles: input.alternateTitles || [], affirmativeFocus: input.affirmativeFocus || [], affirmativeInitiative: input.affirmativeInitiative || "", affirmativeMode: Boolean(input.affirmativeMode), dna: search.jobDna })).digest("hex");
   const previous = options.append ? await getPrisma().hrHuntingSearch.findFirst({ where: { id }, select: { sourceSnapshot: true } }) : null;
   let state = readDiscoveryState(previous?.sourceSnapshot, fingerprint);
   const warnings: string[] = [];
   const evalInput = evaluationInput(search, input);
 
+  const hasAffirmativeFocus = Boolean(input.affirmativeMode && input.affirmativeFocus?.length);
   const knownKeys = new Set(options.append ? search.candidates.map(candidateKey) : []);
   const reusable = (await findReusableCandidateProfiles())
     .filter((candidate) => !knownKeys.has(candidateKey(candidate)));
   const reusableQuality = applyCandidateQualityGate(reusable, search.jobDna, evalInput);
-  const cachedPool = reusableQuality.eligible;
+  const cachedPool = hasAffirmativeFocus ? [] : reusableQuality.eligible;
   const cachedRanked = rankCandidates(cachedPool, search.jobDna, evalInput).slice(0, input.quantity);
   if (cachedRanked.length) {
     warnings.push(`${cachedRanked.length} perfil(is) compatível(is) foram reaproveitados do banco Share antes de consultar fontes externas.`);
   }
 
   const hasManualTitles = Boolean(input.alternateTitles?.length);
-  const externalTarget = Math.max(
+  const externalTarget = hasAffirmativeFocus ? Math.min(20, input.quantity) : Math.max(
     0, input.quantity - cachedRanked.length,
     hasManualTitles && !options.append ? Math.min(20, input.quantity) : 0,
   );
   if (!state && externalTarget > 0) {
-    const manus = await createPlanWithManus(search, input, fallbackPlan(search, input));
-    warnings.push(...manus.warnings);
-    const rounds = buildRounds(search, input, manus.plan).map((round) => compact({
-      profileScraperMode: "Short",
+    const fallback = fallbackPlan(search, input);
+    let sourcingPlan = fallback;
+    if (!hasAffirmativeFocus) {
+      const manus = await createPlanWithManus(search, input, fallback);
+      warnings.push(...manus.warnings);
+      sourcingPlan = manus.plan;
+    }
+    const rounds = buildRounds(search, input, sourcingPlan).map((round) => compact({
+      profileScraperMode: hasAffirmativeFocus ? "Full" : "Short",
       currentJobTitles: round.titles,
-      searchQuery: round.keywords.length ? round.keywords.join(" OR ") : undefined,
+      searchQuery: round.query || (round.keywords.length ? round.keywords.join(" OR ") : undefined),
       locations: round.location ? [round.location] : [],
     }));
     state = {
@@ -106,7 +117,7 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
       };
 
   let externalPool = collected.items;
-  if (externalPool.length < externalTarget && !collected.state.fallbackComplete) {
+  if (!hasAffirmativeFocus && externalPool.length < externalTarget && !collected.state.fallbackComplete) {
     try {
       const fallbackTerms = unique([
         input.currentTitle?.trim() || search.jobDna.title || search.title,
@@ -126,11 +137,15 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
       warnings.push("A fonte complementar Apify ficou indisponível; os perfis já encontrados foram preservados.");
     }
   }
+  if (hasAffirmativeFocus) {
+    externalPool = externalPool.filter((candidate) => hasPublicAffirmativeMention(candidate.professionalSummary, input.affirmativeFocus || [], input.affirmativeInitiative));
+    warnings.push(`${externalPool.length} perfil(is) com menção pública aos focos ou à iniciativa escolhida. Essa menção não confirma identidade, participação ou elegibilidade; confirme diretamente com a pessoa.`);
+  }
   collected.summary.unique = externalPool.length;
   if (externalPool.length >= externalTarget) collected.summary.stopReason = "target_reached";
-  warnings.push(collectionMessage(collected.summary));
+  if (!hasAffirmativeFocus) warnings.push(collectionMessage(collected.summary));
   console.info("[hr-hunting] collection completed", { ...collected.summary });
-  if (externalPool.length) externalPool = await enrich(externalPool, input, warnings);
+  if (externalPool.length && !hasAffirmativeFocus) externalPool = await enrich(externalPool, input, warnings);
 
   const pool = dedupe([...externalPool, ...search.candidates, ...cachedPool]);
   const quality = applyCandidateQualityGate(pool, search.jobDna, evalInput);
@@ -142,7 +157,7 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
   const candidates = dedupe([
     ...ranked.slice(0, input.quantity),
     ...ranked.filter((candidate) => previousKeys.has(candidateKey(candidate))),
-    ...(hasManualTitles && !options.append
+    ...((hasManualTitles && !options.append) || hasAffirmativeFocus
       ? strictRanked.filter((candidate) => externalKeys.has(candidateKey(candidate))).slice(0, Math.min(20, input.quantity))
       : []),
   ]);
@@ -205,6 +220,13 @@ async function createPlanWithManus(search: HrHuntingSearchSnapshot, input: Searc
 function buildRounds(search: HrHuntingSearchSnapshot, input: SearchInput, plan: SourcingPlan): Round[] {
   const original = input.currentTitle?.trim() || search.jobDna.title || search.title;
   const manual = unique(input.alternateTitles || []).slice(0, 12);
+  if (input.affirmativeMode && input.affirmativeFocus?.length) {
+    const titles = unique([original, ...manual, ...buildTitleFamily(original)]).slice(0, 20);
+    const location = input.location?.trim() || search.jobDna.location || "";
+    return buildAffirmativeProfileQueries(input.affirmativeFocus, input.affirmativeInitiative).map((query) => ({
+      label: "descoberta", titles, keywords: [], query, location: location || undefined,
+    }));
+  }
   const precise = manual.length ? manual : unique([original, plan.primaryTitle, ...buildTitleFamily(original), ...plan.equivalentTitles]).slice(0, 20);
   const expanded = unique([original, ...manual, plan.primaryTitle, ...buildTitleFamily(original), ...plan.equivalentTitles, ...plan.adjacentTitles.slice(0, 3)]).slice(0, 30);
   const discovery = unique([...expanded, ...plan.adjacentTitles]).slice(0, 40);

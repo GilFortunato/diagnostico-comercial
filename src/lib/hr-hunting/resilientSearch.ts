@@ -11,6 +11,9 @@ type SearchInput = {
   location?: string;
   keywords: string[];
   alternateTitles?: string[];
+  affirmativeFocus?: import("@/lib/hr-hunting/affirmativeSourcing").AffirmativeFocus[];
+  affirmativeInitiative?: string;
+  affirmativeMode?: boolean;
 };
 
 export async function executeResilientHrHuntingSearch(id: string, ownerId: string, input: SearchInput) {

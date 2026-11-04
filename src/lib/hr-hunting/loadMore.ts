@@ -8,6 +8,9 @@ type LoadMoreInput = {
   location?: string;
   keywords: string[];
   alternateTitles?: string[];
+  affirmativeFocus?: import("@/lib/hr-hunting/affirmativeSourcing").AffirmativeFocus[];
+  affirmativeInitiative?: string;
+  affirmativeMode?: boolean;
   batchSize: number;
 };
 

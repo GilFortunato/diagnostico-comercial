@@ -1,8 +1,9 @@
 import { collectHuntingPages, type CollectionSummary, type HuntingPage } from "@/lib/hunting/pagination";
 import type { HrCandidate } from "@/lib/hr-hunting/types";
+import type { AffirmativeFocus } from "@/lib/hr-hunting/affirmativeSourcing";
 
 export type HrDiscoveryRound = { input: Record<string, unknown>; nextPage: number; exhausted: boolean };
-export type HrDiscoveryState = { version: 1; fingerprint: string; rounds: HrDiscoveryRound[]; pending: HrCandidate[]; fallbackComplete?: boolean; searchFilters?: { quantity: number; currentTitle?: string; seniority: string[]; location?: string; keywords: string[]; alternateTitles?: string[] } };
+export type HrDiscoveryState = { version: 1; fingerprint: string; rounds: HrDiscoveryRound[]; pending: HrCandidate[]; fallbackComplete?: boolean; searchFilters?: { quantity: number; currentTitle?: string; seniority: string[]; location?: string; keywords: string[]; alternateTitles?: string[]; affirmativeFocus?: AffirmativeFocus[]; affirmativeInitiative?: string; affirmativeMode?: boolean } };
 
 export function candidateKey(candidate: HrCandidate) {
   if (candidate.profileUrl) return candidate.profileUrl.split("?")[0].replace(/\/$/, "").toLowerCase();

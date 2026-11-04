@@ -3,6 +3,7 @@ import test from "node:test";
 import { conservativeJobDna } from "@/lib/hr-hunting/jobDna";
 import { applyCandidateQualityGate, buildHrCandidateRecallInput, buildTitleFamily, normalizeCandidates, rankCandidates } from "@/lib/hr-hunting/service";
 import { createJobSchema, executeSearchSchema, type HrCandidate, type JobDna } from "@/lib/hr-hunting/types";
+import { buildAffirmativeProfileQueries, hasPublicAffirmativeMention } from "@/lib/hr-hunting/affirmativeSourcing";
 
 const vacancy = `Jundiaí, SP, BR
 Analista de Pós-Vendas
@@ -143,6 +144,23 @@ test("cargos alternativos digitados ampliam elegibilidade e recalculam aderênci
   assert.equal(applyCandidateQualityGate([profile], dna, withoutAlternatives).eligible.length, 0);
   assert.deepEqual(applyCandidateQualityGate([profile], dna, parsed).eligible.map((item) => item.name), ["Joana"]);
   assert.ok(rankCandidates([profile], dna, parsed)[0].fitScore > rankCandidates([profile], dna, withoutAlternatives)[0].fitScore);
+});
+
+test("busca afirmativa consulta focos escolhidos e exige menção pública, sem inferir identidade", () => {
+  const filters = executeSearchSchema.parse({
+    quantity: 20, currentTitle: "Analista Comercial", seniority: [], location: "", keywords: [],
+    affirmativeFocus: ["women", "disabled"], affirmativeInitiative: "Programa Inclusão Profissional", affirmativeMode: true,
+  });
+  const queries = buildAffirmativeProfileQueries(filters.affirmativeFocus, filters.affirmativeInitiative);
+  assert.deepEqual(queries[0], '"Programa Inclusão Profissional"');
+  assert.match(queries[1], /mulheres em tecnologia/);
+  assert.match(queries[1], /pessoas com deficiência/);
+  assert.ok(queries.every((query) => query.length <= 300));
+  assert.equal(hasPublicAffirmativeMention("Atuo em vendas e participei do Programa Inclusão Profissional.", filters.affirmativeFocus, filters.affirmativeInitiative), true);
+  assert.equal(hasPublicAffirmativeMention("Analista Comercial e especialista em vendas.", filters.affirmativeFocus, filters.affirmativeInitiative), false);
+  const professional = candidate("Ana", "Analista Comercial", "", "https://www.linkedin.com/in/ana", "Empresa X", "Atendimento ao cliente.");
+  const dna: JobDna = { title: "Analista Comercial", shortSummary: "Vendas e atendimento.", responsibilities: [], interviewChecks: [], criteria: [] };
+  assert.equal(rankCandidates([professional], dna, filters)[0].fitScore, rankCandidates([professional], dna, { ...filters, affirmativeMode: false, affirmativeFocus: [] })[0].fitScore);
 });
 
 function candidate(name: string, currentTitle: string | undefined, location: string, profileUrl: string, currentCompany?: string, professionalSummary?: string): HrCandidate {

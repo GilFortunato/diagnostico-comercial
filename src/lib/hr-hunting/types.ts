@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MAX_HUNTING_RESULTS } from "@/lib/hunting/pagination";
+import { affirmativeFocuses } from "@/lib/hr-hunting/affirmativeSourcing";
 
 export const criterionKinds = ["obrigatório", "desejável", "não relevante"] as const;
 export const evidenceStates = ["confirmado", "provável", "inferência", "não verificado"] as const;
@@ -59,6 +60,9 @@ export const executeSearchSchema = z.object({
   location: z.string().trim().max(180).optional().or(z.literal("")),
   keywords: z.array(z.string().trim().min(2).max(80)).max(12).default([]),
   alternateTitles: z.array(z.string().trim().min(2).max(80)).max(12).default([]),
+  affirmativeFocus: z.array(z.enum(affirmativeFocuses)).max(6).default([]),
+  affirmativeInitiative: z.string().trim().max(80).default(""),
+  affirmativeMode: z.boolean().default(false),
 });
 
 export type HrCandidateEvidence = { criterion: string; criterionType: CriterionKind; result: "atende" | "parcial" | "não verificado"; evidence?: string; source: string; confidence: EvidenceState };

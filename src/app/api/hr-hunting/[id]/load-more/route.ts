@@ -15,6 +15,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
   const parsed = loadMoreSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "Revise os filtros antes de carregar mais candidatos." }, { status: 400 });
+  if (parsed.data.affirmativeMode && !parsed.data.affirmativeFocus.length) return NextResponse.json({ error: "Selecione ao menos uma opção afirmativa para esta busca." }, { status: 400 });
   const search = await loadMoreHrHuntingCandidates((await params).id, access.user.id, parsed.data);
   return search ? NextResponse.json({ search }) : NextResponse.json({ error: "Busca não encontrada." }, { status: 404 });
 }

@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { BriefcaseBusiness, Check, Copy, Download, ExternalLink, FolderSearch, ListChecks, LoaderCircle, Plus, Search, Trash2, UserRoundSearch, X } from "lucide-react";
 import { buildLinkedInOutreachMessage } from "@/components/hr-hunting/outreachMessage";
 import type { HrCandidate, HrHuntingSearchSnapshot, JobDna, PublicAffirmativeJob } from "@/lib/hr-hunting/types";
+import { affirmativeFocuses, affirmativeFocusLabels, type AffirmativeFocus } from "@/lib/hr-hunting/affirmativeSourcing";
 
 type JobForm = { description: string; jobUrl: string; companyName: string; recruiterName: string };
-type SearchFilters = { quantity: number; currentTitle: string; location: string; keywords: string; alternateTitles: string[]; seniority: string[] };
+type SearchFilters = { quantity: number; currentTitle: string; location: string; keywords: string; alternateTitles: string[]; seniority: string[]; affirmativeFocus: AffirmativeFocus[]; affirmativeInitiative: string };
 type Pending = "job" | "dna" | "search" | "more" | "export" | "delete" | null;
 
 const emptyForm: JobForm = { description: "", jobUrl: "", companyName: "", recruiterName: "" };
-const emptyFilters: SearchFilters = { quantity: 50, currentTitle: "", location: "", keywords: "", alternateTitles: [], seniority: [] };
+const emptyFilters: SearchFilters = { quantity: 50, currentTitle: "", location: "", keywords: "", alternateTitles: [], seniority: [], affirmativeFocus: [], affirmativeInitiative: "" };
 
 type WorkspaceView = "new" | "all" | "mine" | "shortlists" | "candidates" | "search";
 type SavedSearchSummary = {
@@ -44,6 +45,8 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
   const [form, setForm] = useState<JobForm>(emptyForm);
   const [filters, setFilters] = useState<SearchFilters>(emptyFilters);
   const [alternateTitleDraft, setAlternateTitleDraft] = useState("");
+  const [activeAffirmativeSearch, setActiveAffirmativeSearch] = useState(false);
+  const [affirmativeNotice, setAffirmativeNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [candidate, setCandidate] = useState<HrCandidate | null>(null);
   const [pending, setPending] = useState<Pending>(null);
@@ -112,6 +115,8 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       setSearch(body.search);
       setDraftDna(body.search.jobDna);
       setFilters(filtersForSearch(body.search));
+      setActiveAffirmativeSearch(Boolean(body.search.lastSearchFilters?.affirmativeMode));
+      setAffirmativeNotice(null);
       setAlternateTitleDraft("");
       setSelected([]);
       setCandidate(null);
@@ -145,6 +150,8 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
     setForm(emptyForm);
     setFilters(emptyFilters);
     setAlternateTitleDraft("");
+    setActiveAffirmativeSearch(false);
+    setAffirmativeNotice(null);
     setSelected([]);
     setCandidate(null);
     setError(null);
@@ -166,6 +173,8 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       setSearch(body.search);
       setDraftDna(body.search.jobDna);
       setFilters(filtersForSearch(body.search));
+      setActiveAffirmativeSearch(Boolean(body.search.lastSearchFilters?.affirmativeMode));
+      setAffirmativeNotice(null);
       setAlternateTitleDraft("");
       setSelected([]);
       setView("search");
@@ -234,11 +243,14 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
     setError(null);
   }
 
-  async function runSearch() {
+  async function runSearch(affirmative = false) {
     if (!search) return;
     setPending("search"); setError(null);
     try {
       const { activeSearch, activeFilters } = await persistDraftDna();
+      if (affirmative && !activeFilters.affirmativeFocus.length) {
+        throw new Error("Selecione pelo menos uma opção para a busca afirmativa.");
+      }
       const alternateTitles = mergeTitleOptions(activeFilters.alternateTitles, split(alternateTitleDraft));
       if (alternateTitles.length > 12 || alternateTitles.some((title) => title.length > 80)) {
         throw new Error("Use até 12 cargos alternativos, com no máximo 80 caracteres cada.");
@@ -247,11 +259,21 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       setAlternateTitleDraft("");
       const response = await fetch("/api/hr-hunting/" + activeSearch.id + "/search", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...activeFilters, keywords: split(activeFilters.keywords), alternateTitles }),
+        body: JSON.stringify({
+          ...activeFilters, keywords: split(activeFilters.keywords), alternateTitles,
+          affirmativeMode: affirmative,
+        }),
       });
       const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível buscar candidatos.");
+      const previousIds = new Set(search.candidates.map((item) => item.id));
+      const added = body.search.candidates.filter((item) => !previousIds.has(item.id)).length;
       setSearch(body.search); setDraftDna(body.search.jobDna); setSelected([]); setCandidate(null);
+      setActiveAffirmativeSearch(affirmative);
+      setAffirmativeNotice(affirmative
+        ? added ? `${added} novo(s) perfil(is) com menção pública relacionada à busca. Confirme a participação diretamente com cada pessoa.`
+          : "Nenhum perfil novo com menção pública relacionada à busca foi encontrado neste recorte."
+        : null);
       await refreshSavedSearches();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível buscar candidatos."); }
     finally { setPending(null); }
@@ -265,13 +287,14 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       const { activeSearch, activeFilters } = await persistDraftDna();
       const response = await fetch("/api/hr-hunting/" + activeSearch.id + "/load-more", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...activeFilters, keywords: split(activeFilters.keywords), batchSize: 20 }),
+        body: JSON.stringify({ ...activeFilters, keywords: split(activeFilters.keywords), affirmativeMode: activeAffirmativeSearch, batchSize: 20 }),
       });
       const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível carregar mais candidatos.");
       setSearch(body.search); setDraftDna(body.search.jobDna);
       const added = Math.max(0, body.search.candidates.length - before);
       if (added === 0) setError("Não encontramos novos perfis elegíveis sem repetir os atuais. Você pode ampliar os critérios e fazer uma nova busca.");
+      if (activeAffirmativeSearch) setAffirmativeNotice(added ? `${added} novo(s) perfil(is) com menção pública relacionada à busca.` : "Nenhum novo perfil com menção pública encontrado ao carregar mais.");
       await refreshSavedSearches();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível carregar mais candidatos."); }
     finally { setPending(null); }
@@ -382,7 +405,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
                 <section className="mt-6 rounded-3xl border border-[#cbdcc9] bg-white p-5 shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Busca de candidatos</p><h2 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Defina o recorte da descoberta</h2><p className="mt-1 text-sm text-zinc-600">O banco Share é consultado primeiro. Somente a lacuna de perfis segue para fontes externas.</p></div>
-                    <button type="button" onClick={runSearch} disabled={pending === "search" || pending === "more" || pending === "dna"} className="inline-flex items-center gap-2 rounded-xl bg-[var(--share-green-950)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{pending === "search" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{pending === "search" ? "Buscando candidatos" : search.status === "job_dna_ready" ? "Buscar candidatos" : "Refazer busca"}</button>
+                    <button type="button" onClick={() => void runSearch()} disabled={pending === "search" || pending === "more" || pending === "dna"} className="inline-flex items-center gap-2 rounded-xl bg-[var(--share-green-950)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{pending === "search" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{pending === "search" ? "Buscando candidatos" : search.status === "job_dna_ready" ? "Buscar candidatos" : "Refazer busca"}</button>
                   </div>
                   <div className="mt-5 grid gap-4 md:grid-cols-4"><Field label="Cargo atual" value={filters.currentTitle} setValue={(currentTitle) => setFilters({ ...filters, currentTitle })} placeholder="Ex.: Product Manager" /><Field label="Localização" value={filters.location} setValue={(location) => setFilters({ ...filters, location })} placeholder="Ex.: Jundiaí, SP" /><Field label="Palavras-chave" value={filters.keywords} setValue={(keywords) => setFilters({ ...filters, keywords })} placeholder="Separe por vírgulas" /><label className="grid gap-1 text-sm font-medium text-zinc-700">Resultados iniciais<input type="number" min="5" max="50" value={filters.quantity} onChange={(event) => setFilters({ ...filters, quantity: Number(event.target.value) })} className="h-10 rounded-md border border-[var(--share-line)] px-3 font-normal" /></label></div>
                   <div className="mt-4 rounded-xl border border-[#cbdcc9] bg-[#fbfdf8] p-4">
@@ -395,6 +418,24 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
                     {filters.alternateTitles.length ? <div className="mt-3 flex flex-wrap gap-2">{filters.alternateTitles.map((title, index) => <button type="button" key={title} onClick={() => setFilters((current) => ({ ...current, alternateTitles: current.alternateTitles.filter((_, position) => position !== index) }))} className="rounded-full border border-[#bfd8c7] bg-white px-3 py-1 text-xs font-medium text-[var(--share-green-900)]" aria-label={`Remover opção ${title}`}>{title} ×</button>)}</div> : null}
                     {titleSuggestions(filters.currentTitle).length ? <div className="mt-3 flex flex-wrap gap-2">{titleSuggestions(filters.currentTitle).filter((title) => !filters.alternateTitles.some((item) => item.toLocaleLowerCase("pt-BR") === title.toLocaleLowerCase("pt-BR"))).map((title) => <button type="button" key={title} onClick={() => addAlternateTitle(title)} disabled={filters.alternateTitles.length >= 12} className="rounded-full border border-[#cbdcc9] bg-white px-3 py-1 text-xs font-medium text-[var(--share-green-900)] disabled:opacity-50">+ {title}</button>)}</div> : null}
                   </div>
+                  <div className="mt-4 rounded-xl border border-[#cbdcc9] bg-[#f5faf7] p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-[var(--share-green-950)]">Busca em ações afirmativas</h3>
+                        <p className="mt-1 text-xs text-zinc-600">Escolha os focos e procure menções públicas a programas ou iniciativas profissionais nesta mesma vaga.</p>
+                      </div>
+                      <button type="button" onClick={() => void runSearch(true)} disabled={!filters.affirmativeFocus.length || pending === "search" || pending === "more" || pending === "dna"} className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] bg-white px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] disabled:opacity-50">{pending === "search" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}Refazer busca afirmativa</button>
+                    </div>
+                    <fieldset className="mt-4">
+                      <legend className="text-sm font-medium text-zinc-700">Opções afirmativas</legend>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {affirmativeFocuses.map((focus) => <label key={focus} className="flex items-center gap-2 rounded-md border border-[#cbdcc9] bg-white px-3 py-2 text-sm text-zinc-700"><input type="checkbox" checked={filters.affirmativeFocus.includes(focus)} onChange={(event) => setFilters((current) => ({ ...current, affirmativeFocus: event.target.checked ? [...current.affirmativeFocus, focus] : current.affirmativeFocus.filter((item) => item !== focus) }))} />{affirmativeFocusLabels[focus]}</label>)}
+                      </div>
+                    </fieldset>
+                    <label className="mt-4 grid gap-1 text-sm font-medium text-zinc-700">Programa ou iniciativa (opcional)<input value={filters.affirmativeInitiative} maxLength={80} onChange={(event) => setFilters((current) => ({ ...current, affirmativeInitiative: event.target.value }))} placeholder="Ex.: programa de talentos da sua comunidade" className="h-10 rounded-md border border-[var(--share-line)] bg-white px-3 font-normal" /></label>
+                    <p className="mt-3 text-xs leading-5 text-zinc-600">Uma menção pública orienta a descoberta; ela não comprova identidade ou elegibilidade. O ranking continua baseado nos critérios profissionais do Job DNA.</p>
+                  </div>
+                  {affirmativeNotice ? <p role="status" className="mt-3 rounded-lg border border-[#bfd8c7] bg-[#f5faf7] p-3 text-sm text-[var(--share-green-950)]">{affirmativeNotice}</p> : null}
                   {needsExpansion ? <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Poucos perfis com boa aderência? Inclua cargos alternativos acima e clique em “Refazer busca”.</p> : null}
                 </section>
 
@@ -739,6 +780,8 @@ function filtersForSearch(search: HrHuntingSearchSnapshot): SearchFilters {
     seniority: saved?.seniority ?? [],
     keywords: saved?.keywords.join(", ") ?? "",
     alternateTitles: saved?.alternateTitles ?? [],
+    affirmativeFocus: saved?.affirmativeFocus ?? [],
+    affirmativeInitiative: saved?.affirmativeInitiative ?? "",
     currentTitle: saved?.currentTitle || search.jobDna.title || "",
     location: saved?.location || search.jobDna.location || "",
   };
