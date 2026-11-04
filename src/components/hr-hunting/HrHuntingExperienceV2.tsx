@@ -6,11 +6,11 @@ import { buildLinkedInOutreachMessage } from "@/components/hr-hunting/outreachMe
 import type { HrCandidate, HrHuntingSearchSnapshot, JobDna, PublicAffirmativeJob } from "@/lib/hr-hunting/types";
 
 type JobForm = { description: string; jobUrl: string; companyName: string; recruiterName: string };
-type SearchFilters = { quantity: number; currentTitle: string; location: string; keywords: string; alternateTitles: string; seniority: string[] };
+type SearchFilters = { quantity: number; currentTitle: string; location: string; keywords: string; alternateTitles: string[]; seniority: string[] };
 type Pending = "job" | "dna" | "search" | "more" | "export" | "delete" | null;
 
 const emptyForm: JobForm = { description: "", jobUrl: "", companyName: "", recruiterName: "" };
-const emptyFilters: SearchFilters = { quantity: 50, currentTitle: "", location: "", keywords: "", alternateTitles: "", seniority: [] };
+const emptyFilters: SearchFilters = { quantity: 50, currentTitle: "", location: "", keywords: "", alternateTitles: [], seniority: [] };
 
 type WorkspaceView = "new" | "all" | "mine" | "shortlists" | "candidates" | "search";
 type SavedSearchSummary = {
@@ -43,6 +43,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
   const [draftDna, setDraftDna] = useState<JobDna | null>(null);
   const [form, setForm] = useState<JobForm>(emptyForm);
   const [filters, setFilters] = useState<SearchFilters>(emptyFilters);
+  const [alternateTitleDraft, setAlternateTitleDraft] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [candidate, setCandidate] = useState<HrCandidate | null>(null);
   const [pending, setPending] = useState<Pending>(null);
@@ -111,6 +112,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       setSearch(body.search);
       setDraftDna(body.search.jobDna);
       setFilters(filtersForSearch(body.search));
+      setAlternateTitleDraft("");
       setSelected([]);
       setCandidate(null);
       setView("search");
@@ -142,6 +144,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
     setDraftDna(null);
     setForm(emptyForm);
     setFilters(emptyFilters);
+    setAlternateTitleDraft("");
     setSelected([]);
     setCandidate(null);
     setError(null);
@@ -163,6 +166,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       setSearch(body.search);
       setDraftDna(body.search.jobDna);
       setFilters(filtersForSearch(body.search));
+      setAlternateTitleDraft("");
       setSelected([]);
       setView("search");
       await refreshSavedSearches();
@@ -219,14 +223,31 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
     finally { setPending(null); }
   }
 
+  function addAlternateTitle(value = alternateTitleDraft) {
+    const next = mergeTitleOptions(filters.alternateTitles, split(value));
+    if (next.length > 12 || next.some((title) => title.length > 80)) {
+      setError("Use até 12 cargos alternativos, com no máximo 80 caracteres cada.");
+      return;
+    }
+    setFilters((current) => ({ ...current, alternateTitles: next }));
+    setAlternateTitleDraft("");
+    setError(null);
+  }
+
   async function runSearch() {
     if (!search) return;
     setPending("search"); setError(null);
     try {
       const { activeSearch, activeFilters } = await persistDraftDna();
+      const alternateTitles = mergeTitleOptions(activeFilters.alternateTitles, split(alternateTitleDraft));
+      if (alternateTitles.length > 12 || alternateTitles.some((title) => title.length > 80)) {
+        throw new Error("Use até 12 cargos alternativos, com no máximo 80 caracteres cada.");
+      }
+      setFilters((current) => ({ ...current, alternateTitles }));
+      setAlternateTitleDraft("");
       const response = await fetch("/api/hr-hunting/" + activeSearch.id + "/search", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...activeFilters, keywords: split(activeFilters.keywords), alternateTitles: split(activeFilters.alternateTitles) }),
+        body: JSON.stringify({ ...activeFilters, keywords: split(activeFilters.keywords), alternateTitles }),
       });
       const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível buscar candidatos.");
@@ -244,7 +265,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       const { activeSearch, activeFilters } = await persistDraftDna();
       const response = await fetch("/api/hr-hunting/" + activeSearch.id + "/load-more", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...activeFilters, keywords: split(activeFilters.keywords), alternateTitles: split(activeFilters.alternateTitles), batchSize: 20 }),
+        body: JSON.stringify({ ...activeFilters, keywords: split(activeFilters.keywords), batchSize: 20 }),
       });
       const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível carregar mais candidatos.");
@@ -365,9 +386,14 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
                   </div>
                   <div className="mt-5 grid gap-4 md:grid-cols-4"><Field label="Cargo atual" value={filters.currentTitle} setValue={(currentTitle) => setFilters({ ...filters, currentTitle })} placeholder="Ex.: Product Manager" /><Field label="Localização" value={filters.location} setValue={(location) => setFilters({ ...filters, location })} placeholder="Ex.: Jundiaí, SP" /><Field label="Palavras-chave" value={filters.keywords} setValue={(keywords) => setFilters({ ...filters, keywords })} placeholder="Separe por vírgulas" /><label className="grid gap-1 text-sm font-medium text-zinc-700">Resultados iniciais<input type="number" min="5" max="50" value={filters.quantity} onChange={(event) => setFilters({ ...filters, quantity: Number(event.target.value) })} className="h-10 rounded-md border border-[var(--share-line)] px-3 font-normal" /></label></div>
                   <div className="mt-4 rounded-xl border border-[#cbdcc9] bg-[#fbfdf8] p-4">
-                    <Field label="Cargos alternativos para ampliar a busca" value={filters.alternateTitles} setValue={(alternateTitles) => setFilters((current) => ({ ...current, alternateTitles }))} placeholder="Ex.: Sales, Key Account, Executivo de Contas" />
-                    <p className="mt-2 text-xs text-zinc-600">Separe por vírgulas. Esses cargos entram na descoberta e na aderência ao cargo; os critérios do Job DNA continuam valendo.</p>
-                    {titleSuggestions(filters.currentTitle).length ? <div className="mt-3 flex flex-wrap gap-2">{titleSuggestions(filters.currentTitle).filter((title) => !split(filters.alternateTitles).some((item) => item.toLocaleLowerCase("pt-BR") === title.toLocaleLowerCase("pt-BR"))).map((title) => <button type="button" key={title} onClick={() => setFilters((current) => ({ ...current, alternateTitles: [...split(current.alternateTitles), title].join(", ") }))} className="rounded-full border border-[#cbdcc9] bg-white px-3 py-1 text-xs font-medium text-[var(--share-green-900)]">+ {title}</button>)}</div> : null}
+                    <label htmlFor="hr-alternate-title" className="text-sm font-medium text-zinc-700">Outras opções de cargo nesta vaga</label>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <input id="hr-alternate-title" value={alternateTitleDraft} onChange={(event) => setAlternateTitleDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addAlternateTitle(); } }} placeholder="Ex.: Sales, Key Account, Executivo de Contas" className="h-10 min-w-[220px] flex-1 rounded-md border border-[var(--share-line)] bg-white px-3 text-sm" />
+                      <button type="button" onClick={() => addAlternateTitle()} disabled={!alternateTitleDraft.trim() || filters.alternateTitles.length >= 12} className="rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)] disabled:opacity-50">Adicionar opção</button>
+                    </div>
+                    <p className="mt-2 text-xs text-zinc-600">Adicione até 12 cargos, separados por vírgula ou um de cada vez. A busca avalia os novos perfis pelos critérios do Job DNA.</p>
+                    {filters.alternateTitles.length ? <div className="mt-3 flex flex-wrap gap-2">{filters.alternateTitles.map((title, index) => <button type="button" key={title} onClick={() => setFilters((current) => ({ ...current, alternateTitles: current.alternateTitles.filter((_, position) => position !== index) }))} className="rounded-full border border-[#bfd8c7] bg-white px-3 py-1 text-xs font-medium text-[var(--share-green-900)]" aria-label={`Remover opção ${title}`}>{title} ×</button>)}</div> : null}
+                    {titleSuggestions(filters.currentTitle).length ? <div className="mt-3 flex flex-wrap gap-2">{titleSuggestions(filters.currentTitle).filter((title) => !filters.alternateTitles.some((item) => item.toLocaleLowerCase("pt-BR") === title.toLocaleLowerCase("pt-BR"))).map((title) => <button type="button" key={title} onClick={() => addAlternateTitle(title)} disabled={filters.alternateTitles.length >= 12} className="rounded-full border border-[#cbdcc9] bg-white px-3 py-1 text-xs font-medium text-[var(--share-green-900)] disabled:opacity-50">+ {title}</button>)}</div> : null}
                   </div>
                   {needsExpansion ? <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Poucos perfis com boa aderência? Inclua cargos alternativos acima e clique em “Refazer busca”.</p> : null}
                 </section>
@@ -695,6 +721,16 @@ function State({ title, text }: { title: string; text: string }) { return <secti
 function Field({ label, value, setValue, placeholder = "" }: { label: string; value: string; setValue: (value: string) => void; placeholder?: string }) { return <label className="grid gap-1 text-sm font-medium text-zinc-700">{label}<input value={value} onChange={(event) => setValue(event.target.value)} placeholder={placeholder} className="h-10 rounded-md border border-[var(--share-line)] px-3 font-normal" /></label>; }
 function Area({ label, value, setValue, rows = 5, placeholder = "" }: { label: string; value: string; setValue: (value: string) => void; rows?: number; placeholder?: string }) { return <label className="mt-4 grid gap-1 text-sm font-medium text-zinc-700">{label}<textarea value={value} onChange={(event) => setValue(event.target.value)} rows={rows} placeholder={placeholder} className="rounded-md border border-[var(--share-line)] p-3 font-normal" /></label>; }
 function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3"><p className="text-xs uppercase text-zinc-500">{label}</p><p className="mt-1 font-semibold text-[var(--share-green-950)]">{value}</p></div>; }
+function mergeTitleOptions(existing: string[], additions: string[]) {
+  const seen = new Set<string>();
+  return [...existing, ...additions].map((title) => title.trim()).filter((title) => {
+    const key = title.toLocaleLowerCase("pt-BR");
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function filtersForSearch(search: HrHuntingSearchSnapshot): SearchFilters {
   const saved = search.lastSearchFilters;
   return {
@@ -702,7 +738,7 @@ function filtersForSearch(search: HrHuntingSearchSnapshot): SearchFilters {
     quantity: saved?.quantity ?? emptyFilters.quantity,
     seniority: saved?.seniority ?? [],
     keywords: saved?.keywords.join(", ") ?? "",
-    alternateTitles: saved?.alternateTitles.join(", ") ?? "",
+    alternateTitles: saved?.alternateTitles ?? [],
     currentTitle: saved?.currentTitle || search.jobDna.title || "",
     location: saved?.location || search.jobDna.location || "",
   };

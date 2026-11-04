@@ -138,12 +138,14 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
   const expandedRanked = rankCandidates(quality.rejected, search.jobDna, evalInput);
   const ranked = dedupe([...strictRanked, ...expandedRanked]);
   const externalKeys = new Set(externalPool.map(candidateKey));
-  const candidates = hasManualTitles && !options.append
-    ? dedupe([
-        ...ranked.slice(0, input.quantity),
-        ...strictRanked.filter((candidate) => externalKeys.has(candidateKey(candidate))).slice(0, Math.min(20, input.quantity)),
-      ])
-    : ranked.slice(0, input.quantity);
+  const previousKeys = new Set(search.candidates.map(candidateKey));
+  const candidates = dedupe([
+    ...ranked.slice(0, input.quantity),
+    ...ranked.filter((candidate) => previousKeys.has(candidateKey(candidate))),
+    ...(hasManualTitles && !options.append
+      ? strictRanked.filter((candidate) => externalKeys.has(candidateKey(candidate))).slice(0, Math.min(20, input.quantity))
+      : []),
+  ]);
 
   if (quality.rejected.length) {
     warnings.push(`${quality.rejected.length} perfil(is) vieram da expansão e permaneceram visíveis com aderência calculada contra a vaga original.`);
