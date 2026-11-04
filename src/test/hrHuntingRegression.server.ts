@@ -160,7 +160,8 @@ test("busca afirmativa consulta focos escolhidos e exige menção pública, sem 
   assert.equal(hasPublicAffirmativeMention("Analista Comercial e especialista em vendas.", filters.affirmativeFocus, filters.affirmativeInitiative), false);
   const professional = candidate("Ana", "Analista Comercial", "", "https://www.linkedin.com/in/ana", "Empresa X", "Atendimento ao cliente.");
   const dna: JobDna = { title: "Analista Comercial", shortSummary: "Vendas e atendimento.", responsibilities: [], interviewChecks: [], criteria: [] };
-  assert.equal(rankCandidates([professional], dna, filters)[0].fitScore, rankCandidates([professional], dna, { ...filters, affirmativeMode: false, affirmativeFocus: [] })[0].fitScore);
+  const standardFilters = { ...filters, affirmativeMode: false, affirmativeFocus: [] };
+  assert.equal(rankCandidates([professional], dna, filters)[0].fitScore, rankCandidates([professional], dna, standardFilters)[0].fitScore);
 });
 
 function candidate(name: string, currentTitle: string | undefined, location: string, profileUrl: string, currentCompany?: string, professionalSummary?: string): HrCandidate {
