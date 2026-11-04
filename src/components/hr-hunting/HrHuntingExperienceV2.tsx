@@ -559,7 +559,7 @@ function AffirmativeJobFinder({ onUseUrl, selectedUrl }: { onUseUrl: (url: strin
       <p className="mt-2 text-sm leading-6 text-zinc-600">
         Encontre anúncios que mencionam ações afirmativas. Abra a fonte para conferir o recorte e se a vaga ainda está aberta.
       </p>
-      <div className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+      <fieldset disabled={pending} className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
         <Field label="Cargo ou área" value={title} setValue={(value) => { setTitle(value); setSearched(false); setJobs([]); }} placeholder="Ex.: analista de marketing" />
         <Field label="Localização" value={location} setValue={(value) => { setLocation(value); setSearched(false); setJobs([]); }} placeholder="Ex.: São Paulo, SP" />
         <button
@@ -571,7 +571,7 @@ function AffirmativeJobFinder({ onUseUrl, selectedUrl }: { onUseUrl: (url: strin
           {pending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           {pending ? "Buscando vagas" : "Buscar vagas"}
         </button>
-      </div>
+      </fieldset>
       {error ? <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">{error}</p> : null}
       {searched && !jobs.length ? <p className="mt-4 text-sm text-zinc-600">Nenhum anúncio com indicação afirmativa apareceu neste recorte. Tente outro cargo ou amplie a localização.</p> : null}
       {jobs.length ? (
