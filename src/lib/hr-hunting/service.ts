@@ -454,8 +454,10 @@ const criterionStopWords = new Set([
 ]);
 
 function evaluateCriterion(label: string, kind: CriterionKind, profileText: string, source: string) {
-  const alternatives = normal(label)
-    .split(/[,;\/]|\b(?:ou|or)\b/)
+  const normalizedLabel = normal(label);
+  const hasAlternativeMarkers = /\b(?:ou|or|como)\b/.test(normalizedLabel);
+  const alternatives = normalizedLabel
+    .split(hasAlternativeMarkers ? /[,;\/]|\b(?:ou|or|como)\b/ : /[;\/]/)
     .map((part) => part.split(/[^a-z0-9]+/).filter((term) => term.length > 2 && !criterionStopWords.has(term)))
     .filter((terms) => terms.length);
   const evaluated = alternatives.map((terms) => {
