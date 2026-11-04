@@ -253,8 +253,11 @@ export function normalizeCandidates(items: unknown[]): HrCandidate[] {
     const phone = pick(item, ["workPhone", "businessPhone", "professionalPhone", "profile.workPhone"]);
     const sourceName = pick(item, ["sourceName", "_sourceName"]) || "LinkedIn Profile Search via Harvest";
     const location = pickLocation(item) || pickLocation(currentExperience);
-    const professionalSummary = pick(item, ["about", "summary", "description", "profile.summary", "headline", "position"])
-      || pick(currentPosition, ["description"]);
+    const professionalSummary = unique([
+      pick(item, ["about", "summary", "description", "profile.summary", "headline", "position"]),
+      pick(currentPosition, ["description"]),
+      ...collectProfessionalProfileText(item),
+    ]).join(" · ").slice(0, 8000);
     return [{
       id: `hr_${stableId(key || String(index))}`,
       name,
@@ -276,6 +279,45 @@ export function normalizeCandidates(items: unknown[]): HrCandidate[] {
       shortlisted: false,
     }];
   });
+}
+
+const professionalSections = [
+  "education", "educations", "educationHistory",
+  "profile.education", "profile.educations", "profile.educationHistory",
+  "skills", "topSkills", "profile.skills", "profile.topSkills",
+  "certifications", "licenses", "courses", "profile.certifications",
+  "experience", "experiences", "positions", "currentPositions", "currentPosition",
+  "profile.experience", "profile.experiences", "profile.positions",
+];
+const professionalFields = new Set([
+  "title", "position", "jobtitle", "headline", "description", "summary",
+  "degree", "degreename", "fieldofstudy", "field", "major", "specialization", "subject", "school", "schoolname", "institution", "institutionname",
+  "company", "companyname", "skill", "skills", "name", "certification",
+  "certificationname", "license", "licensename", "course", "coursename",
+  "activities", "details", "positionhistory", "workhistory",
+]);
+
+function collectProfessionalProfileText(item: UnknownRecord) {
+  const values: string[] = [];
+  const visit = (value: unknown, depth: number) => {
+    if (depth > 5 || values.length >= 120) return;
+    if (typeof value === "string") {
+      const text = value.replace(/\s+/g, " ").trim();
+      if (text.length >= 2 && !/^https?:\/\//i.test(text)) values.push(text.slice(0, 500));
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const entry of value) visit(entry, depth + 1);
+      return;
+    }
+    if (!isRecord(value)) return;
+    for (const [key, entry] of Object.entries(value)) {
+      if (professionalFields.has(key.toLowerCase())) visit(entry, depth + 1);
+    }
+  };
+
+  for (const path of professionalSections) visit(getPath(item, path), 0);
+  return unique(values).slice(0, 80);
 }
 
 export function applyCandidateQualityGate(candidates: HrCandidate[], dna: JobDna, input: SearchInput) {
@@ -403,12 +445,29 @@ function locationAffinity(candidateLocation: string, targetLocation: string) {
   return targetTerms.length ? matches.length / targetTerms.length : 0;
 }
 
+const criterionStopWords = new Set([
+  "a", "as", "ao", "aos", "com", "como", "da", "das", "de", "do", "dos", "e", "em",
+  "na", "nas", "no", "nos", "o", "os", "ou", "para", "por", "que", "um", "uma",
+  "formacao", "area", "areas", "experiencia", "previa", "conhecimento", "conhecimentos",
+  "desejavel", "obrigatorio", "profissional", "profissionais", "atuacao", "vivencia",
+  "ferramenta", "ferramentas", "edicao", "grafica", "similares", "similar",
+]);
+
 function evaluateCriterion(label: string, kind: CriterionKind, profileText: string, source: string) {
-  const terms = normal(label).split(/\s+/).filter((term) => term.length > 3 && !/requisito|experiencia|conhecimento|desejavel|obrigatorio|profissional|atuacao|vivencia/.test(term));
-  const matches = terms.filter((term) => profileText.includes(term));
-  const matchRatio = terms.length ? matches.length / terms.length : 0;
+  const alternatives = normal(label)
+    .split(/[,;\/]|\b(?:ou|or)\b/)
+    .map((part) => part.split(/[^a-z0-9]+/).filter((term) => term.length > 2 && !criterionStopWords.has(term)))
+    .filter((terms) => terms.length);
+  const evaluated = alternatives.map((terms) => {
+    const matches = terms.filter((term) => profileText.includes(term));
+    return { matches, ratio: matches.length / terms.length };
+  });
+  const best = evaluated.sort((left, right) => right.ratio - left.ratio)[0];
+  const matchRatio = best?.ratio || 0;
+  const matches = best?.matches || [];
   const result = matchRatio >= 0.7 ? "atende" as const : matchRatio >= 0.3 ? "parcial" as const : "não verificado" as const;
-  return { criterion: label, criterionType: kind, result, evidence: matches.length ? `Termos profissionais encontrados no perfil retornado pela fonte: ${matches.join(", ")}.` : undefined, source, confidence: matches.length ? "confirmado" as const : "não verificado" as const };
+  const evidence = matches.length ? "Termos profissionais encontrados no perfil retornado pela fonte: " + matches.join(", ") + "." : undefined;
+  return { criterion: label, criterionType: kind, result, evidence, source, confidence: matches.length ? "confirmado" as const : "não verificado" as const };
 }
 
 function flattenProfileItems(items: unknown[]) {
