@@ -212,7 +212,11 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       const updatedSearch = await persistJobDna(search.id, jobDna);
       setSearch(updatedSearch);
       setDraftDna(updatedSearch.jobDna);
-      setFilters((current) => ({ ...current, currentTitle: jobDna.title || current.currentTitle, location: jobDna.location || "" }));
+      setFilters((current) => ({
+        ...current,
+        currentTitle: current.currentTitle.trim() === search.jobDna.title.trim() ? jobDna.title : current.currentTitle,
+        location: current.location.trim() === (search.jobDna.location || "").trim() ? jobDna.location || "" : current.location,
+      }));
       await refreshSavedSearches();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível salvar o Job DNA."); }
     finally { setPending(null); }
@@ -355,7 +359,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
                 <section className="mt-6 rounded-3xl border border-[#cbdcc9] bg-white p-5 shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Busca de candidatos</p><h2 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Defina o recorte da descoberta</h2><p className="mt-1 text-sm text-zinc-600">O banco Share é consultado primeiro. Somente a lacuna de perfis segue para fontes externas.</p></div>
-                    <button type="button" onClick={runSearch} disabled={pending === "search" || pending === "more"} className="inline-flex items-center gap-2 rounded-xl bg-[var(--share-green-950)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{pending === "search" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{pending === "search" ? "Buscando candidatos" : "Buscar candidatos"}</button>
+                    <button type="button" onClick={runSearch} disabled={pending === "search" || pending === "more" || pending === "dna"} className="inline-flex items-center gap-2 rounded-xl bg-[var(--share-green-950)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{pending === "search" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{pending === "search" ? "Buscando candidatos" : "Buscar candidatos"}</button>
                   </div>
                   <div className="mt-5 grid gap-4 md:grid-cols-4"><Field label="Cargo atual" value={filters.currentTitle} setValue={(currentTitle) => setFilters({ ...filters, currentTitle })} placeholder="Ex.: Product Manager" /><Field label="Localização" value={filters.location} setValue={(location) => setFilters({ ...filters, location })} placeholder="Ex.: Jundiaí, SP" /><Field label="Palavras-chave" value={filters.keywords} setValue={(keywords) => setFilters({ ...filters, keywords })} placeholder="Separe por vírgulas" /><label className="grid gap-1 text-sm font-medium text-zinc-700">Resultados iniciais<input type="number" min="5" max="50" value={filters.quantity} onChange={(event) => setFilters({ ...filters, quantity: Number(event.target.value) })} className="h-10 rounded-md border border-[var(--share-line)] px-3 font-normal" /></label></div>
                 </section>
