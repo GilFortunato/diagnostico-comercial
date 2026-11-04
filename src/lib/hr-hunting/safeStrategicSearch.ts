@@ -68,7 +68,10 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
     const manus = await createPlanWithManus(search, input, fallbackPlan(search, input));
     warnings.push(...manus.warnings);
     const rounds = buildRounds(search, input, manus.plan).map((round) => compact({
-      profileScraperMode: "Short", currentJobTitles: round.titles, locations: round.location ? [round.location] : [],
+      profileScraperMode: "Short",
+      currentJobTitles: round.titles,
+      searchQuery: round.keywords.length ? round.keywords.join(" OR ") : undefined,
+      locations: round.location ? [round.location] : [],
     }));
     state = {
       version: 1, fingerprint, pending: [],
@@ -99,8 +102,13 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
   let externalPool = collected.items;
   if (externalPool.length < externalTarget && !collected.state.fallbackComplete) {
     try {
+      const fallbackTerms = unique([
+        input.currentTitle?.trim() || search.jobDna.title || search.title,
+        ...input.keywords,
+        ...criterionSearchKeywords(search, ["obrigatório", "desejável"]),
+      ]).slice(0, 16);
       const raw = await runApifyActor("linkedinProfileSearchFallback", compact({
-        searchQuery: input.currentTitle?.trim() || search.jobDna.title || search.title,
+        searchQuery: fallbackTerms.join(" OR "),
         locations: (input.location?.trim() || search.jobDna.location) ? [input.location?.trim() || search.jobDna.location] : [],
         maxItems: 50,
       }), { timeoutMs: 15_000 });
@@ -183,11 +191,42 @@ function buildRounds(search: HrHuntingSearchSnapshot, input: SearchInput, plan: 
   const expanded = unique([...precise, ...plan.adjacentTitles.slice(0, 3)]).slice(0, 30);
   const discovery = unique([...expanded, ...plan.adjacentTitles]).slice(0, 40);
   const originalLocation = input.location?.trim() || search.jobDna.location || "";
+  const requiredKeywords = unique([
+    ...input.keywords,
+    ...criterionSearchKeywords(search, ["obrigatório"]),
+    ...plan.mustHaveKeywords,
+  ]).slice(0, 12);
+  const supportingKeywords = unique([
+    ...criterionSearchKeywords(search, ["desejável"]),
+    ...plan.supportingKeywords,
+  ]).slice(0, 10);
   return [
-    { label: "precisa", titles: precise, keywords: [], location: originalLocation || undefined },
-    { label: "ampliada", titles: expanded, keywords: [], location: originalLocation || undefined },
-    { label: "descoberta", titles: discovery, keywords: [], location: originalLocation || undefined },
+    { label: "precisa", titles: precise, keywords: requiredKeywords, location: originalLocation || undefined },
+    { label: "ampliada", titles: expanded, keywords: requiredKeywords, location: originalLocation || undefined },
+    { label: "descoberta", titles: discovery, keywords: unique([...requiredKeywords, ...supportingKeywords]).slice(0, 16), location: originalLocation || undefined },
   ];
+}
+
+function criterionSearchKeywords(
+  search: HrHuntingSearchSnapshot,
+  kinds: HrHuntingSearchSnapshot["jobDna"]["criteria"][number]["kind"][],
+) {
+  const stopWords = new Set([
+    "a", "as", "ao", "aos", "com", "como", "da", "das", "de", "do", "dos", "e", "em",
+    "na", "nas", "no", "nos", "o", "os", "ou", "para", "por", "que", "um", "uma",
+    "formacao", "area", "areas", "experiencia", "previa", "conhecimento", "conhecimentos",
+    "desejavel", "obrigatorio", "profissional", "profissionais", "atuacao", "vivencia",
+    "ferramenta", "ferramentas", "edicao", "grafica", "similares", "similar", "dominio",
+  ]);
+  const criteria = search.jobDna.criteria.filter((criterion) => kinds.includes(criterion.kind));
+  return unique(criteria.flatMap((criterion) => criterion.label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .split(/[,;\/]|\b(?:ou|or|como)\b/)
+    .map((part) => part.split(/[^a-z0-9]+/).filter((term) => term.length > 2 && !stopWords.has(term)).join(" "))
+    .filter((term) => term.length >= 3),
+  ));
 }
 
 async function enrich(candidates: HrCandidate[], input: SearchInput, warnings: string[]) {
