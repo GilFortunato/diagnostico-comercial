@@ -4,7 +4,7 @@ import type { PublicAffirmativeJob } from "@/lib/hr-hunting/types";
 
 type SearchRow = Record<string, unknown>;
 
-const affirmativeSignal = /\bafirmativ[ao]s?\b|\ba[cç][aã]o(?:ões|oes)? afirmativ[ao]s?\b|\bexclusiv[ao]s? para (?:pessoas|mulheres|candidat)/i;
+const affirmativeSignal = /\bafirmativ[ao]s?\b|\bexclusiv[ao]s?\s+(?:para\s+)?(?:pessoas|mulheres|candidat[ao]s?|pcd|negr[ao]s?|trans|ind[ií]gen[ao]s?)\b/i;
 const jobSignal = /\bvagas?\b|\bjobs?\b|\bcarreiras?\b|\boportunidades?\b|\btrainee\b|\best[aá]gio\b|\bprocesso seletivo\b/i;
 
 export async function findPublicAffirmativeJobs(title: string, location = ""): Promise<PublicAffirmativeJob[]> {
@@ -12,7 +12,7 @@ export async function findPublicAffirmativeJobs(title: string, location = ""): P
   const queries = [
     scope + ' "vaga afirmativa"',
     scope + ' "processo seletivo afirmativo"',
-    scope + ' "vaga exclusiva" pessoas',
+    scope + ' "vaga exclusiva"',
     scope + ' "programa afirmativo" recrutamento',
   ].join("\n");
   const rows = await runApifyActor("publicJobSearch", {
