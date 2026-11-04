@@ -330,7 +330,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
 
             {!workspaceLoading && view === "new" ? (
               <>
-                <AffirmativeJobFinder onUseUrl={(jobUrl) => setForm({ ...form, jobUrl })} />
+                <AffirmativeJobFinder selectedUrl={form.jobUrl} onUseUrl={(jobUrl) => setForm({ ...form, jobUrl })} />
                 <Intake form={form} setForm={setForm} pending={pending === "job"} onSubmit={createJob} />
               </>
             ) : null}
@@ -525,21 +525,19 @@ function huntingLabel(ownerName?: string) {
   return `Hunting de ${first}`;
 }
 
-function AffirmativeJobFinder({ onUseUrl }: { onUseUrl: (url: string) => void }) {
+function AffirmativeJobFinder({ onUseUrl, selectedUrl }: { onUseUrl: (url: string) => void; selectedUrl: string }) {
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [jobs, setJobs] = useState<PublicAffirmativeJob[]>([]);
   const [pending, setPending] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
 
   async function findJobs() {
     setPending(true);
     setError(null);
     setSearched(false);
     setJobs([]);
-    setSelectedUrl(null);
     try {
       const params = new URLSearchParams({ title: title.trim(), location: location.trim() });
       const response = await fetch("/api/hr-hunting/affirmative-jobs?" + params.toString(), { cache: "no-store" });
@@ -562,8 +560,8 @@ function AffirmativeJobFinder({ onUseUrl }: { onUseUrl: (url: string) => void })
         Encontre anúncios que mencionam ações afirmativas. Abra a fonte para conferir o recorte e se a vaga ainda está aberta.
       </p>
       <div className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
-        <Field label="Cargo ou área" value={title} setValue={(value) => { setTitle(value); setSearched(false); setJobs([]); setSelectedUrl(null); }} placeholder="Ex.: analista de marketing" />
-        <Field label="Localização" value={location} setValue={(value) => { setLocation(value); setSearched(false); setJobs([]); setSelectedUrl(null); }} placeholder="Ex.: São Paulo, SP" />
+        <Field label="Cargo ou área" value={title} setValue={(value) => { setTitle(value); setSearched(false); setJobs([]); }} placeholder="Ex.: analista de marketing" />
+        <Field label="Localização" value={location} setValue={(value) => { setLocation(value); setSearched(false); setJobs([]); }} placeholder="Ex.: São Paulo, SP" />
         <button
           type="button"
           onClick={() => void findJobs()}
@@ -592,7 +590,6 @@ function AffirmativeJobFinder({ onUseUrl }: { onUseUrl: (url: string) => void })
                   type="button"
                   onClick={() => {
                     onUseUrl(job.url);
-                    setSelectedUrl(job.url);
                     document.getElementById("hr-hunting-job-intake")?.scrollIntoView({ behavior: "smooth" });
                   }}
                   className="font-semibold text-[var(--share-green-800)] underline"
