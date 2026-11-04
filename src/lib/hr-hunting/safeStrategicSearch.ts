@@ -22,6 +22,7 @@ type SearchInput = {
   seniority: string[];
   location?: string;
   keywords: string[];
+  alternateTitles?: string[];
 };
 
 type SourcingPlan = {
@@ -47,7 +48,7 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
   const search = await findOwnedHrHuntingSearch(id, ownerId);
   if (!search) return null;
 
-  const fingerprint = createHash("sha256").update(JSON.stringify({ currentTitle: input.currentTitle, seniority: input.seniority, location: input.location, keywords: input.keywords, dna: search.jobDna })).digest("hex");
+  const fingerprint = createHash("sha256").update(JSON.stringify({ currentTitle: input.currentTitle, seniority: input.seniority, location: input.location, keywords: input.keywords, alternateTitles: input.alternateTitles || [], dna: search.jobDna })).digest("hex");
   const previous = options.append ? await getPrisma().hrHuntingSearch.findFirst({ where: { id }, select: { sourceSnapshot: true } }) : null;
   let state = readDiscoveryState(previous?.sourceSnapshot, fingerprint);
   const warnings: string[] = [];
@@ -63,7 +64,11 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
     warnings.push(`${cachedRanked.length} perfil(is) compatível(is) foram reaproveitados do banco Share antes de consultar fontes externas.`);
   }
 
-  const externalTarget = Math.max(0, input.quantity - cachedRanked.length);
+  const hasManualTitles = Boolean(input.alternateTitles?.length);
+  const externalTarget = Math.max(
+    0, input.quantity - cachedRanked.length,
+    hasManualTitles && !options.append ? Math.min(20, input.quantity) : 0,
+  );
   if (!state && externalTarget > 0) {
     const manus = await createPlanWithManus(search, input, fallbackPlan(search, input));
     warnings.push(...manus.warnings);
@@ -74,16 +79,17 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
       locations: round.location ? [round.location] : [],
     }));
     state = {
-      version: 1, fingerprint, pending: [],
+      version: 1, fingerprint, pending: [], searchFilters: input,
       rounds: [...new Map(rounds.map((actorInput) => [JSON.stringify(actorInput), actorInput])).values()]
         .map((actorInput) => ({ input: actorInput, nextPage: 1, exhausted: false })),
     };
   }
   if (!state) {
-    state = { version: 1, fingerprint, pending: [], rounds: [], fallbackComplete: true };
+    state = { version: 1, fingerprint, pending: [], rounds: [], fallbackComplete: true, searchFilters: input };
   }
 
-  const excludedKeys = new Set([...knownKeys, ...cachedPool.map(candidateKey)]);
+  state.searchFilters = input;
+  const excludedKeys = new Set([...knownKeys, ...cachedPool.map(candidateKey), ...search.candidates.map(candidateKey)]);
   const collected = externalTarget > 0
     ? await collectHrDiscovery({
         state, target: externalTarget,
@@ -104,6 +110,7 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
     try {
       const fallbackTerms = unique([
         input.currentTitle?.trim() || search.jobDna.title || search.title,
+        ...(input.alternateTitles || []),
         ...input.keywords,
         ...criterionSearchKeywords(search, ["obrigatório", "desejável"]),
       ]).slice(0, 16);
@@ -125,11 +132,18 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
   console.info("[hr-hunting] collection completed", { ...collected.summary });
   if (externalPool.length) externalPool = await enrich(externalPool, input, warnings);
 
-  const pool = dedupe([...cachedPool, ...externalPool]);
+  const pool = dedupe([...externalPool, ...search.candidates, ...cachedPool]);
   const quality = applyCandidateQualityGate(pool, search.jobDna, evalInput);
   const strictRanked = rankCandidates(quality.eligible, search.jobDna, evalInput);
   const expandedRanked = rankCandidates(quality.rejected, search.jobDna, evalInput);
-  const candidates = dedupe([...strictRanked, ...expandedRanked]).slice(0, input.quantity);
+  const ranked = dedupe([...strictRanked, ...expandedRanked]);
+  const externalKeys = new Set(externalPool.map(candidateKey));
+  const candidates = hasManualTitles && !options.append
+    ? dedupe([
+        ...ranked.slice(0, input.quantity),
+        ...strictRanked.filter((candidate) => externalKeys.has(candidateKey(candidate))).slice(0, Math.min(20, input.quantity)),
+      ])
+    : ranked.slice(0, input.quantity);
 
   if (quality.rejected.length) {
     warnings.push(`${quality.rejected.length} perfil(is) vieram da expansão e permaneceram visíveis com aderência calculada contra a vaga original.`);
@@ -164,6 +178,7 @@ async function createPlanWithManus(search: HrHuntingSearchSnapshot, input: Searc
     `Responsabilidades: ${search.jobDna.responsibilities.join(" | ") || "não detalhadas"}`,
     `Critérios: ${search.jobDna.criteria.filter((item) => item.kind !== "não relevante").map((item) => `${item.kind}: ${item.label}`).join(" | ") || "não detalhados"}`,
     `Palavras-chave informadas: ${input.keywords.join(", ") || "nenhuma"}`,
+    `Cargos alternativos escolhidos pela recrutadora: ${input.alternateTitles?.join(", ") || "nenhum"}`, 
     "Não use atributos pessoais ou protegidos. Responda somente no schema solicitado.",
   ].join("\n");
 
@@ -187,8 +202,9 @@ async function createPlanWithManus(search: HrHuntingSearchSnapshot, input: Searc
 
 function buildRounds(search: HrHuntingSearchSnapshot, input: SearchInput, plan: SourcingPlan): Round[] {
   const original = input.currentTitle?.trim() || search.jobDna.title || search.title;
-  const precise = unique([original, plan.primaryTitle, ...buildTitleFamily(original), ...plan.equivalentTitles]).slice(0, 20);
-  const expanded = unique([...precise, ...plan.adjacentTitles.slice(0, 3)]).slice(0, 30);
+  const manual = unique(input.alternateTitles || []).slice(0, 12);
+  const precise = manual.length ? manual : unique([original, plan.primaryTitle, ...buildTitleFamily(original), ...plan.equivalentTitles]).slice(0, 20);
+  const expanded = unique([original, ...manual, plan.primaryTitle, ...buildTitleFamily(original), ...plan.equivalentTitles, ...plan.adjacentTitles.slice(0, 3)]).slice(0, 30);
   const discovery = unique([...expanded, ...plan.adjacentTitles]).slice(0, 40);
   const originalLocation = input.location?.trim() || search.jobDna.location || "";
   const requiredKeywords = unique([
@@ -201,7 +217,7 @@ function buildRounds(search: HrHuntingSearchSnapshot, input: SearchInput, plan: 
     ...plan.supportingKeywords,
   ]).slice(0, 10);
   return [
-    { label: "precisa", titles: precise, keywords: requiredKeywords, location: originalLocation || undefined },
+    { label: "precisa", titles: precise, keywords: manual.length ? input.keywords : requiredKeywords, location: originalLocation || undefined },
     { label: "ampliada", titles: expanded, keywords: requiredKeywords, location: originalLocation || undefined },
     { label: "descoberta", titles: discovery, keywords: unique([...requiredKeywords, ...supportingKeywords]).slice(0, 16), location: originalLocation || undefined },
   ];
@@ -266,11 +282,32 @@ async function persistResult({ id, candidates, discoveryState, warnings, status 
 }) {
   await getPrisma().$transaction(async (tx) => {
     const profileIds = await upsertCandidateProfiles(tx, candidates);
-    const existing = await tx.hrHuntingCandidate.findMany({ where: { searchId: id }, select: { id: true, profileUrl: true } });
-    const knownUrls = new Set(existing.map((row) => row.profileUrl?.split("?")[0].replace(/\/$/, "").toLowerCase()).filter(Boolean));
-    const persisted = candidates.filter((candidate) => !knownUrls.has(candidateKey(candidate)))
-      .map((candidate) => ({ candidate, rowId: candidateRecordId(id, candidate.id) }))
-      .filter(({ rowId }) => !existing.some((row) => row.id === rowId));
+    const existing = await tx.hrHuntingCandidate.findMany({ where: { searchId: id }, select: { id: true, profileUrl: true, sourcePersonId: true } });
+    const existingByUrl = new Map(existing.filter((row) => row.profileUrl).map((row) => [row.profileUrl!.split("?")[0].replace(/\/$/, "").toLowerCase(), row.id]));
+    const existingById = new Set(existing.map((row) => row.id));
+    const existingBySourceId = new Map(existing.filter((row) => row.sourcePersonId).map((row) => [row.sourcePersonId!, row.id]));
+    const matches = candidates.map((candidate) => ({
+      candidate,
+      existingId: existingByUrl.get(candidateKey(candidate))
+        || (existingById.has(candidate.id) ? candidate.id : existingBySourceId.get(candidate.id)),
+    }));
+    const matched = matches.filter((item): item is { candidate: HrCandidate; existingId: string } => Boolean(item.existingId));
+    const persisted = matches.filter((item) => !item.existingId)
+      .map(({ candidate }) => ({ candidate, rowId: candidateRecordId(id, candidate.id) }))
+      .filter(({ rowId }) => !existingById.has(rowId));
+    for (const { candidate, existingId } of matched) {
+      await tx.hrHuntingCandidate.update({
+        where: { id: existingId },
+        data: {
+          fitScore: candidate.fitScore,
+          fitClassification: candidate.fitClassification,
+          mainSignal: candidate.mainSignal || null,
+          pointsToValidate: candidate.pointsToValidate,
+          rawSnapshot: candidate as unknown as Prisma.InputJsonValue,
+        },
+      });
+    }
+    if (matched.length) await tx.hrHuntingCandidateEvidence.deleteMany({ where: { candidateId: { in: matched.map((item) => item.existingId) } } });
     let insertedIds = new Set<string>();
     if (persisted.length) {
       const inserted = await tx.hrHuntingCandidate.createManyAndReturn({
@@ -300,7 +337,8 @@ async function persistResult({ id, candidates, discoveryState, warnings, status 
     }
 
     const inserted = persisted.filter(({ rowId }) => insertedIds.has(rowId));
-    const evidenceData = inserted.flatMap(({ candidate, rowId }) => candidate.evidence.map((evidence) => ({
+    const evidenceData = [...inserted, ...matched.map(({ candidate, existingId }) => ({ candidate, rowId: existingId }))]
+      .flatMap(({ candidate, rowId }) => candidate.evidence.map((evidence) => ({
             candidateId: rowId,
             criterion: evidence.criterion,
             criterionType: evidence.criterionType,
@@ -373,7 +411,7 @@ function sanitizePlan(value: SourcingPlan, fallback: SourcingPlan): SourcingPlan
 function dedupe(candidates: HrCandidate[]) {
   const seen = new Set<string>();
   return candidates.filter((candidate) => {
-    const key = candidate.profileUrl || `${normalize(candidate.name)}|${normalize(candidate.currentTitle || "")}`;
+    const key = candidateKey(candidate);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

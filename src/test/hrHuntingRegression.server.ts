@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { conservativeJobDna } from "@/lib/hr-hunting/jobDna";
 import { applyCandidateQualityGate, buildHrCandidateRecallInput, buildTitleFamily, normalizeCandidates, rankCandidates } from "@/lib/hr-hunting/service";
-import { createJobSchema, type HrCandidate, type JobDna } from "@/lib/hr-hunting/types";
+import { createJobSchema, executeSearchSchema, type HrCandidate, type JobDna } from "@/lib/hr-hunting/types";
 
 const vacancy = `Jundiaí, SP, BR
 Analista de Pós-Vendas
@@ -126,6 +126,23 @@ test("ranking dá mais peso para família de cargo e evidência profissional", (
   assert.equal(ranked[0].name, "Maria");
   assert.ok(ranked[0].fitScore > ranked[1].fitScore);
   assert.match(ranked[0].mainSignal || "", /Cargo\/família profissional aderente/);
+});
+
+test("cargos alternativos digitados ampliam elegibilidade e recalculam aderência", () => {
+  const parsed = executeSearchSchema.parse({
+    quantity: 20, currentTitle: "Gerente Comercial", seniority: [], location: "", keywords: [],
+    alternateTitles: ["Key Account", "Sales"],
+  });
+  const dna: JobDna = {
+    title: "Gerente Comercial", shortSummary: "Gestão de contas e relacionamento comercial.",
+    responsibilities: [], interviewChecks: [],
+    criteria: [{ id: "c1", label: "Relacionamento com clientes", kind: "obrigatório", sourceExcerpt: "Relacionamento com clientes." }],
+  };
+  const profile = candidate("Joana", "Key Account Manager", "", "https://www.linkedin.com/in/joana", "Empresa X", "Relacionamento com clientes.");
+  const withoutAlternatives = { ...parsed, alternateTitles: [] };
+  assert.equal(applyCandidateQualityGate([profile], dna, withoutAlternatives).eligible.length, 0);
+  assert.deepEqual(applyCandidateQualityGate([profile], dna, parsed).eligible.map((item) => item.name), ["Joana"]);
+  assert.ok(rankCandidates([profile], dna, parsed)[0].fitScore > rankCandidates([profile], dna, withoutAlternatives)[0].fitScore);
 });
 
 function candidate(name: string, currentTitle: string | undefined, location: string, profileUrl: string, currentCompany?: string, professionalSummary?: string): HrCandidate {

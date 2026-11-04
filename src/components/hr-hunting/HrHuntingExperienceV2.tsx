@@ -6,11 +6,11 @@ import { buildLinkedInOutreachMessage } from "@/components/hr-hunting/outreachMe
 import type { HrCandidate, HrHuntingSearchSnapshot, JobDna, PublicAffirmativeJob } from "@/lib/hr-hunting/types";
 
 type JobForm = { description: string; jobUrl: string; companyName: string; recruiterName: string };
-type SearchFilters = { quantity: number; currentTitle: string; location: string; keywords: string; seniority: string[] };
+type SearchFilters = { quantity: number; currentTitle: string; location: string; keywords: string; alternateTitles: string; seniority: string[] };
 type Pending = "job" | "dna" | "search" | "more" | "export" | "delete" | null;
 
 const emptyForm: JobForm = { description: "", jobUrl: "", companyName: "", recruiterName: "" };
-const emptyFilters: SearchFilters = { quantity: 50, currentTitle: "", location: "", keywords: "", seniority: [] };
+const emptyFilters: SearchFilters = { quantity: 50, currentTitle: "", location: "", keywords: "", alternateTitles: "", seniority: [] };
 
 type WorkspaceView = "new" | "all" | "mine" | "shortlists" | "candidates" | "search";
 type SavedSearchSummary = {
@@ -54,6 +54,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
 
   const sorted = useMemo(() => [...(search?.candidates || [])].sort((a, b) => b.fitScore - a.fitScore || a.name.localeCompare(b.name, "pt-BR")), [search]);
   const selectedCandidates = sorted.filter((item) => selected.includes(item.id));
+  const needsExpansion = search?.status === "no_results" || (search?.status === "results_ready" && sorted.filter((item) => item.fitScore >= 60).length < 5);
   const visibleSearches = useMemo(() => {
     if (view === "mine") return savedSearches.filter((item) => item.mine);
     if (view === "shortlists") return savedSearches.filter((item) => item.mine && item.shortlist > 0);
@@ -109,11 +110,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível abrir a vaga.");
       setSearch(body.search);
       setDraftDna(body.search.jobDna);
-      setFilters({
-        ...emptyFilters,
-        currentTitle: body.search.jobDna.title || "",
-        location: body.search.jobDna.location || "",
-      });
+      setFilters(filtersForSearch(body.search));
       setSelected([]);
       setCandidate(null);
       setView("search");
@@ -165,7 +162,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível analisar a vaga.");
       setSearch(body.search);
       setDraftDna(body.search.jobDna);
-      setFilters({ ...emptyFilters, currentTitle: body.search.jobDna.title || "", location: body.search.jobDna.location || "" });
+      setFilters(filtersForSearch(body.search));
       setSelected([]);
       setView("search");
       await refreshSavedSearches();
@@ -229,7 +226,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       const { activeSearch, activeFilters } = await persistDraftDna();
       const response = await fetch("/api/hr-hunting/" + activeSearch.id + "/search", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...activeFilters, keywords: split(activeFilters.keywords) }),
+        body: JSON.stringify({ ...activeFilters, keywords: split(activeFilters.keywords), alternateTitles: split(activeFilters.alternateTitles) }),
       });
       const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível buscar candidatos.");
@@ -247,7 +244,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       const { activeSearch, activeFilters } = await persistDraftDna();
       const response = await fetch("/api/hr-hunting/" + activeSearch.id + "/load-more", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...activeFilters, keywords: split(activeFilters.keywords), batchSize: 20 }),
+        body: JSON.stringify({ ...activeFilters, keywords: split(activeFilters.keywords), alternateTitles: split(activeFilters.alternateTitles), batchSize: 20 }),
       });
       const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível carregar mais candidatos.");
@@ -364,14 +361,20 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
                 <section className="mt-6 rounded-3xl border border-[#cbdcc9] bg-white p-5 shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Busca de candidatos</p><h2 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Defina o recorte da descoberta</h2><p className="mt-1 text-sm text-zinc-600">O banco Share é consultado primeiro. Somente a lacuna de perfis segue para fontes externas.</p></div>
-                    <button type="button" onClick={runSearch} disabled={pending === "search" || pending === "more" || pending === "dna"} className="inline-flex items-center gap-2 rounded-xl bg-[var(--share-green-950)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{pending === "search" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{pending === "search" ? "Buscando candidatos" : "Buscar candidatos"}</button>
+                    <button type="button" onClick={runSearch} disabled={pending === "search" || pending === "more" || pending === "dna"} className="inline-flex items-center gap-2 rounded-xl bg-[var(--share-green-950)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{pending === "search" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{pending === "search" ? "Buscando candidatos" : search.status === "job_dna_ready" ? "Buscar candidatos" : "Refazer busca"}</button>
                   </div>
                   <div className="mt-5 grid gap-4 md:grid-cols-4"><Field label="Cargo atual" value={filters.currentTitle} setValue={(currentTitle) => setFilters({ ...filters, currentTitle })} placeholder="Ex.: Product Manager" /><Field label="Localização" value={filters.location} setValue={(location) => setFilters({ ...filters, location })} placeholder="Ex.: Jundiaí, SP" /><Field label="Palavras-chave" value={filters.keywords} setValue={(keywords) => setFilters({ ...filters, keywords })} placeholder="Separe por vírgulas" /><label className="grid gap-1 text-sm font-medium text-zinc-700">Resultados iniciais<input type="number" min="5" max="50" value={filters.quantity} onChange={(event) => setFilters({ ...filters, quantity: Number(event.target.value) })} className="h-10 rounded-md border border-[var(--share-line)] px-3 font-normal" /></label></div>
+                  <div className="mt-4 rounded-xl border border-[#cbdcc9] bg-[#fbfdf8] p-4">
+                    <Field label="Cargos alternativos para ampliar a busca" value={filters.alternateTitles} setValue={(alternateTitles) => setFilters((current) => ({ ...current, alternateTitles }))} placeholder="Ex.: Sales, Key Account, Executivo de Contas" />
+                    <p className="mt-2 text-xs text-zinc-600">Separe por vírgulas. Esses cargos entram na descoberta e na aderência ao cargo; os critérios do Job DNA continuam valendo.</p>
+                    {titleSuggestions(filters.currentTitle).length ? <div className="mt-3 flex flex-wrap gap-2">{titleSuggestions(filters.currentTitle).filter((title) => !split(filters.alternateTitles).some((item) => item.toLocaleLowerCase("pt-BR") === title.toLocaleLowerCase("pt-BR"))).map((title) => <button type="button" key={title} onClick={() => setFilters((current) => ({ ...current, alternateTitles: [...split(current.alternateTitles), title].join(", ") }))} className="rounded-full border border-[#cbdcc9] bg-white px-3 py-1 text-xs font-medium text-[var(--share-green-900)]">+ {title}</button>)}</div> : null}
+                  </div>
+                  {needsExpansion ? <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Poucos perfis com boa aderência? Inclua cargos alternativos acima e clique em “Refazer busca”.</p> : null}
                 </section>
 
                 <ConnectorNotice status={search.status} warnings={search.connectorWarnings} />
                 {search.status === "job_dna_ready" ? <State title="Job DNA pronto para revisão" text="Revise o cargo e os critérios profissionais antes de iniciar a busca." /> : null}
-                {search.status === "no_results" ? <State title="Nenhum candidato elegível neste recorte" text="Amplie a família de cargo ou a localização. Falha de fonte é tratada separadamente e não vira falso zero." /> : null}
+                {search.status === "no_results" ? <State title="Nenhum candidato elegível neste recorte" text="Inclua cargos alternativos acima e clique em “Refazer busca”. Você também pode ajustar a localização." /> : null}
                 {search.status === "connector_error" ? <State title="A pesquisa não pôde ser concluída" text="Os resultados existentes foram preservados. Teste a conexão e tente novamente." /> : null}
 
                 {sorted.length ? <Results candidates={sorted} selected={selected} setSelected={setSelected} onOpen={setCandidate} onShortlist={toggleShortlist} onExport={exportSnapshot} exporting={pending === "export"} onLoadMore={loadMore} loadingMore={pending === "more"} /> : null}
@@ -692,4 +695,24 @@ function State({ title, text }: { title: string; text: string }) { return <secti
 function Field({ label, value, setValue, placeholder = "" }: { label: string; value: string; setValue: (value: string) => void; placeholder?: string }) { return <label className="grid gap-1 text-sm font-medium text-zinc-700">{label}<input value={value} onChange={(event) => setValue(event.target.value)} placeholder={placeholder} className="h-10 rounded-md border border-[var(--share-line)] px-3 font-normal" /></label>; }
 function Area({ label, value, setValue, rows = 5, placeholder = "" }: { label: string; value: string; setValue: (value: string) => void; rows?: number; placeholder?: string }) { return <label className="mt-4 grid gap-1 text-sm font-medium text-zinc-700">{label}<textarea value={value} onChange={(event) => setValue(event.target.value)} rows={rows} placeholder={placeholder} className="rounded-md border border-[var(--share-line)] p-3 font-normal" /></label>; }
 function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-md border border-[var(--share-line)] bg-[#fbfdf8] p-3"><p className="text-xs uppercase text-zinc-500">{label}</p><p className="mt-1 font-semibold text-[var(--share-green-950)]">{value}</p></div>; }
+function filtersForSearch(search: HrHuntingSearchSnapshot): SearchFilters {
+  const saved = search.lastSearchFilters;
+  return {
+    ...emptyFilters,
+    quantity: saved?.quantity ?? emptyFilters.quantity,
+    seniority: saved?.seniority ?? [],
+    keywords: saved?.keywords.join(", ") ?? "",
+    alternateTitles: saved?.alternateTitles.join(", ") ?? "",
+    currentTitle: saved?.currentTitle || search.jobDna.title || "",
+    location: saved?.location || search.jobDna.location || "",
+  };
+}
+
+function titleSuggestions(title: string) {
+  if (/sales|comercial|vendas|key account|account executive|executiv[oa] de contas/i.test(title)) {
+    return ["Sales", "Key Account", "Account Executive", "Executivo de Contas", "Gerente Comercial"];
+  }
+  return [];
+}
+
 function split(value: string) { return [...new Set(value.split(/[,;\n]/).map((item) => item.trim()).filter((item) => item.length >= 2))]; }

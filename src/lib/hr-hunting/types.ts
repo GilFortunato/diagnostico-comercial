@@ -58,6 +58,7 @@ export const executeSearchSchema = z.object({
   seniority: z.array(z.enum(["manager", "director", "vp", "c_level", "owner"])).max(5).default([]),
   location: z.string().trim().max(180).optional().or(z.literal("")),
   keywords: z.array(z.string().trim().min(2).max(80)).max(12).default([]),
+  alternateTitles: z.array(z.string().trim().min(2).max(80)).max(12).default([]),
 });
 
 export type HrCandidateEvidence = { criterion: string; criterionType: CriterionKind; result: "atende" | "parcial" | "não verificado"; evidence?: string; source: string; confidence: EvidenceState };
@@ -80,4 +81,5 @@ export type HrCandidate = {
 export type HrHuntingSearchSnapshot = {
   id: string; ownerId?: string; ownerName?: string; mine?: boolean; title: string; jobDescription: string; jobUrl?: string; companyName?: string; recruiterName?: string; jobDna: JobDna; searchTerms: string[];
   status: string; connectorWarnings: string[]; createdAt: string; updatedAt: string; candidates: HrCandidate[];
+  lastSearchFilters?: z.infer<typeof executeSearchSchema>;
 };

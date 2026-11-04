@@ -7,6 +7,7 @@ type LoadMoreInput = {
   seniority: string[];
   location?: string;
   keywords: string[];
+  alternateTitles?: string[];
   batchSize: number;
 };
 

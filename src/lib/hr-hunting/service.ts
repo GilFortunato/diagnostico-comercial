@@ -3,10 +3,10 @@ import { Prisma, type ConfidenceLevel } from "@prisma/client";
 import { runApifyActor } from "@/lib/connectors/apifyClient";
 import { getPrisma } from "@/lib/db/prisma";
 import { createJobDna } from "@/lib/hr-hunting/jobDna";
-import type { CriterionKind, EvidenceState, HrCandidate, HrHuntingSearchSnapshot, JobDna, MessageFormat } from "@/lib/hr-hunting/types";
+import { executeSearchSchema, type CriterionKind, type EvidenceState, type HrCandidate, type HrHuntingSearchSnapshot, type JobDna, type MessageFormat } from "@/lib/hr-hunting/types";
 import { attachCandidateMemory } from "@/lib/hr-hunting/candidateMemory";
 
-type SearchInput = { quantity: number; currentTitle?: string; seniority: string[]; location?: string; keywords: string[] };
+type SearchInput = { quantity: number; currentTitle?: string; seniority: string[]; location?: string; keywords: string[]; alternateTitles?: string[] };
 type UnknownRecord = Record<string, unknown>;
 type HrHuntingSearchWithCandidates = Prisma.HrHuntingSearchGetPayload<{
   include: {
@@ -224,7 +224,10 @@ function serializeSearch(row: HrHuntingSearchWithCandidates, actorId?: string): 
     contacts: candidate.contacts.map((item) => ({ value: item.value, type: item.type as HrCandidate["contacts"][number]["type"], source: item.source, confidence: fromPrismaConfidence(item.confidence), obtainedAt: item.obtainedAt?.toISOString() })),
     shortlisted: Boolean(candidate.shortlist), shortlist: candidate.shortlist ? { nextStep: candidate.shortlist.nextStep || undefined, notes: candidate.shortlist.notes || undefined } : undefined,
   }));
-  return { id: row.id, ownerId: row.ownerId, ownerName: row.owner.name || row.owner.email || "Usuário", mine: actorId ? row.ownerId === actorId : undefined, title: row.title, jobDescription: row.jobDescription, jobUrl: row.jobUrl || undefined, companyName: row.companyName || undefined, recruiterName: row.recruiterName || undefined, jobDna: row.jobDna as JobDna, searchTerms: row.searchTerms, status: row.status, connectorWarnings: row.connectorWarnings, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), candidates };
+  const savedFilters = row.sourceSnapshot && typeof row.sourceSnapshot === "object" && !Array.isArray(row.sourceSnapshot)
+    ? (row.sourceSnapshot as Record<string, unknown>).searchFilters : undefined;
+  const parsedFilters = executeSearchSchema.safeParse(savedFilters);
+  return { id: row.id, ownerId: row.ownerId, ownerName: row.owner.name || row.owner.email || "Usuário", mine: actorId ? row.ownerId === actorId : undefined, title: row.title, jobDescription: row.jobDescription, jobUrl: row.jobUrl || undefined, companyName: row.companyName || undefined, recruiterName: row.recruiterName || undefined, jobDna: row.jobDna as JobDna, searchTerms: row.searchTerms, status: row.status, connectorWarnings: row.connectorWarnings, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), candidates, lastSearchFilters: parsedFilters.success ? parsedFilters.data : undefined };
 }
 
 export function normalizeCandidates(items: unknown[]): HrCandidate[] {
@@ -327,7 +330,7 @@ export function applyCandidateQualityGate(candidates: HrCandidate[], dna: JobDna
   const rejected: HrCandidate[] = [];
 
   for (const candidate of candidates) {
-    const titleFit = candidate.currentTitle ? titleAffinity(candidate.currentTitle, targetTitle) : 0;
+    const titleFit = candidate.currentTitle ? searchTitleAffinity(candidate.currentTitle, targetTitle, input.alternateTitles) : 0;
     const locationFit = locationAffinity(candidate.location || "", input.location || "");
     const hasProfessionalEvidence = Boolean(candidate.currentTitle && candidate.profileUrl);
     const passesTitle = titleFit >= 0.35;
@@ -348,7 +351,7 @@ export function rankCandidates(candidates: HrCandidate[], dna: JobDna, input: Se
     const desired = evidence.filter((item) => item.criterionType === "desejável");
     const requiredRatio = ratio(required);
     const desiredRatio = ratio(desired);
-    const titleFit = titleAffinity(candidate.currentTitle || "", targetTitle);
+    const titleFit = searchTitleAffinity(candidate.currentTitle || "", targetTitle, input.alternateTitles);
     const locationFit = input.location ? locationAffinity(candidate.location || "", input.location) : 1;
     const completeness = [candidate.currentCompany, candidate.professionalSummary].filter(Boolean).length / 2;
     const score = Math.round(Math.min(100,
@@ -413,6 +416,13 @@ function uniqueContacts(contacts: HrCandidate["contacts"]) {
     seen.add(key);
     return true;
   });
+}
+
+function searchTitleAffinity(candidateTitle: string, targetTitle: string, alternateTitles: string[] = []) {
+  return Math.max(
+    titleAffinity(candidateTitle, targetTitle),
+    ...alternateTitles.map((title) => titleAffinity(candidateTitle, title) * 0.9),
+  );
 }
 
 function titleAffinity(candidateTitle: string, targetTitle: string) {

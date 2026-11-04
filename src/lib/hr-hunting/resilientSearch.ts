@@ -10,6 +10,7 @@ type SearchInput = {
   seniority: string[];
   location?: string;
   keywords: string[];
+  alternateTitles?: string[];
 };
 
 export async function executeResilientHrHuntingSearch(id: string, ownerId: string, input: SearchInput) {
