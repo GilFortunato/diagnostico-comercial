@@ -7,7 +7,8 @@ export type ApifyActorKey =
   | "linkedinCompanyEmployeesFallback"
   | "linkedinCompanyDetails"
   | "linkedinCompanySearch"
-  | "leadDiscovery";
+  | "leadDiscovery"
+  | "publicJobSearch";
 
 export type ApifyActorDefinition = {
   key: ApifyActorKey;
@@ -105,6 +106,20 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
     defaultInput: {
       scraperMode: "short",
       maxItems: 25,
+    },
+  },
+  publicJobSearch: {
+    key: "publicJobSearch",
+    actorId: "apify/google-search-scraper",
+    label: "Busca pública de vagas afirmativas",
+    purpose: "Localizar anúncios públicos que declaram recorte ou programa afirmativo.",
+    stage: "authority",
+    defaultInput: {
+      queries: "",
+      maxPagesPerQuery: 1,
+      countryCode: "br",
+      languageCode: "pt-BR",
+      saveHtmlToKeyValueStore: false,
     },
   },
   leadDiscovery: {

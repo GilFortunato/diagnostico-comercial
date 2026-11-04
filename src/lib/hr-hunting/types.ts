@@ -42,6 +42,16 @@ export const createJobSchema = z.object({
 });
 
 export const updateJobDnaSchema = z.object({ jobDna: jobDnaSchema });
+export const affirmativeJobSearchSchema = z.object({
+  title: z.string().trim().min(2).max(180).refine((value) => /[\p{L}\p{N}]{2,}/u.test(value)),
+  location: z.string().trim().max(180).optional().or(z.literal("")),
+});
+export type PublicAffirmativeJob = {
+  title: string;
+  url: string;
+  source: string;
+  snippet: string;
+};
 export const executeSearchSchema = z.object({
   quantity: z.number().int().min(5).max(MAX_HUNTING_RESULTS).default(50),
   currentTitle: z.string().trim().max(180).optional().or(z.literal("")),

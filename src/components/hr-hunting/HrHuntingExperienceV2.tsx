@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BriefcaseBusiness, Check, Copy, Download, ExternalLink, FolderSearch, ListChecks, LoaderCircle, Plus, Search, Trash2, UserRoundSearch, X } from "lucide-react";
 import { buildLinkedInOutreachMessage } from "@/components/hr-hunting/outreachMessage";
-import type { HrCandidate, HrHuntingSearchSnapshot, JobDna } from "@/lib/hr-hunting/types";
+import type { HrCandidate, HrHuntingSearchSnapshot, JobDna, PublicAffirmativeJob } from "@/lib/hr-hunting/types";
 
 type JobForm = { description: string; jobUrl: string; companyName: string; recruiterName: string };
 type SearchFilters = { quantity: number; currentTitle: string; location: string; keywords: string; seniority: string[] };
@@ -328,7 +328,12 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
               </div>
             ) : null}
 
-            {!workspaceLoading && view === "new" ? <Intake form={form} setForm={setForm} pending={pending === "job"} onSubmit={createJob} /> : null}
+            {!workspaceLoading && view === "new" ? (
+              <>
+                <AffirmativeJobFinder onUseUrl={(jobUrl) => setForm({ ...form, jobUrl })} />
+                <Intake form={form} setForm={setForm} pending={pending === "job"} onSubmit={createJob} />
+              </>
+            ) : null}
 
             {!workspaceLoading && ["all", "mine", "shortlists"].includes(view) ? (
               <SavedSearchList
@@ -520,8 +525,92 @@ function huntingLabel(ownerName?: string) {
   return `Hunting de ${first}`;
 }
 
+function AffirmativeJobFinder({ onUseUrl }: { onUseUrl: (url: string) => void }) {
+  const [title, setTitle] = useState("");
+  const [location, setLocation] = useState("");
+  const [jobs, setJobs] = useState<PublicAffirmativeJob[]>([]);
+  const [pending, setPending] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
+
+  async function findJobs() {
+    setPending(true);
+    setError(null);
+    setSearched(false);
+    setJobs([]);
+    setSelectedUrl(null);
+    try {
+      const params = new URLSearchParams({ title: title.trim(), location: location.trim() });
+      const response = await fetch("/api/hr-hunting/affirmative-jobs?" + params.toString(), { cache: "no-store" });
+      const body = await response.json() as { jobs?: PublicAffirmativeJob[]; error?: string };
+      if (!response.ok) throw new Error(body.error || "Não foi possível buscar vagas afirmativas.");
+      setJobs(body.jobs || []);
+      setSearched(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível buscar vagas afirmativas.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <section className="mt-8 max-w-4xl rounded-lg border border-[var(--share-line)] bg-white p-6">
+      <p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Vagas públicas</p>
+      <h2 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Encontrar vagas afirmativas</h2>
+      <p className="mt-2 text-sm leading-6 text-zinc-600">
+        Encontre anúncios que mencionam ações afirmativas. Abra a fonte para conferir o recorte e se a vaga ainda está aberta.
+      </p>
+      <div className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+        <Field label="Cargo ou área" value={title} setValue={(value) => { setTitle(value); setSearched(false); setJobs([]); setSelectedUrl(null); }} placeholder="Ex.: analista de marketing" />
+        <Field label="Localização" value={location} setValue={(value) => { setLocation(value); setSearched(false); setJobs([]); setSelectedUrl(null); }} placeholder="Ex.: São Paulo, SP" />
+        <button
+          type="button"
+          onClick={() => void findJobs()}
+          disabled={pending || title.trim().length < 2}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[var(--share-green-950)] px-4 text-sm font-semibold text-white disabled:opacity-60"
+        >
+          {pending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          {pending ? "Buscando vagas" : "Buscar vagas"}
+        </button>
+      </div>
+      {error ? <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">{error}</p> : null}
+      {searched && !jobs.length ? <p className="mt-4 text-sm text-zinc-600">Nenhum anúncio com indicação afirmativa apareceu neste recorte. Tente outro cargo ou amplie a localização.</p> : null}
+      {jobs.length ? (
+        <div className="mt-6 space-y-3">
+          <p className="text-sm font-medium text-[var(--share-green-950)]">{jobs.length} anúncio(s) público(s) encontrado(s)</p>
+          {jobs.map((job) => (
+            <article key={job.url} className="rounded-xl border border-[var(--share-line)] p-4">
+              <p className="text-xs font-semibold text-[var(--share-green-800)]">{job.source}</p>
+              <h3 className="mt-1 font-semibold text-[var(--share-green-950)]">{job.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">{job.snippet}</p>
+              <div className="mt-3 flex flex-wrap gap-3 text-sm">
+                <a href={job.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--share-green-800)] underline">
+                  Abrir anúncio
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUseUrl(job.url);
+                    setSelectedUrl(job.url);
+                    document.getElementById("hr-hunting-job-intake")?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  className="font-semibold text-[var(--share-green-800)] underline"
+                >
+                  {selectedUrl === job.url ? "Link incluído na vaga" : "Usar link na nova vaga"}
+                </button>
+              </div>
+            </article>
+          ))}
+          <p className="text-xs text-zinc-500">Para analisar a vaga, copie a descrição completa do anúncio no formulário abaixo.</p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function Intake({ form, setForm, pending, onSubmit }: { form: JobForm; setForm: (value: JobForm) => void; pending: boolean; onSubmit: () => void }) {
-  return <section className="mt-8 max-w-4xl rounded-lg border border-[var(--share-line)] bg-white p-6"><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Nova busca</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Cole a vaga completa</h2><p className="mt-2 text-sm leading-6 text-zinc-600">Título, local, responsabilidades e requisitos ficam no mesmo texto. A Share AI estrutura o Job DNA para sua revisão.</p><div className="mt-6 grid gap-4"><Area label="Vaga completa" value={form.description} setValue={(description) => setForm({ ...form, description })} rows={16} placeholder="Cole aqui a oportunidade exatamente como recebeu." /><div className="grid gap-4 md:grid-cols-3"><Field label="Link da vaga" value={form.jobUrl} setValue={(jobUrl) => setForm({ ...form, jobUrl })} placeholder="Opcional" /><Field label="Empresa ou cliente" value={form.companyName} setValue={(companyName) => setForm({ ...form, companyName })} placeholder="Opcional" /><Field label="Recrutadora responsável" value={form.recruiterName} setValue={(recruiterName) => setForm({ ...form, recruiterName })} placeholder="Opcional" /></div><div className="flex justify-end"><button type="button" disabled={pending || form.description.trim().length < 30} onClick={onSubmit} className="inline-flex items-center gap-2 rounded-md bg-[var(--share-green-950)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">{pending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{pending ? "Analisando vaga" : "Analisar vaga"}</button></div></div></section>;
+  return <section id="hr-hunting-job-intake" className="mt-8 max-w-4xl rounded-lg border border-[var(--share-line)] bg-white p-6"><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Nova busca</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Cole a vaga completa</h2><p className="mt-2 text-sm leading-6 text-zinc-600">Título, local, responsabilidades e requisitos ficam no mesmo texto. A Share AI estrutura o Job DNA para sua revisão.</p><div className="mt-6 grid gap-4"><Area label="Vaga completa" value={form.description} setValue={(description) => setForm({ ...form, description })} rows={16} placeholder="Cole aqui a oportunidade exatamente como recebeu." /><div className="grid gap-4 md:grid-cols-3"><Field label="Link da vaga" value={form.jobUrl} setValue={(jobUrl) => setForm({ ...form, jobUrl })} placeholder="Opcional" /><Field label="Empresa ou cliente" value={form.companyName} setValue={(companyName) => setForm({ ...form, companyName })} placeholder="Opcional" /><Field label="Recrutadora responsável" value={form.recruiterName} setValue={(recruiterName) => setForm({ ...form, recruiterName })} placeholder="Opcional" /></div><div className="flex justify-end"><button type="button" disabled={pending || form.description.trim().length < 30} onClick={onSubmit} className="inline-flex items-center gap-2 rounded-md bg-[var(--share-green-950)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">{pending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{pending ? "Analisando vaga" : "Analisar vaga"}</button></div></div></section>;
 }
 
 function DnaEditor({ initial, pending, onSave, onChange }: { initial: JobDna; pending: boolean; onSave: (dna: JobDna) => void; onChange: (dna: JobDna) => void }) {

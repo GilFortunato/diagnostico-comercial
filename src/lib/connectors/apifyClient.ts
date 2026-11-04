@@ -163,6 +163,7 @@ function configuredActorId(actorKey: ApifyActorKey) {
     linkedinCompanyDetails: process.env.APIFY_LINKEDIN_COMPANY_ACTOR_ID,
     linkedinCompanySearch: process.env.APIFY_LINKEDIN_COMPANY_SEARCH_ACTOR_ID,
     leadDiscovery: process.env.APIFY_LEAD_DISCOVERY_ACTOR_ID,
+    publicJobSearch: process.env.APIFY_PUBLIC_JOB_SEARCH_ACTOR_ID,
   };
   return variables[actorKey]?.trim() || undefined;
 }
