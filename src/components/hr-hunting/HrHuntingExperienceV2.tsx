@@ -40,6 +40,7 @@ type CandidateBankItem = {
 
 export function HrHuntingExperienceV2({ accountName }: { accountName?: string | null }) {
   const [search, setSearch] = useState<HrHuntingSearchSnapshot | null>(null);
+  const [draftDna, setDraftDna] = useState<JobDna | null>(null);
   const [form, setForm] = useState<JobForm>(emptyForm);
   const [filters, setFilters] = useState<SearchFilters>(emptyFilters);
   const [selected, setSelected] = useState<string[]>([]);
@@ -107,6 +108,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível abrir a vaga.");
       setSearch(body.search);
+      setDraftDna(body.search.jobDna);
       setFilters({
         ...emptyFilters,
         currentTitle: body.search.jobDna.title || "",
@@ -140,6 +142,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
 
   function resetSearch() {
     setSearch(null);
+    setDraftDna(null);
     setForm(emptyForm);
     setFilters(emptyFilters);
     setSelected([]);
@@ -161,6 +164,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível analisar a vaga.");
       setSearch(body.search);
+      setDraftDna(body.search.jobDna);
       setFilters({ ...emptyFilters, currentTitle: body.search.jobDna.title || "", location: body.search.jobDna.location || "" });
       setSelected([]);
       setView("search");
@@ -170,15 +174,45 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
     } finally { setPending(null); }
   }
 
+  async function persistJobDna(searchId: string, jobDna: JobDna) {
+    const response = await fetch("/api/hr-hunting/" + searchId, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobDna }),
+    });
+    const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
+    if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível salvar o Job DNA.");
+    return body.search;
+  }
+
+  async function persistDraftDna() {
+    if (!search) throw new Error("Abra uma vaga antes de buscar candidatos.");
+    const jobDna = draftDna || search.jobDna;
+    if (JSON.stringify(jobDna) === JSON.stringify(search.jobDna)) {
+      return { activeSearch: search, activeFilters: filters };
+    }
+
+    const titleFollowsDna = filters.currentTitle.trim() === search.jobDna.title.trim();
+    const locationFollowsDna = filters.location.trim() === (search.jobDna.location || "").trim();
+    const activeSearch = await persistJobDna(search.id, jobDna);
+    const activeFilters = {
+      ...filters,
+      currentTitle: titleFollowsDna ? activeSearch.jobDna.title : filters.currentTitle,
+      location: locationFollowsDna ? activeSearch.jobDna.location || "" : filters.location,
+    };
+    setSearch(activeSearch);
+    setDraftDna(activeSearch.jobDna);
+    setFilters(activeFilters);
+    await refreshSavedSearches();
+    return { activeSearch, activeFilters };
+  }
+
   async function saveDna(jobDna: JobDna) {
     if (!search) return;
     setPending("dna"); setError(null);
     try {
-      const response = await fetch(`/api/hr-hunting/${search.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobDna }) });
-      const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
-      if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível salvar o Job DNA.");
-      setSearch(body.search);
-      setFilters((current) => ({ ...current, currentTitle: jobDna.title || current.currentTitle, location: jobDna.location || current.location }));
+      const updatedSearch = await persistJobDna(search.id, jobDna);
+      setSearch(updatedSearch);
+      setDraftDna(updatedSearch.jobDna);
+      setFilters((current) => ({ ...current, currentTitle: jobDna.title || current.currentTitle, location: jobDna.location || "" }));
       await refreshSavedSearches();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível salvar o Job DNA."); }
     finally { setPending(null); }
@@ -188,13 +222,14 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
     if (!search) return;
     setPending("search"); setError(null);
     try {
-      const response = await fetch(`/api/hr-hunting/${search.id}/search`, {
+      const { activeSearch, activeFilters } = await persistDraftDna();
+      const response = await fetch("/api/hr-hunting/" + activeSearch.id + "/search", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...filters, keywords: split(filters.keywords) }),
+        body: JSON.stringify({ ...activeFilters, keywords: split(activeFilters.keywords) }),
       });
       const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível buscar candidatos.");
-      setSearch(body.search); setSelected([]); setCandidate(null);
+      setSearch(body.search); setDraftDna(body.search.jobDna); setSelected([]); setCandidate(null);
       await refreshSavedSearches();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível buscar candidatos."); }
     finally { setPending(null); }
@@ -205,13 +240,14 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
     setPending("more"); setError(null);
     const before = search.candidates.length;
     try {
-      const response = await fetch(`/api/hr-hunting/${search.id}/load-more`, {
+      const { activeSearch, activeFilters } = await persistDraftDna();
+      const response = await fetch("/api/hr-hunting/" + activeSearch.id + "/load-more", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...filters, keywords: split(filters.keywords), batchSize: 20 }),
+        body: JSON.stringify({ ...activeFilters, keywords: split(activeFilters.keywords), batchSize: 20 }),
       });
       const body = await response.json() as { search?: HrHuntingSearchSnapshot; error?: string };
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível carregar mais candidatos.");
-      setSearch(body.search);
+      setSearch(body.search); setDraftDna(body.search.jobDna);
       const added = Math.max(0, body.search.candidates.length - before);
       if (added === 0) setError("Não encontramos novos perfis elegíveis sem repetir os atuais. Você pode ampliar os critérios e fazer uma nova busca.");
       await refreshSavedSearches();
@@ -315,7 +351,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
                   </div>
                 </article>
 
-                <DnaEditor initial={search.jobDna} pending={pending === "dna"} onSave={saveDna} />
+                <DnaEditor key={search.id} initial={search.jobDna} pending={pending === "dna"} onSave={saveDna} onChange={setDraftDna} />
                 <section className="mt-6 rounded-3xl border border-[#cbdcc9] bg-white p-5 shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Busca de candidatos</p><h2 className="mt-1 text-xl font-semibold text-[var(--share-green-950)]">Defina o recorte da descoberta</h2><p className="mt-1 text-sm text-zinc-600">O banco Share é consultado primeiro. Somente a lacuna de perfis segue para fontes externas.</p></div>
@@ -484,10 +520,14 @@ function Intake({ form, setForm, pending, onSubmit }: { form: JobForm; setForm: 
   return <section className="mt-8 max-w-4xl rounded-lg border border-[var(--share-line)] bg-white p-6"><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Nova busca</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Cole a vaga completa</h2><p className="mt-2 text-sm leading-6 text-zinc-600">Título, local, responsabilidades e requisitos ficam no mesmo texto. A Share AI estrutura o Job DNA para sua revisão.</p><div className="mt-6 grid gap-4"><Area label="Vaga completa" value={form.description} setValue={(description) => setForm({ ...form, description })} rows={16} placeholder="Cole aqui a oportunidade exatamente como recebeu." /><div className="grid gap-4 md:grid-cols-3"><Field label="Link da vaga" value={form.jobUrl} setValue={(jobUrl) => setForm({ ...form, jobUrl })} placeholder="Opcional" /><Field label="Empresa ou cliente" value={form.companyName} setValue={(companyName) => setForm({ ...form, companyName })} placeholder="Opcional" /><Field label="Recrutadora responsável" value={form.recruiterName} setValue={(recruiterName) => setForm({ ...form, recruiterName })} placeholder="Opcional" /></div><div className="flex justify-end"><button type="button" disabled={pending || form.description.trim().length < 30} onClick={onSubmit} className="inline-flex items-center gap-2 rounded-md bg-[var(--share-green-950)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-60">{pending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{pending ? "Analisando vaga" : "Analisar vaga"}</button></div></div></section>;
 }
 
-function DnaEditor({ initial, pending, onSave }: { initial: JobDna; pending: boolean; onSave: (dna: JobDna) => void }) {
+function DnaEditor({ initial, pending, onSave, onChange }: { initial: JobDna; pending: boolean; onSave: (dna: JobDna) => void; onChange: (dna: JobDna) => void }) {
   const [dna, setDna] = useState(initial);
-  const updateCriterion = (index: number, patch: Partial<JobDna["criteria"][number]>) => setDna({ ...dna, criteria: dna.criteria.map((item, current) => current === index ? { ...item, ...patch } : item) });
-  return <section className="mt-7 rounded-lg border border-[var(--share-line)] bg-white p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Job DNA</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Revise antes de buscar</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Critérios não encontrados no perfil permanecem como “Não verificado”, sem reprovação automática.</p></div><button type="button" disabled={pending} onClick={() => onSave(dna)} className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)]"><Check className="h-4 w-4" />Salvar Job DNA</button></div><div className="mt-5 grid gap-4 md:grid-cols-2"><Field label="Cargo identificado" value={dna.title} setValue={(title) => setDna({ ...dna, title })} /><Field label="Localização" value={dna.location || ""} setValue={(location) => setDna({ ...dna, location })} /></div><Area label="Resumo da oportunidade" value={dna.shortSummary} setValue={(shortSummary) => setDna({ ...dna, shortSummary })} rows={4} /><div className="mt-4 grid gap-4 md:grid-cols-3"><Field label="Área" value={dna.area || ""} setValue={(area) => setDna({ ...dna, area })} /><Field label="Senioridade" value={dna.seniority || ""} setValue={(seniority) => setDna({ ...dna, seniority })} /><Field label="Modelo de trabalho" value={dna.workModel || ""} setValue={(workModel) => setDna({ ...dna, workModel })} /></div>{dna.responsibilities.length ? <div className="mt-5"><p className="text-sm font-medium text-zinc-700">Responsabilidades identificadas</p><ul className="mt-2 grid gap-1 text-sm text-zinc-600">{dna.responsibilities.map((item) => <li key={item}>• {item}</li>)}</ul></div> : null}<div className="mt-5 overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b border-[var(--share-line)] text-xs uppercase text-[var(--share-green-800)]"><tr><th className="p-3">Critério</th><th className="p-3">Classificação</th><th className="p-3">Trecho da vaga</th></tr></thead><tbody>{dna.criteria.map((item, index) => <tr key={item.id} className="border-b border-[var(--share-line)]"><td className="p-3"><input value={item.label} onChange={(event) => updateCriterion(index, { label: event.target.value })} className="w-full rounded-md border border-[var(--share-line)] px-2 py-1" /></td><td className="p-3"><select value={item.kind} onChange={(event) => updateCriterion(index, { kind: event.target.value as typeof item.kind })} className="rounded-md border border-[var(--share-line)] bg-white px-2 py-1"><option value="obrigatório">Obrigatório</option><option value="desejável">Desejável</option><option value="não relevante">Não relevante</option></select></td><td className="p-3 text-zinc-600">{item.sourceExcerpt}</td></tr>)}</tbody></table></div></section>;
+  const updateDna = (next: JobDna) => {
+    setDna(next);
+    onChange(next);
+  };
+  const updateCriterion = (index: number, patch: Partial<JobDna["criteria"][number]>) => updateDna({ ...dna, criteria: dna.criteria.map((item, current) => current === index ? { ...item, ...patch } : item) });
+  return <section className="mt-7 rounded-lg border border-[var(--share-line)] bg-white p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase text-[var(--share-green-800)]">Job DNA</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">Revise antes de buscar</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Critérios não encontrados no perfil permanecem como “Não verificado”, sem reprovação automática.</p></div><button type="button" disabled={pending} onClick={() => onSave(dna)} className="inline-flex items-center gap-2 rounded-md border border-[var(--share-green-800)] px-4 py-2 text-sm font-semibold text-[var(--share-green-900)]"><Check className="h-4 w-4" />Salvar Job DNA</button></div><div className="mt-5 grid gap-4 md:grid-cols-2"><Field label="Cargo identificado" value={dna.title} setValue={(title) => updateDna({ ...dna, title })} /><Field label="Localização" value={dna.location || ""} setValue={(location) => updateDna({ ...dna, location })} /></div><Area label="Resumo da oportunidade" value={dna.shortSummary} setValue={(shortSummary) => updateDna({ ...dna, shortSummary })} rows={4} /><div className="mt-4 grid gap-4 md:grid-cols-3"><Field label="Área" value={dna.area || ""} setValue={(area) => updateDna({ ...dna, area })} /><Field label="Senioridade" value={dna.seniority || ""} setValue={(seniority) => updateDna({ ...dna, seniority })} /><Field label="Modelo de trabalho" value={dna.workModel || ""} setValue={(workModel) => updateDna({ ...dna, workModel })} /></div>{dna.responsibilities.length ? <div className="mt-5"><p className="text-sm font-medium text-zinc-700">Responsabilidades identificadas</p><ul className="mt-2 grid gap-1 text-sm text-zinc-600">{dna.responsibilities.map((item) => <li key={item}>• {item}</li>)}</ul></div> : null}<div className="mt-5 overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b border-[var(--share-line)] text-xs uppercase text-[var(--share-green-800)]"><tr><th className="p-3">Critério</th><th className="p-3">Classificação</th><th className="p-3">Trecho da vaga</th></tr></thead><tbody>{dna.criteria.map((item, index) => <tr key={item.id} className="border-b border-[var(--share-line)]"><td className="p-3"><input value={item.label} onChange={(event) => updateCriterion(index, { label: event.target.value })} className="w-full rounded-md border border-[var(--share-line)] px-2 py-1" /></td><td className="p-3"><select value={item.kind} onChange={(event) => updateCriterion(index, { kind: event.target.value as typeof item.kind })} className="rounded-md border border-[var(--share-line)] bg-white px-2 py-1"><option value="obrigatório">Obrigatório</option><option value="desejável">Desejável</option><option value="não relevante">Não relevante</option></select></td><td className="p-3 text-zinc-600">{item.sourceExcerpt}</td></tr>)}</tbody></table></div></section>;
 }
 
 function Results({ candidates, selected, setSelected, onOpen, onShortlist, onExport, exporting, onLoadMore, loadingMore }: { candidates: HrCandidate[]; selected: string[]; setSelected: (ids: string[]) => void; onOpen: (candidate: HrCandidate) => void; onShortlist: (candidate: HrCandidate, value: boolean) => void; onExport: (scope: "all" | "shortlist") => void; exporting: boolean; onLoadMore: () => void; loadingMore: boolean }) {
