@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AddToCrmButton } from "@/components/crm/AddToCrmButton";
 import { BookmarkPlus, Building2, Database, Download, ExternalLink, FolderSearch, ListChecks, LoaderCircle, Plus, Search, Trash2, Users } from "lucide-react";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
 import { defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
@@ -27,7 +28,7 @@ type WorkspaceListDetail = {
   items: Array<{ id: string; addedByName: string; createdAt: string; lead: WorkspaceLead }>;
 };
 
-export function DecisionMakerMapExperienceV2() {
+export function DecisionMakerMapExperienceV2({ canUseCrm = false }: { canUseCrm?: boolean }) {
   const units = useMemo(() => demoBusinessUnits.filter((unit) => unit.contextType === "business"), []);
   const initialUnit = units.find((unit) => unit.id === defaultBusinessUnitId) || units[0];
   const [mode, setMode] = useState<SearchMode>("people");
@@ -423,6 +424,8 @@ export function DecisionMakerMapExperienceV2() {
 
               {result.mode === "companies" ? <CompanyTable
                 companies={result.companies}
+                canUseCrm={canUseCrm}
+                searchId={result.workspaceSearchId}
                 selected={selectedCompanyIds}
                 setSelected={setSelectedCompanyIds}
                 onContinue={continueWithSelectedCompanies}
@@ -432,7 +435,7 @@ export function DecisionMakerMapExperienceV2() {
                 lists={workspaceLists}
                 onSelectList={setSelectedListId}
                 onSaveLead={(leadId) => void saveLeadToList(leadId)}
-              /> : <PeopleTable people={result.people} selectedListId={selectedListId} lists={workspaceLists} onSelectList={setSelectedListId} onSaveLead={(leadId) => void saveLeadToList(leadId)} />}
+              /> : <PeopleTable people={result.people} canUseCrm={canUseCrm} searchId={result.workspaceSearchId} selectedListId={selectedListId} lists={workspaceLists} onSelectList={setSelectedListId} onSaveLead={(leadId) => void saveLeadToList(leadId)} />}
 
               <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-md bg-[#fbfdf8] p-4">
                 <p className="text-sm text-zinc-600">{result.mode === "companies" ? "Novas contas são deduplicadas por LinkedIn, domínio e nome normalizado." : "Novas pessoas são deduplicadas pela URL real do LinkedIn e ID da fonte."}</p>
@@ -465,6 +468,7 @@ export function DecisionMakerMapExperienceV2() {
       {!workspaceLoading && (workspaceView === "leads" || workspaceView === "my-leads") ? (
         <WorkspaceLeadsPanel
           title={workspaceView === "my-leads" ? "Meus leads" : "Leads da equipe"}
+          canUseCrm={canUseCrm}
           leads={workspaceView === "my-leads" ? workspaceLeads.filter((lead) => lead.mine) : workspaceLeads}
           lists={workspaceLists}
           selectedListId={selectedListId}
@@ -543,7 +547,7 @@ function SavedSearchPanel({ title, searches, onOpen, onDelete }: { title: string
   </section>;
 }
 
-function WorkspaceLeadsPanel({ title, leads, lists, selectedListId, onSelectList, onSaveLead }: { title: string; leads: WorkspaceLead[]; lists: WorkspaceList[]; selectedListId: string; onSelectList: (id: string) => void; onSaveLead: (id: string) => void }) {
+function WorkspaceLeadsPanel({ title, leads, lists, selectedListId, onSelectList, onSaveLead, canUseCrm }: { canUseCrm: boolean; title: string; leads: WorkspaceLead[]; lists: WorkspaceList[]; selectedListId: string; onSelectList: (id: string) => void; onSaveLead: (id: string) => void }) {
   return <section className="rounded-2xl border border-[var(--share-line)] bg-white p-6">
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--share-green-800)]">Banco Share</p><h2 className="mt-1 text-2xl font-semibold text-[var(--share-green-950)]">{title}</h2><p className="mt-2 text-sm text-zinc-500">Empresas e pessoas já encontradas pelo comercial, preservando quem trouxe o lead primeiro.</p></div>
@@ -552,7 +556,7 @@ function WorkspaceLeadsPanel({ title, leads, lists, selectedListId, onSelectList
     <div className="mt-5 divide-y divide-[var(--share-line)]">
       {leads.map((lead) => <div key={lead.id} className="flex flex-wrap items-center justify-between gap-4 py-4">
         <div><div className="flex flex-wrap items-center gap-2"><strong className="text-[var(--share-green-950)]">{lead.name}</strong><span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(lead.firstSeenByName)}</span></div><p className="mt-1 text-sm text-zinc-500">{lead.title || lead.companyName || lead.domain || "Informações comerciais preservadas no banco Share"}{lead.location ? ` · ${lead.location}` : ""}</p></div>
-        <div className="flex gap-2">{lead.linkedinUrl ? <a href={lead.linkedinUrl} target="_blank" rel="noreferrer" className="rounded-lg border border-[var(--share-line)] px-3 py-2 text-xs font-semibold text-[var(--share-green-800)]">LinkedIn</a> : null}<button type="button" onClick={() => onSaveLead(lead.id)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--share-green-950)] px-3 py-2 text-xs font-semibold text-white"><BookmarkPlus className="h-3.5 w-3.5" /> Salvar na lista</button></div>
+        <div className="flex gap-2">{lead.linkedinUrl ? <a href={lead.linkedinUrl} target="_blank" rel="noreferrer" className="rounded-lg border border-[var(--share-line)] px-3 py-2 text-xs font-semibold text-[var(--share-green-800)]">LinkedIn</a> : null}<button type="button" onClick={() => onSaveLead(lead.id)} className="inline-flex items-center gap-1 rounded-lg bg-[var(--share-green-950)] px-3 py-2 text-xs font-semibold text-white"><BookmarkPlus className="h-3.5 w-3.5" /> Salvar na lista</button>{canUseCrm && <AddToCrmButton leadId={lead.id} />}</div>
       </div>)}
       {!leads.length ? <p className="py-10 text-center text-sm text-zinc-500">O banco comercial ainda está vazio.</p> : null}
     </div>
@@ -630,7 +634,11 @@ function CompanyTable({
   lists,
   onSelectList,
   onSaveLead,
+  canUseCrm,
+  searchId,
 }: {
+  canUseCrm: boolean;
+  searchId?: string;
   companies: HuntingCompany[];
   selected: string[];
   setSelected: (ids: string[]) => void;
@@ -656,7 +664,7 @@ function CompanyTable({
           <td className="p-3 font-semibold">{company.fit}</td>
           <td className="p-3">{company.linkedinUrl ? <a href={company.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[var(--share-green-800)]">LinkedIn <ExternalLink className="h-3.5 w-3.5" /></a> : company.source}</td>
           <td className="p-3">{company.firstSeenByName ? <span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(company.firstSeenByName)}</span> : <span className="text-xs text-zinc-400">Novo lead</span>}</td>
-          <td className="p-3"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => onSearchCompany(company)} disabled={!company.linkedinUrl || isSearching} className="whitespace-nowrap rounded-md bg-[var(--share-green-950)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{company.linkedinUrl ? "Buscar decisores" : "Sem LinkedIn"}</button><button type="button" onClick={() => onSaveLead(company.workspaceLeadId)} disabled={!company.workspaceLeadId || !selectedListId} className="inline-flex items-center gap-1 rounded-md border border-[var(--share-line)] px-3 py-2 text-xs font-semibold text-[var(--share-green-800)] disabled:opacity-40"><BookmarkPlus className="h-3.5 w-3.5" /> Lista</button></div></td>
+          <td className="p-3"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => onSearchCompany(company)} disabled={!company.linkedinUrl || isSearching} className="whitespace-nowrap rounded-md bg-[var(--share-green-950)] px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{company.linkedinUrl ? "Buscar decisores" : "Sem LinkedIn"}</button><button type="button" onClick={() => onSaveLead(company.workspaceLeadId)} disabled={!company.workspaceLeadId || !selectedListId} className="inline-flex items-center gap-1 rounded-md border border-[var(--share-line)] px-3 py-2 text-xs font-semibold text-[var(--share-green-800)] disabled:opacity-40"><BookmarkPlus className="h-3.5 w-3.5" /> Lista</button>{canUseCrm && <AddToCrmButton key={company.workspaceLeadId ?? company.id} leadId={company.workspaceLeadId} searchId={searchId} />}</div></td>
         </tr>)}</tbody>
       </table>
     </div>
@@ -664,10 +672,10 @@ function CompanyTable({
   </div>;
 }
 
-function PeopleTable({ people, selectedListId, lists, onSelectList, onSaveLead }: { people: HuntingPerson[]; selectedListId: string; lists: WorkspaceList[]; onSelectList: (id: string) => void; onSaveLead: (leadId?: string) => void }) {
+function PeopleTable({ people, selectedListId, lists, onSelectList, onSaveLead, canUseCrm, searchId }: { canUseCrm: boolean; searchId?: string; people: HuntingPerson[]; selectedListId: string; lists: WorkspaceList[]; onSelectList: (id: string) => void; onSaveLead: (leadId?: string) => void }) {
   return <div className="mt-4">
     <div className="mb-3 flex justify-end"><LeadListSelector lists={lists} selectedListId={selectedListId} onSelectList={onSelectList} /></div>
-    <div className="overflow-x-auto"><table className="w-full min-w-[1040px] text-left text-sm"><thead className="text-xs uppercase text-[var(--share-green-800)]"><tr><th className="border-b p-3">Pessoa</th><th className="border-b p-3">Cargo</th><th className="border-b p-3">Empresa</th><th className="border-b p-3">Fit</th><th className="border-b p-3">Workspace</th><th className="border-b p-3">Próxima ação</th></tr></thead><tbody>{people.map((person) => <tr key={person.id} className="border-b border-[var(--share-line)]"><td className="p-3"><a href={person.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--share-green-950)] hover:underline">{person.name}<ExternalLink className="h-3.5 w-3.5" /></a><span className="mt-1 block text-xs text-zinc-500">{person.location || "Localização não informada"}</span></td><td className="p-3">{person.title}</td><td className="p-3">{person.company}</td><td className="p-3"><strong>{person.fitScore}%</strong><span className="ml-2 text-xs text-zinc-500">{person.fit}</span></td><td className="p-3"><div className="flex flex-col items-start gap-2">{person.firstSeenByName ? <span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(person.firstSeenByName)}</span> : <span className="text-xs text-zinc-400">Novo lead</span>}<button type="button" onClick={() => onSaveLead(person.workspaceLeadId)} disabled={!person.workspaceLeadId || !selectedListId} className="inline-flex items-center gap-1 rounded-md border border-[var(--share-line)] px-2 py-1 text-[10px] font-semibold text-[var(--share-green-800)] disabled:opacity-40"><BookmarkPlus className="h-3 w-3" /> Salvar na lista</button></div></td><td className="p-3 text-zinc-600">{person.nextBestAction}</td></tr>)}</tbody></table></div>
+    <div className="overflow-x-auto"><table className="w-full min-w-[1040px] text-left text-sm"><thead className="text-xs uppercase text-[var(--share-green-800)]"><tr><th className="border-b p-3">Pessoa</th><th className="border-b p-3">Cargo</th><th className="border-b p-3">Empresa</th><th className="border-b p-3">Fit</th><th className="border-b p-3">Workspace</th><th className="border-b p-3">Próxima ação</th></tr></thead><tbody>{people.map((person) => <tr key={person.id} className="border-b border-[var(--share-line)]"><td className="p-3"><a href={person.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--share-green-950)] hover:underline">{person.name}<ExternalLink className="h-3.5 w-3.5" /></a><span className="mt-1 block text-xs text-zinc-500">{person.location || "Localização não informada"}</span></td><td className="p-3">{person.title}</td><td className="p-3">{person.company}</td><td className="p-3"><strong>{person.fitScore}%</strong><span className="ml-2 text-xs text-zinc-500">{person.fit}</span></td><td className="p-3"><div className="flex flex-col items-start gap-2">{person.firstSeenByName ? <span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(person.firstSeenByName)}</span> : <span className="text-xs text-zinc-400">Novo lead</span>}<button type="button" onClick={() => onSaveLead(person.workspaceLeadId)} disabled={!person.workspaceLeadId || !selectedListId} className="inline-flex items-center gap-1 rounded-md border border-[var(--share-line)] px-2 py-1 text-[10px] font-semibold text-[var(--share-green-800)] disabled:opacity-40"><BookmarkPlus className="h-3 w-3" /> Salvar na lista</button>{canUseCrm && <AddToCrmButton key={person.workspaceLeadId ?? person.id} leadId={person.workspaceLeadId} searchId={searchId} />}</div></td><td className="p-3 text-zinc-600">{person.nextBestAction}</td></tr>)}</tbody></table></div>
   </div>;
 }
 

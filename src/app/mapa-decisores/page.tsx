@@ -6,7 +6,7 @@ import { getUserModuleAccess } from "@/lib/auth/modulePermissions";
 
 export default async function DecisionMakerMapPage() {
   const user = await getSessionUser();
-  const allowed = user ? await getUserModuleAccess(user, "decision.makers").catch(() => false) : false;
+  const [allowed, canUseCrm] = user ? await Promise.all([getUserModuleAccess(user, "decision.makers").catch(() => false), getUserModuleAccess(user, "humanship.crm").catch(() => false)]) : [false, false];
 
   if (!user || !allowed) {
     return (
@@ -22,8 +22,8 @@ export default async function DecisionMakerMapPage() {
 
   return (
     <>
-      <AppHeader isAdmin={isAdminUser(user)} />
-      <DecisionMakerMapExperienceV2 />
+      <AppHeader isAdmin={isAdminUser(user)} canUseCrm={canUseCrm} />
+      <DecisionMakerMapExperienceV2 canUseCrm={canUseCrm} />
     </>
   );
 }

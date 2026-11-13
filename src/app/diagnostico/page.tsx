@@ -11,7 +11,7 @@ export default async function DiagnosticoPage() {
   const user = await getSessionUser();
   if (!user) redirect("/");
 
-  const allowed = await getUserModuleAccess(user, "authority.personal").catch(() => false);
+  const [allowed, canUseCrm] = await Promise.all([getUserModuleAccess(user, "authority.personal").catch(() => false), getUserModuleAccess(user, "humanship.crm").catch(() => false)]);
   if (!allowed) {
     return (
       <main className="share-shell grid min-h-screen place-items-center p-6">
@@ -25,7 +25,7 @@ export default async function DiagnosticoPage() {
 
   return (
     <main className="share-shell min-h-screen text-[var(--share-ink)]">
-      <AppHeader isAdmin={isAdminUser(user)} />
+      <AppHeader isAdmin={isAdminUser(user)} canUseCrm={canUseCrm} />
       <div className="mx-auto grid max-w-7xl gap-8 px-5 py-8">
         <section className="share-green-panel overflow-hidden rounded-2xl text-white">
           <div className="grid gap-8 p-6 md:p-8 lg:grid-cols-[1fr_420px]">
