@@ -10,6 +10,7 @@ export const platformModules = [
   "hr.hunting",
   "humanship.r1ship",
   "humanship.admin",
+  "humanship.crm",
   "rapport",
   "meeting.intelligence",
 ] as const;
@@ -30,6 +31,7 @@ const defaultModuleAccess: Record<PlatformModule, boolean> = {
   "hr.hunting": false,
   "humanship.r1ship": false,
   "humanship.admin": false,
+  "humanship.crm": false,
   rapport: false,
   "meeting.intelligence": false,
 };

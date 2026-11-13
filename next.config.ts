@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
       { source: "/", headers: noStoreHeaders },
       { source: "/hr-hunting/:path*", headers: noStoreHeaders },
       { source: "/mapa-decisores/:path*", headers: noStoreHeaders },
+      { source: "/diagnostico/crm/:path*", headers: noStoreHeaders },
       { source: "/perfil/:path*", headers: noStoreHeaders },
       { source: "/conteudo/:path*", headers: noStoreHeaders },
       { source: "/conectores/:path*", headers: noStoreHeaders },

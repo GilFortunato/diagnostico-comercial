@@ -836,3 +836,142 @@ model MktScoutRecord {
   @@index([kind, ownerId, updatedAt])
   @@index([expiresAt])
 }
+
+model CrmAccount {
+  id          String           @id @default(cuid())
+  identityKey String           @unique
+  name        String
+  legalName   String?
+  segment     String?
+  employeeRange String?
+  website     String?
+  linkedinUrl String?
+  location    String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  contacts    CrmContact[]
+  opportunities CrmOpportunity[]
+
+  @@index([name])
+}
+
+model CrmContact {
+  id          String      @id @default(cuid())
+  accountId   String
+  identityKey String
+  name        String
+  title       String?
+  seniority   String?
+  email       String?
+  phone       String?
+  linkedinUrl String?
+  location    String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  account     CrmAccount  @relation(fields: [accountId], references: [id])
+  opportunities CrmOpportunityContact[]
+
+  @@unique([accountId, identityKey])
+}
+
+model CrmOpportunity {
+  id                String      @id @default(cuid())
+  sourceKey         String?     @unique
+  legacyId          String?
+  accountId         String
+  stage             String      @default("Mapeado")
+  temperature       String      @default("Frio")
+  priority          String?
+  result            String      @default("Em aberto")
+  contractClosed    Boolean     @default(false)
+  contactStatus     String?
+  relationship      String?
+  owner             String?
+  origin            String?
+  channel           String?
+  project           String?
+  sponsorship       String?
+  events            String[]
+  nextAction        String?
+  nextActionDate    DateTime?   @db.Date
+  proposalDueDate   DateTime?   @db.Date
+  proposedValue     Decimal?    @db.Decimal(16, 2)
+  soldValue         Decimal?    @db.Decimal(16, 2)
+  saleDate          DateTime?   @db.Date
+  paymentMethod     String?
+  downPayment       Decimal?    @db.Decimal(16, 2)
+  installmentCount  Int?
+  notes             String?
+  followUp          String?
+  historicalNotes   String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  account           CrmAccount  @relation(fields: [accountId], references: [id])
+  contacts          CrmOpportunityContact[]
+  activities        CrmActivity[]
+  huntingLinks      CrmHuntingLink[]
+
+  @@index([accountId])
+  @@index([stage, nextActionDate])
+}
+
+model CrmOpportunityContact {
+  opportunityId String
+  contactId     String
+  opportunity   CrmOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  contact       CrmContact     @relation(fields: [contactId], references: [id])
+
+  @@id([opportunityId, contactId])
+  @@index([contactId])
+}
+
+model CrmActivity {
+  id            String          @id @default(cuid())
+  sourceKey     String?         @unique
+  opportunityId String
+  kind          String
+  date          DateTime?       @db.Date
+  channel       String?
+  reaction      String?
+  note          String?
+  attempt       Int?
+  stage         String?
+  actor         String?
+  createdAt     DateTime        @default(now())
+  opportunity   CrmOpportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId, date])
+  @@index([kind, date])
+}
+
+model CrmHuntingLink {
+  leadId        String
+  opportunityId String
+  searchId      String?
+  context       Json?
+  createdAt     DateTime        @default(now())
+  opportunity   CrmOpportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, opportunityId])
+  @@index([opportunityId])
+}
+
+model CrmImportRow {
+  sheet       String
+  rowNumber   Int
+  opportunityId String?
+  data        Json
+
+  @@id([sheet, rowNumber])
+  @@index([opportunityId])
+}
+
+model CrmReportView {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  filters   Json
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+}
