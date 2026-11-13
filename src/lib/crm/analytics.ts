@@ -19,10 +19,15 @@ export function commercialMetrics(rows: CrmRow[], activities: ActivitySummary[],
   const contacts = of("Contato");
   const responses = of("Reação");
   const held = of("Reunião realizada");
-  const done = new Set(all.filter((activity) => activity.kind === "Reunião realizada" && activity.date).map((activity) => activity.opportunityId + ":" + activity.date));
-  const latestMeetingHeld = new Map<string, string>();
-  for (const a of all) if (a.kind === "Reunião realizada" && a.date && a.date > (latestMeetingHeld.get(a.opportunityId) ?? "")) latestMeetingHeld.set(a.opportunityId, a.date);
-  const upcoming = of("Reunião agendada").filter((a) => a.date && a.date >= today && !done.has(a.opportunityId + ":" + a.date) && a.date > (latestMeetingHeld.get(a.opportunityId) ?? ""));
+  const latestUnlinkedMeetingHeld = new Map<string, string>();
+  for (const item of all) {
+    if (item.kind !== "Reunião realizada" || item.meetingLinked || !item.date) continue;
+    if (item.date > (latestUnlinkedMeetingHeld.get(item.opportunityId) ?? "")) latestUnlinkedMeetingHeld.set(item.opportunityId, item.date);
+  }
+  const pendingMeetings = of("Reunião agendada").filter((item) =>
+    item.date && (item.meetingLinked || item.date > (latestUnlinkedMeetingHeld.get(item.opportunityId) ?? "")));
+  const upcoming = pendingMeetings.filter((a) => a.date && a.date >= today);
+  const overdueMeetings = pendingMeetings.filter((a) => a.date && a.date < today);
   const active = rows.filter(isActive);
   const won = rows.filter((row) => (row.contractClosed || row.stage === "Fechado" || row.result === "Vendido") &&
     ((!filters.from && !filters.to) || datePasses(row.saleDate, filters.from, filters.to) || period.some((a) => a.opportunityId === row.id && a.stage === "Fechado")));
@@ -100,6 +105,6 @@ export function commercialMetrics(rows: CrmRow[], activities: ActivitySummary[],
     upcoming: upcoming.length, held: held.length, proposedValue: totals(active, "proposedValue"), soldValue: totals(won, "soldValue"),
     funnel, conversion, weekly, byChannel, segments, eventGroups, byOwner,
     contactedIds: prospects, reactedIds: reacted,
-    upcomingMeetings: upcoming, heldMeetings: held, activeCount: active.length,
+    upcomingMeetings: upcoming, overdueMeetings, heldMeetings: held, activeCount: active.length,
   };
 }

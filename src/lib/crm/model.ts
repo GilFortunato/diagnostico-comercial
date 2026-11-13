@@ -3,6 +3,7 @@ export const stages = [
   "Reunião realizada", "Enviar proposta", "Proposta enviada", "Negociação",
   "FUP Futuro", "Fechado", "Perdido", "Concorrente", "Sem resposta",
 ] as const;
+export type CrmStage = (typeof stages)[number];
 export const temperatures = ["Frio", "Morno", "Quente"] as const;
 export const priorities = ["Alta", "Média", "Baixa"] as const;
 export const results = ["Em aberto", "Vendido", "Não vendido", "Sem retorno"] as const;
@@ -18,7 +19,7 @@ export const daysBetween = (from: string, to: string) => Math.floor((Date.parse(
 export const brl = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export type CrmRow = {
-  id: string; legacyId: string | null; name: string; segment: string | null;
+  id: string; legacyId: string | null; name: string; segment: string | null; version: string;
   contactNames: string[]; stage: string; temperature: string; priority: string | null;
   owner: string | null; channel: string | null; project: string | null; sponsorship: string | null; events: string[];
   result: string; contractClosed: boolean; nextAction: string | null; nextActionDate: string | null;
@@ -27,15 +28,31 @@ export type CrmRow = {
 };
 
 export type ActivitySummary = {
-  opportunityId: string; kind: string; date: string | null;
+  id: string; opportunityId: string; kind: string; date: string | null;
   channel: string | null; reaction: string | null; stage: string | null;
+  meetingLinked?: boolean;
 };
 
+export type CrmTask = {
+  id: string; opportunityId: string; title: string; owner: string | null; dueDate: string | null;
+  status: "Pendente" | "Concluída" | "Cancelada";
+  meetingId: string | null; resolvedBy: string | null; resolvedAt: string | null;
+};
+
+export type CrmImportReview = {
+  rowNumber: number; opportunityId: string | null; data: Record<string, string | number | boolean | null>;
+  reviewNote: string | null; reviewedBy: string | null; reviewedAt: string | null;
+};
+
+export const reportPanels = ["summary", "operations", "proposals", "meetings", "segments", "import"] as const;
+export type ReportPanel = (typeof reportPanels)[number];
+
 export type CrmDetail = {
+  tasks?: CrmTask[];
   row: CrmRow;
   account: { name: string; legalName: string | null; segment: string | null; employeeRange: string | null; website: string | null; linkedinUrl: string | null; location: string | null };
   contacts: { id: string; name: string; title: string | null; seniority: string | null; email: string | null; phone: string | null; linkedinUrl: string | null; location: string | null }[];
-  activities: (ActivitySummary & { id: string; note: string | null; attempt: number | null; actor: string | null })[];
+  activities: (ActivitySummary & { note: string | null; attempt: number | null; actor: string | null })[];
   history: { sheet: string; rowNumber: number; data: Record<string, string | number | boolean | null> }[];
   source: { leadId: string; searchId: string | null; context: unknown }[];
   related: { id: string; stage: string; project: string | null; sponsorship: string | null; contacts: string[] }[];
@@ -44,13 +61,33 @@ export type CrmDetail = {
   installmentCount: number | null; notes: string | null; followUp: string | null; historicalNotes: string | null;
 };
 
-export type CrmFilters = { search: string; from: string; to: string; owner: string; segment: string; stage: string; channel: string; event: string; temperature: string; sponsorship: string };
+export type CrmFilters = { search: string; from: string; to: string; owner: string; segment: string; stage: string; channel: string; event: string; temperature: string; sponsorship: string; panel?: ReportPanel; period?: "last7" | "last30" };
 export type ReportView = { id: string; name: string; filters: CrmFilters };
 export const emptyFilters: CrmFilters = { search: "", from: "", to: "", owner: "", segment: "", stage: "", channel: "", event: "", temperature: "", sponsorship: "" };
 
 export function isActive(row: Pick<CrmRow, "stage" | "result" | "contractClosed">) {
   return !row.contractClosed && !["Fechado", "Perdido", "Concorrente", "FUP Futuro"].includes(row.stage) && !["Vendido", "Não vendido"].includes(row.result);
 }
+
+export function stageOutcome(previous: Pick<CrmRow, "stage" | "result" | "contractClosed">, stage: string, explicitResult?: string) {
+  const changed = stage !== previous.stage;
+  let result = explicitResult ?? previous.result;
+  if (changed && explicitResult === undefined) {
+    if (stage === "Fechado") result = "Vendido";
+    else if (stage === "Perdido") result = "Não vendido";
+    else if (["Fechado", "Perdido"].includes(previous.stage) || previous.contractClosed || ["Vendido", "Não vendido"].includes(previous.result)) result = "Em aberto";
+  }
+  const contractClosed = changed || explicitResult !== undefined
+    ? stage === "Fechado" || result === "Vendido"
+    : previous.contractClosed;
+  return { stage, result, contractClosed };
+}
+
+export function needsNextAction(row: CrmRow, stage: CrmStage) {
+  return stage !== row.stage && isActive(stageOutcome(row, stage)) && (!row.nextAction?.trim() || !row.nextActionDate);
+}
+
+export const meetingNextAction = "Participar da reunião";
 
 export function alertFor(row: CrmRow, today: string) {
   if (!isActive(row)) return { label: row.contractClosed ? "Ganho" : row.stage, tone: "neutral" };

@@ -2,8 +2,10 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { getPrisma } from "@/lib/db/prisma";
-import { isActive, normalize, todayInBrazil, type CrmDetail, type CrmFilters } from "./model";
-import type { accountUpdate, activityInput, contactUpdate, huntingInput, manualInput, opportunityUpdate } from "./schemas";
+import { isActive, meetingNextAction, normalize, stageOutcome, todayInBrazil, type CrmDetail, type CrmFilters, type CrmImportReview } from "./model";
+import type { accountUpdate, activityInput, contactUpdate, huntingInput, manualInput, opportunityUpdate, taskInput, importReviewInput } from "./schemas";
+
+import { firstTask, pendingTask, serializeTask, syncNextAction, taskOrder } from "./tasks";
 
 const day = (value: Date | null) => value?.toISOString().slice(0, 10) ?? null;
 const money = (value: Prisma.Decimal | null) => value === null ? null : Number(value);
@@ -22,7 +24,7 @@ export class CrmError extends Error {
 
 function crmRow(opp: Opportunity, lastContact: Date | null) {
   return {
-    id: opp.id, legacyId: opp.legacyId, name: opp.account.name, segment: opp.account.segment,
+    id: opp.id, legacyId: opp.legacyId, version: opp.updatedAt.toISOString(), name: opp.account.name, segment: opp.account.segment,
     contactNames: opp.contacts.map(({ contact }) => contact.name), stage: opp.stage, temperature: opp.temperature,
     priority: opp.priority, owner: opp.owner, channel: opp.channel, project: opp.project, sponsorship: opp.sponsorship, events: opp.events,
     result: opp.result, contractClosed: opp.contractClosed, nextAction: opp.nextAction,
@@ -33,11 +35,12 @@ function crmRow(opp: Opportunity, lastContact: Date | null) {
 
 export async function listCrm(userId: string) {
   const db = getPrisma();
-  const [opportunities, activities, views, sourceCount] = await Promise.all([
+  const [opportunities, activities, views, sourceCount, tasks] = await Promise.all([
     db.crmOpportunity.findMany({ include: listInclude, orderBy: [{ updatedAt: "desc" }, { id: "asc" }] }),
-    db.crmActivity.findMany({ select: { opportunityId: true, kind: true, date: true, channel: true, reaction: true, stage: true } }),
+    db.crmActivity.findMany({ select: { id: true, opportunityId: true, kind: true, date: true, channel: true, reaction: true, stage: true, sourceKey: true, reminder: { select: { id: true } } } }),
     db.crmReportView.findMany({ where: { userId }, select: { id: true, name: true, filters: true }, orderBy: { name: "asc" } }),
     db.crmOpportunity.count({ where: { sourceKey: { startsWith: "humanship-pipeline-2026:" } } }),
+    db.crmTask.findMany({ orderBy: [...taskOrder] }),
   ]);
   const lastContacts = new Map<string, Date>();
   for (const activity of activities) {
@@ -47,9 +50,10 @@ export async function listCrm(userId: string) {
   }
   return {
     rows: opportunities.map((opp) => crmRow(opp, lastContacts.get(opp.id) ?? null)),
-    activities: activities.map((activity) => ({ ...activity, date: day(activity.date) })),
+    activities: activities.map(({ sourceKey, reminder, ...activity }) => ({ ...activity, date: day(activity.date), meetingLinked: Boolean(reminder || sourceKey?.startsWith("crm-meeting:")) })),
     views: views.map((view) => ({ ...view, filters: view.filters as CrmFilters })),
     sourceCount,
+    tasks: tasks.map(serializeTask),
   };
 }
 
@@ -58,7 +62,8 @@ export async function getCrmDetail(id: string): Promise<(CrmDetail & { version: 
   const [opp, history] = await Promise.all([
     db.crmOpportunity.findUnique({
       where: { id },
-      include: { account: true, contacts: { include: { contact: true } }, activities: {
+      include: { account: true, tasks: { orderBy: [...taskOrder] }, contacts: { include: { contact: true } }, activities: {
+        include: { reminder: { select: { id: true } } },
         orderBy: [{ date: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
       }, huntingLinks: { select: { leadId: true, searchId: true, context: true } } },
     }),
@@ -72,8 +77,9 @@ export async function getCrmDetail(id: string): Promise<(CrmDetail & { version: 
   });
   return {
     row: crmRow(opp, opp.activities.find((activity) => activity.kind === "Contato" && activity.date)?.date ?? null),
+    tasks: opp.tasks.map(serializeTask),
     account: opp.account, contacts: opp.contacts.map(({ contact }) => contact),
-    activities: opp.activities.map((activity) => ({ ...activity, date: day(activity.date) })),
+    activities: opp.activities.map(({ sourceKey, reminder, ...activity }) => ({ ...activity, date: day(activity.date), meetingLinked: Boolean(reminder || sourceKey?.startsWith("crm-meeting:")) })),
     history: history.map((record) => ({ ...record, data: record.data as CrmDetail["history"][number]["data"] })),
     source: opp.huntingLinks, related: related.map((item) => ({ ...item, contacts: item.contacts.map(({ contact }) => contact.name) })),
     contactStatus: opp.contactStatus, origin: opp.origin, sponsorship: opp.sponsorship,
@@ -83,31 +89,180 @@ export async function getCrmDetail(id: string): Promise<(CrmDetail & { version: 
   };
 }
 
+const versionConflict = "A ficha foi atualizada por outra pessoa. Reabra e tente novamente.";
+
+async function lockOpportunity(tx: Tx, id: string, version: string) {
+  const previous = await tx.crmOpportunity.findUnique({ where: { id } });
+  if (!previous) throw new CrmError("Oportunidade não encontrada.", 404);
+  const expected = new Date(version);
+  if (+previous.updatedAt !== +expected) throw new CrmError(versionConflict, 409);
+  const lockedAt = new Date(Math.max(Date.now(), +previous.updatedAt + 1));
+  const locked = await tx.crmOpportunity.updateMany({
+    where: { id, updatedAt: expected }, data: { updatedAt: lockedAt },
+  });
+  if (!locked.count) throw new CrmError(versionConflict, 409);
+  return { ...previous, lockedAt };
+}
+
+type Meeting = NonNullable<z.infer<typeof opportunityUpdate>["meeting"]>;
+
+async function saveMeeting(tx: Tx, id: string, meeting: Meeting, owner: string | null, actor: string, today: Date) {
+  const scheduled = meeting.id ? await tx.crmActivity.findFirst({
+    where: { id: meeting.id, opportunityId: id, kind: "Reunião agendada" },
+  }) : null;
+  if (meeting.id && !scheduled) throw new CrmError("O agendamento mudou. Atualize a lista e tente novamente.", 409);
+  const base = { opportunityId: id, actor };
+  if (meeting.kind === "Reunião cancelada") {
+    await tx.crmActivity.update({ where: { id: meeting.id }, data: { kind: "Agendamento cancelado" } });
+    await tx.crmTask.updateMany({ where: { ...pendingTask(id), meetingId: meeting.id }, data: { status: "Cancelada", resolvedAt: new Date(), resolvedBy: actor } });
+    return { ...base, kind: meeting.kind, date: today, note: [day(scheduled?.date ?? null), meeting.note].filter(Boolean).join(" · ") };
+  }
+  const meetingDate = new Date(meeting.date);
+  if (meeting.kind === "Reunião realizada") {
+    if (meetingDate > today) throw new CrmError("A data de realização da reunião não pode estar no futuro.");
+    if (scheduled) {
+      await tx.crmActivity.update({ where: { id: scheduled.id }, data: { kind: "Agendamento concluído" } });
+      await tx.crmTask.updateMany({ where: { ...pendingTask(id), meetingId: scheduled.id }, data: { status: "Concluída", resolvedAt: new Date(), resolvedBy: actor } });
+    }
+    return { ...base, kind: meeting.kind, date: meetingDate, note: meeting.note, ...(scheduled ? { sourceKey: "crm-meeting:" + scheduled.id } : {}) };
+  }
+  const activity = scheduled
+    ? await tx.crmActivity.update({ where: { id: scheduled.id }, data: { date: meetingDate, note: meeting.note } })
+    : await tx.crmActivity.create({ data: { ...base, kind: meeting.kind, date: meetingDate, note: meeting.note } });
+  await tx.crmTask.upsert({
+    where: { meetingId: activity.id },
+    create: { opportunityId: id, meetingId: activity.id, title: meetingNextAction, dueDate: meetingDate, owner },
+    update: { dueDate: meetingDate, status: "Pendente", resolvedAt: null, resolvedBy: null },
+  });
+  if (scheduled && day(scheduled.date) !== meeting.date) {
+    return { ...base, kind: "Reunião reagendada", date: today, note: (day(scheduled.date) ?? "Sem data") + " → " + meeting.date };
+  }
+}
+
+function describeAction(label: string | null, due: Date | null) {
+  return [label, day(due)?.split("-").reverse().join("/")].filter(Boolean).join(" · ") || "Sem próxima ação";
+}
+
 export async function updateCrmOpportunity(id: string, input: z.infer<typeof opportunityUpdate>, actor: string) {
-  const { version, nextActionDate, proposalDueDate, saleDate, ...values } = input;
+  const { version, nextAction, nextActionDate, proposalDueDate, saleDate, meeting, proposal, outcomeNote, ...values } = input;
   await getPrisma().$transaction(async (tx) => {
-    const previous = await tx.crmOpportunity.findUnique({ where: { id } });
-    if (!previous) throw new CrmError("Oportunidade não encontrada.", 404);
-    const stage = values.stage ?? previous.stage;
+    const previous = await lockOpportunity(tx, id, version);
+    const scheduledCount = meeting?.kind === "Reunião cancelada"
+      ? await tx.crmActivity.count({ where: { opportunityId: id, kind: "Reunião agendada" } }) : 0;
+    const requestedStage = scheduledCount > 1 ? previous.stage : values.stage ?? previous.stage;
+    const { stage, result, contractClosed } = stageOutcome(previous, requestedStage, values.result);
     const stageChanged = stage !== previous.stage;
-    const result = values.result ?? (stageChanged && stage === "Fechado" ? "Vendido"
-      : stageChanged && stage === "Perdido" ? "Não vendido"
-      : stageChanged && ["Fechado", "Perdido"].includes(previous.stage) ? "Em aberto" : previous.result);
-    const contractClosed = stageChanged || values.result !== undefined ? stage === "Fechado" || result === "Vendido" : previous.contractClosed;
-    const actionDate = date(nextActionDate);
-    const action = values.nextAction === undefined ? previous.nextAction : values.nextAction;
-    if (stageChanged && isActive({ stage, result, contractClosed }) && (!action || !(actionDate === undefined ? previous.nextActionDate : actionDate))) {
+    const today = new Date(todayInBrazil());
+    const owner = values.owner === undefined ? previous.owner : values.owner;
+    const log: Prisma.CrmActivityCreateManyInput[] = [];
+    if (meeting) {
+      const entry = await saveMeeting(tx, id, meeting, owner, actor, today);
+      if (entry) log.push(entry);
+    }
+    const action = nextAction === undefined ? previous.nextAction : nextAction || null;
+    const nextDate = nextActionDate === undefined ? previous.nextActionDate : date(nextActionDate) ?? null;
+    const actionChanged = action !== previous.nextAction || day(nextDate) !== day(previous.nextActionDate);
+    if (actionChanged && meeting?.kind !== "Reunião agendada") {
+      const current = await firstTask(tx, id);
+      const replaceCurrent = !meeting && current && !current.meetingId;
+      if (action || nextDate) {
+        const fields = { title: action || "Próxima ação", dueDate: nextDate };
+        if (replaceCurrent) await tx.crmTask.update({ where: { id: current.id }, data: fields });
+        else await tx.crmTask.create({ data: { opportunityId: id, owner: owner || actor, ...fields } });
+      } else if (replaceCurrent) {
+        await tx.crmTask.update({ where: { id: current.id }, data: { status: "Cancelada", resolvedAt: new Date(), resolvedBy: actor } });
+      }
+      log.push({ opportunityId: id, kind: "Próxima ação atualizada", date: today, actor, note: describeAction(previous.nextAction, previous.nextActionDate) + "\n→ " + describeAction(action, nextDate) });
+    }
+    const next = await firstTask(tx, id);
+    if (stageChanged && isActive({ stage, result, contractClosed }) && meeting?.kind !== "Reunião cancelada" && !next?.dueDate) {
       throw new CrmError("Informe a próxima ação e a data antes de avançar uma oportunidade ativa.");
     }
-    const updated = await tx.crmOpportunity.updateMany({
-      where: { id, updatedAt: new Date(version) },
-      data: { ...values, result, contractClosed, nextActionDate: actionDate, proposalDueDate: date(proposalDueDate), saleDate: date(saleDate) },
-    });
-    if (!updated.count) throw new CrmError("A ficha foi atualizada por outra pessoa. Reabra e tente novamente.", 409);
-    if (stageChanged) {
-      await tx.crmActivity.create({ data: { opportunityId: id, kind: "Mudança de etapa", date: new Date(todayInBrazil()), stage, actor, note: previous.stage + " → " + stage } });
+    if (stageChanged) log.push({ opportunityId: id, kind: "Mudança de etapa", date: today, stage, actor, note: previous.stage + " → " + stage });
+    if (values.result === "Vendido" && saleDate && new Date(saleDate) > today) throw new CrmError("A data do fechamento não pode estar no futuro.");
+    if (outcomeNote) log.push({ opportunityId: id, kind: "Resultado da proposta", date: today, actor, note: outcomeNote });
+    if (proposal) {
+      const sentOn = new Date(proposal.sentOn);
+      if (sentOn > today) throw new CrmError("A data de envio da proposta não pode estar no futuro.");
+      const existing = await tx.crmActivity.findFirst({ where: { opportunityId: id, kind: "Proposta enviada", date: sentOn } });
+      if (existing) await tx.crmActivity.update({ where: { id: existing.id }, data: { note: proposal.note } });
+      else log.push({ opportunityId: id, kind: "Proposta enviada", date: sentOn, channel: values.channel === undefined ? previous.channel : values.channel, actor, note: proposal.note });
     }
+    await tx.crmOpportunity.update({ where: { id }, data: {
+      ...values, result, contractClosed, nextAction: next?.title ?? null, nextActionDate: next?.dueDate ?? null,
+      proposalDueDate: date(proposalDueDate), saleDate: date(saleDate), updatedAt: previous.lockedAt,
+    } });
+    if (log.length) await tx.crmActivity.createMany({ data: log });
   });
+}
+
+export async function updateCrmTask(id: string, input: z.infer<typeof taskInput>, actor: string) {
+  const { task } = input;
+  await getPrisma().$transaction(async (tx) => {
+    if (task.kind === "create") {
+      const duplicate = await tx.crmTask.findUnique({ where: { requestId: task.requestId } });
+      if (duplicate?.opportunityId === id && duplicate.title === task.title && duplicate.owner === task.owner && day(duplicate.dueDate) === task.dueDate) return;
+      if (duplicate) throw new CrmError("Já existe uma tarefa com esse identificador.", 409);
+    }
+    const { lockedAt } = await lockOpportunity(tx, id, input.version);
+    let title: string;
+    let kind: string;
+    if (task.kind === "create") {
+      title = task.title;
+      kind = "Tarefa criada";
+      await tx.crmTask.create({ data: {
+        opportunityId: id, requestId: task.requestId, title, owner: task.owner, dueDate: new Date(task.dueDate),
+      } });
+    } else {
+      const current = await tx.crmTask.findFirst({ where: { id: task.id, opportunityId: id } });
+      if (!current) throw new CrmError("Tarefa não encontrada.", 404);
+      if (current.meetingId) throw new CrmError("Atualize este lembrete pela aba Reuniões.");
+      title = current.title;
+      if (task.kind === "edit") {
+        if (current.status !== "Pendente") throw new CrmError("Reabra a tarefa antes de editar.");
+        kind = "Tarefa atualizada";
+        title = [
+          describeAction(current.title, current.dueDate) + " · " + (current.owner ?? "Sem responsável"),
+          describeAction(task.title, new Date(task.dueDate)) + " · " + task.owner,
+        ].join("\n→ ");
+        await tx.crmTask.update({ where: { id: current.id }, data: { title: task.title, owner: task.owner, dueDate: new Date(task.dueDate) } });
+      } else {
+        const status = { complete: "Concluída", cancel: "Cancelada", reopen: "Pendente" }[task.kind];
+        if (current.status === status) return;
+        if (task.kind !== "reopen" && current.status !== "Pendente") throw new CrmError("A tarefa já foi encerrada.");
+        kind = { complete: "Tarefa concluída", cancel: "Tarefa cancelada", reopen: "Tarefa reaberta" }[task.kind];
+        await tx.crmTask.update({ where: { id: current.id }, data: {
+          status, resolvedAt: task.kind === "reopen" ? null : new Date(), resolvedBy: task.kind === "reopen" ? null : actor,
+        } });
+      }
+    }
+    await syncNextAction(tx, id, lockedAt);
+    await tx.crmActivity.create({ data: { opportunityId: id, kind, actor, date: new Date(todayInBrazil()), note: title } });
+  });
+}
+
+export async function listCrmImportReview(): Promise<CrmImportReview[]> {
+  const rows = await getPrisma().crmImportRow.findMany({
+    where: { sheet: "Página3" }, orderBy: { rowNumber: "asc" },
+    select: { rowNumber: true, data: true, opportunityId: true, reviewNote: true, reviewedAt: true, reviewedBy: true },
+  });
+  return rows.map((row) => ({ ...row, reviewedAt: row.reviewedAt?.toISOString() ?? null, data: row.data as CrmImportReview["data"] }));
+}
+
+export async function reviewCrmImport(input: z.infer<typeof importReviewInput>, actor: string) {
+  await getPrisma().$transaction(async (tx) => {
+    const { rowNumber, opportunityId, reviewNote, reviewedAt } = input;
+    if (opportunityId && !await tx.crmOpportunity.findUnique({ where: { id: opportunityId }, select: { id: true } })) {
+      throw new CrmError("Oportunidade não encontrada.", 404);
+    }
+    const reviewTime = new Date(Math.max(Date.now(), reviewedAt ? Date.parse(reviewedAt) + 1 : 0));
+    const updated = await tx.crmImportRow.updateMany({
+      where: { sheet: "Página3", rowNumber, reviewedAt: date(reviewedAt) },
+      data: { opportunityId, reviewNote, reviewedBy: actor, reviewedAt: reviewTime },
+    });
+    if (!updated.count) throw new CrmError("Este registro já mudou. Atualize a conferência.", 409);
+  });
+  return listCrmImportReview();
 }
 
 export async function updateCrmAccount(id: string, input: z.infer<typeof accountUpdate>) {

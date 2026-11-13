@@ -1,5 +1,6 @@
 "use client";
 
+import { TaskActions, type TaskSelection } from "./CrmTaskQueue";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { activityKinds, alertFor, brl, channels, daysBetween, installmentPlan, priorities, reactions, results, stages, temperatures, todayInBrazil, type CrmDetail } from "@/lib/crm/model";
@@ -49,8 +50,9 @@ function safeUrl(value: string | null) {
   catch { return null; }
 }
 
-export function CrmOpportunityDrawer({ id, onClose, onSelect, onUpdated, eventNames }: {
+export function CrmOpportunityDrawer({ id, onClose, onSelect, onUpdated, eventNames, onTask, onMeetings }: {
   id: string; onClose: () => void; onSelect: (id: string) => void; onUpdated: () => void; eventNames: string[];
+  onTask: (selection: TaskSelection) => void; onMeetings: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -156,6 +158,17 @@ export function CrmOpportunityDrawer({ id, onClose, onSelect, onUpdated, eventNa
             <div className="sm:col-span-2"><button type="submit" className={crmButton} disabled={busy}>Salvar oportunidade</button></div>
           </form>
         </Section>
+        <Section title="Tarefas">
+          <button type="button" className={crmButton} onClick={() => onTask({ row })}>Nova tarefa</button>
+          {(detail.tasks?.length ?? 0) === 0 && <p className="mt-3 text-sm text-zinc-600">Nenhuma tarefa cadastrada.</p>}
+          <ul className="mt-3 divide-y divide-[var(--share-line)]">
+            {detail.tasks?.map((task) => <li key={task.id} className="py-3 text-sm">
+              <p className="whitespace-pre-wrap break-words font-semibold">{task.title}</p>
+              <p className="text-xs text-zinc-600">{[task.status, task.owner ?? "Sem responsável", task.dueDate && dateLabel(task.dueDate), task.resolvedBy].filter(Boolean).join(" · ")}</p>
+              <TaskActions task={task} onTask={(item) => onTask({ ...item, row })} onMeeting={onMeetings} />
+            </li>)}
+          </ul>
+        </Section>
         <Section title="Linha do tempo">
           <form key={"act:" + revision} onSubmit={save("activity", (form) => ({
             ...textFields(form, ["date", "channel", "reaction", "note"]), kind: field(form, "kind"),
@@ -213,8 +226,8 @@ export function CrmOpportunityDrawer({ id, onClose, onSelect, onUpdated, eventNa
           const context = source.context as { source?: string; fit?: string; fitReasons?: string[] } | null;
           return <li key={source.leadId}><p className="font-semibold">{[context?.source, context?.fit].filter(Boolean).join(" · ") || "B2B Hunting"}</p>{context?.fitReasons?.map((reason, index) => <p key={index}>{reason}</p>)}{source.searchId && <p className="text-xs text-zinc-600">Pesquisa {source.searchId}</p>}</li>;
         })}</ul></Section>}
-        {detail.history.map((record) => <Section key={record.rowNumber} title={"Registro original · " + record.sheet + " · linha " + record.rowNumber}>
-          <dl className="grid gap-2 text-sm sm:grid-cols-2">{Object.entries(record.data).map(([column, value]) => <div key={column}><dt className="font-semibold">{sourceHeader(column)}</dt><dd className="break-words whitespace-pre-wrap text-zinc-600">{String(value)}</dd></div>)}</dl>
+        {detail.history.map((record) => <Section key={record.sheet + ":" + record.rowNumber} title={"Registro original · " + record.sheet + " · linha " + record.rowNumber}>
+          <dl className="grid gap-2 text-sm sm:grid-cols-2">{Object.entries(record.data).map(([column, value]) => <div key={column}><dt className="font-semibold">{record.sheet === "Pipeline" ? sourceHeader(column) : "Coluna " + column}</dt><dd className="break-words whitespace-pre-wrap text-zinc-600">{String(value)}</dd></div>)}</dl>
         </Section>)}
       </>}
     </div>
