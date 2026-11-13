@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { activityKinds, channels, priorities, reactions, results, stages, temperatures } from "./model";
+import { activityKinds, channels, priorities, reactions, reportPanels, results, stages, temperatures } from "./model";
 
 const date = z.iso.date();
 const text = (max = 300) => z.string().trim().max(max);
@@ -16,6 +16,12 @@ export const opportunityUpdate = z.strictObject({
   proposedValue: money, soldValue: money, saleDate: date.nullable().optional(), paymentMethod: field(),
   downPayment: money, installmentCount: z.number().int().min(1).max(120).nullable().optional(),
   notes: field(20000), followUp: field(20000), historicalNotes: field(20000),
+  meeting: z.discriminatedUnion("kind", [
+    z.strictObject({ id: text().min(1).optional(), kind: z.enum(["Reunião agendada", "Reunião realizada"]), date, note: field(12000) }),
+    z.strictObject({ id: text().min(1), kind: z.literal("Reunião cancelada"), note: text(12000).min(1) }),
+  ]).optional(),
+  proposal: z.strictObject({ sentOn: date, note: field(12000) }).optional(),
+  outcomeNote: field(4000),
   version: z.iso.datetime(),
 });
 
@@ -36,7 +42,7 @@ export const activityInput = z.strictObject({
 
 export const filtersSchema = z.strictObject({
   search: text(), from: z.union([date, z.literal("")]), to: z.union([date, z.literal("")]),
-  owner: text(), segment: text(), stage: text(), channel: text(), event: text(), temperature: text(), sponsorship: text().default(""),
+  owner: text(), segment: text(), stage: text(), channel: text(), event: text(), temperature: text(), sponsorship: text().default(""), panel: z.enum(reportPanels).optional(), period: z.enum(["last7", "last30"]).optional(),
 }).refine((f) => !f.from || !f.to || f.from <= f.to, "A data final precisa ser igual ou posterior à inicial.");
 
 export const viewInput = z.strictObject({ name: text(80).min(1), filters: filtersSchema });
@@ -48,4 +54,17 @@ export const huntingInput = z.strictObject({
 export const manualInput = z.strictObject({
   requestId: z.uuid(), company: text().min(1), contact: field(), segment: field(), origin: field(),
   project: field(), sponsorship: field(), owner: field(),
+});
+
+const taskFields = { title: text(4000).min(1), dueDate: date, owner: text().min(1) };
+export const taskMutation = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("create"), requestId: z.uuid(), ...taskFields }),
+  z.strictObject({ kind: z.literal("edit"), id: text().min(1), ...taskFields }),
+  z.strictObject({ kind: z.enum(["complete", "cancel", "reopen"]), id: text().min(1) }),
+]);
+
+export const taskInput = z.strictObject({ version: z.iso.datetime(), task: taskMutation });
+export const importReviewInput = z.strictObject({
+  rowNumber: z.number().int().positive(), opportunityId: text().min(1).nullable(), reviewNote: text(4000).min(1),
+  reviewedAt: z.iso.datetime().nullable(),
 });

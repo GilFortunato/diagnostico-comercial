@@ -21,7 +21,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
   }
   const [{ lead }, canHunt] = await Promise.all([searchParams, getUserModuleAccess(access.user, "decision.makers").catch(() => false)]);
   return <>
-    <AppHeader isAdmin={isAdminUser(access.user)} canUseCrm />
+    <AppHeader isAdmin={isAdminUser(access.user)} canUseCrm fullWidth />
     <CrmWorkspace initialLead={typeof lead === "string" ? lead : undefined} canHunt={canHunt} />
   </>;
 }

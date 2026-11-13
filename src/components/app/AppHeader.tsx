@@ -6,12 +6,12 @@ import { LoginButton } from "@/components/auth/LoginButton";
 import { usePathname } from "next/navigation";
 import { getAppNavigation } from "@/lib/auth/navigation";
 
-export function AppHeader({ isAdmin = false, canUseCrm = isAdmin }: { isAdmin?: boolean; canUseCrm?: boolean }) {
+export function AppHeader({ isAdmin = false, canUseCrm = isAdmin, fullWidth = false }: { isAdmin?: boolean; canUseCrm?: boolean; fullWidth?: boolean }) {
   const navigation = getAppNavigation(isAdmin, canUseCrm);
   const pathname = usePathname();
   return (
     <header className="sticky top-0 z-30 border-b border-white/15 bg-[var(--share-green-950)]/95 text-white backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-3">
+      <div className={"flex flex-wrap items-center justify-between gap-4 py-3 " + (fullWidth ? "w-full px-3 sm:px-5" : "mx-auto max-w-7xl px-5")}>
         <Link href="/" className="flex items-end gap-2" aria-label="Share AI - Home">
           <Image
             src="/brand/share-wordmark-white.svg"

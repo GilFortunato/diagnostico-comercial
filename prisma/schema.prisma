@@ -910,6 +910,7 @@ model CrmOpportunity {
   contacts          CrmOpportunityContact[]
   activities        CrmActivity[]
   huntingLinks      CrmHuntingLink[]
+  tasks             CrmTask[]
 
   @@index([accountId])
   @@index([stage, nextActionDate])
@@ -941,6 +942,8 @@ model CrmActivity {
   opportunity   CrmOpportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
 
   @@index([opportunityId, date])
+  reminder      CrmTask?
+
   @@index([kind, date])
 }
 
@@ -961,6 +964,9 @@ model CrmImportRow {
   rowNumber   Int
   opportunityId String?
   data        Json
+  reviewNote  String?
+  reviewedBy  String?
+  reviewedAt  DateTime?
 
   @@id([sheet, rowNumber])
   @@index([opportunityId])
@@ -974,4 +980,23 @@ model CrmReportView {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, name])
+}
+
+model CrmTask {
+  id            String          @id @default(cuid())
+  requestId     String?         @unique
+  opportunityId String
+  opportunity   CrmOpportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  meetingId     String?         @unique
+  meeting       CrmActivity?    @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  title         String
+  owner         String?
+  dueDate       DateTime?       @db.Date
+  status        String          @default("Pendente")
+  resolvedAt    DateTime?
+  resolvedBy    String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([opportunityId, status, dueDate])
 }
