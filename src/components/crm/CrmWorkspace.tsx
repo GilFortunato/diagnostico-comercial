@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowUpRight, CalendarDays, ChartNoAxesCombined, ClipboardList, Clock3, Columns3, LayoutList, Pencil, Plus, Search } from "lucide-react";
+import { ArrowUpRight, Bell, CalendarDays, ChartNoAxesCombined, ClipboardList, Clock3, Columns3, LayoutList, Pencil, Plus, Search } from "lucide-react";
 import { crmButton, crmControl, dateLabel, requestCrm } from "./controls";
 import { CrmCreateOpportunity } from "./CrmCreateOpportunity";
 import { CrmCharts } from "./CrmCharts";
@@ -15,6 +15,7 @@ import { proposalStages, reportLabels, resolveReportPeriod } from "@/lib/crm/rep
 import { CrmQuickEdit, type QuickEdit } from "./CrmQuickEdit";
 import { CrmOpportunityDrawer } from "./CrmOpportunityDrawer";
 import { commercialMetrics } from "@/lib/crm/analytics";
+import { crmChatPath } from "@/lib/crm/googleChatConfig";
 import { alertFor, brl, channels, emptyFilters, filterRows, isActive, stages, temperatures, todayInBrazil, type ActivitySummary, type CrmDetail, type CrmFilters, type CrmRow, type CrmTask, type ReportView } from "@/lib/crm/model";
 
 type CrmResponse = { rows: CrmRow[]; activities: ActivitySummary[]; tasks?: CrmTask[]; views: ReportView[]; sourceCount: number };
@@ -26,7 +27,7 @@ const tabs: { label: Tab; icon: typeof Clock3 }[] = [
 ];
 const numeric = (v: number) => v.toLocaleString("pt-BR");
 const sort = (values: string[]) => [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
-export function CrmWorkspace({ initialLead, canHunt }: { initialLead?: string; canHunt: boolean }) {
+export function CrmWorkspace({ initialLead, canHunt, canConfigureChat }: { initialLead?: string; canHunt: boolean; canConfigureChat?: boolean }) {
   const [data, setData] = useState<CrmResponse | null>(null);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>(initialLead ? "Pipeline" : "Ações de hoje");
@@ -137,6 +138,7 @@ export function CrmWorkspace({ initialLead, canHunt }: { initialLead?: string; c
       <div className="share-green-panel flex flex-wrap items-end justify-between gap-5 rounded-2xl p-6 text-white sm:p-8">
         <div><p className="text-sm font-semibold text-[var(--share-lime)]">Humanship</p><h1 className="mt-1 text-4xl font-semibold tracking-tight">CRM</h1><p className="mt-2 text-sm text-white/75">Patrocínios e parcerias</p></div>
         <div className="flex flex-wrap gap-2"><CrmCreateOpportunity onCreated={(id) => { setTab("Pipeline"); setSelected(id); void reload(); }} />
+        {canConfigureChat && <Link href={crmChatPath} className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-4 py-2.5 text-sm font-semibold hover:bg-white/10"><Bell className="h-4 w-4" /> Alertas no Google Chat</Link>}
         {canHunt && <Link href="/mapa-decisores" className="inline-flex items-center gap-2 rounded-lg bg-[var(--share-lime)] px-4 py-2.5 text-sm font-semibold text-[var(--share-green-950)]">B2B Hunting <ArrowUpRight className="h-4 w-4" /></Link>}</div>
       </div>
       <nav aria-label="Seções do CRM" className="mt-4 flex gap-1 overflow-x-auto rounded-xl border border-[var(--share-line)] bg-white p-1.5">
