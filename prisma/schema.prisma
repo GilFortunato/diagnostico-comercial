@@ -74,6 +74,7 @@ model User {
   modulePermissions   UserModulePermission[]
   memberships         Membership[]
   credentials         UserConnectorCredential[]
+  crmChatSettings     CrmChatSettings?
   skillRuns           SkillRun[]
   assessments         AuthorityAssessment[]
   hrHuntingSearches   HrHuntingSearch[]
@@ -999,4 +1000,13 @@ model CrmTask {
   updatedAt     DateTime        @updatedAt
 
   @@index([opportunityId, status, dueDate])
+}
+
+model CrmChatSettings {
+  senderId    String   @id
+  sender      User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  credential  String?
+  recipients  Json     @default("[]")
+  enabled     Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
 }

@@ -2,6 +2,7 @@ import { AppHeader } from "@/components/app/AppHeader";
 import { CrmWorkspace } from "@/components/crm/CrmWorkspace";
 import { isAdminUser } from "@/lib/auth/admin";
 import { authorizeCrm } from "@/lib/crm/http";
+import { isCrmChatSender } from "@/lib/crm/googleChatConfig";
 import { getUserModuleAccess } from "@/lib/auth/modulePermissions";
 
 export const metadata = { title: "CRM Humanship | Share AI" };
@@ -20,8 +21,9 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     </>;
   }
   const [{ lead }, canHunt] = await Promise.all([searchParams, getUserModuleAccess(access.user, "decision.makers").catch(() => false)]);
+  const isAdmin = isAdminUser(access.user);
   return <>
-    <AppHeader isAdmin={isAdminUser(access.user)} canUseCrm fullWidth />
-    <CrmWorkspace initialLead={typeof lead === "string" ? lead : undefined} canHunt={canHunt} />
+    <AppHeader isAdmin={isAdmin} canUseCrm fullWidth />
+    <CrmWorkspace initialLead={typeof lead === "string" ? lead : undefined} canHunt={canHunt} canConfigureChat={isAdmin && isCrmChatSender(access.user.email)} />
   </>;
 }
