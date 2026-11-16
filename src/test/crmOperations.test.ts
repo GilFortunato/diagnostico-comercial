@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { commercialMetrics } from "../lib/crm/analytics";
 import { emptyFilters, stageOutcome, type ActivitySummary, type CrmRow } from "../lib/crm/model";
 import { operationalReports, resolveReportPeriod } from "../lib/crm/reports";
+import { crmMutation } from "../lib/crm/schemas";
 
 const today = "2026-11-13";
 const row: CrmRow = {
@@ -16,6 +17,20 @@ const row: CrmRow = {
 
 const activity = (id: string, kind: string, date: string, meetingLinked = false): ActivitySummary => ({
   id, opportunityId: row.id, kind, date, channel: "LinkedIn", reaction: null, stage: null, meetingLinked,
+});
+
+test("Kanban stage changes accept opportunity data without a task payload", () => {
+  const version = "2026-11-16T12:00:00.000Z";
+  const move = { action: "opportunity", data: { stage: "Em conversa", version } };
+  assert.deepEqual(crmMutation.parse(move), move);
+
+  const moveWithNextAction = {
+    ...move,
+    data: { ...move.data, nextAction: "Retornar ao decisor", nextActionDate: "2026-11-17" },
+  };
+  assert.deepEqual(crmMutation.parse(moveWithNextAction), moveWithNextAction);
+  assert.equal(crmMutation.safeParse({ ...move, data: { stage: "Em conversa" } }).success, false);
+  assert.equal(crmMutation.safeParse({ ...move, action: "task" }).success, false);
 });
 
 test("completing a meeting keeps another explicitly scheduled meeting visible", () => {
