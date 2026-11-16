@@ -64,6 +64,15 @@ export const taskMutation = z.discriminatedUnion("kind", [
 ]);
 
 export const taskInput = z.strictObject({ version: z.iso.datetime(), task: taskMutation });
+
+export const crmMutation = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("opportunity"), data: opportunityUpdate }),
+  z.object({ action: z.literal("account"), data: accountUpdate }),
+  z.object({ action: z.literal("contact"), data: contactUpdate }),
+  z.object({ action: z.literal("activity"), data: activityInput }),
+  z.object({ action: z.literal("task"), data: taskInput }),
+]);
+
 export const importReviewInput = z.strictObject({
   rowNumber: z.number().int().positive(), opportunityId: text().min(1).nullable(), reviewNote: text(4000).min(1),
   reviewedAt: z.iso.datetime().nullable(),
