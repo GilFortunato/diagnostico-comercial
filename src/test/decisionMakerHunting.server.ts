@@ -8,7 +8,7 @@ import { clearDecisionMakerCache, executeDecisionMakerSearch } from "@/lib/decis
 import { rankPeople, targetRolesNotFound } from "@/lib/decision-makers/ranking";
 import { addRoleSelection, expandRoleFamilies, removeRoleSelection } from "@/lib/decision-makers/roleIntelligence";
 import { buildBroadPeopleInput, buildCompanyDiscoveryInput, buildHarvestPeopleInput, discoverBroadPeople } from "@/lib/connectors/apifyHunting";
-import { toPublicProfileFallbackInput } from "@/lib/connectors/apifyClient";
+import { readPublicProfileFallbackItems, toPublicProfileFallbackInput } from "@/lib/connectors/apifyClient";
 import { companySearchSchema, personSearchSchema, type DecisionMakerResult } from "@/lib/decision-makers/search";
 import { conservativeJobDna } from "@/lib/hr-hunting/jobDna";
 import { buildHrHuntingWorkbook } from "@/lib/hr-hunting/exportWorkbook";
@@ -352,14 +352,23 @@ test("B2B preserva perfis com nome e LinkedIn quando a descoberta não informa c
   assert.ok(result.warnings.some((message) => message.includes("não informam cargo")));
 });
 
-test("fallback Apify usa campos de cargo e respeita o limite de 300 caracteres", () => {
+test("fallback Apify usa o contrato do Dami e divide o limite entre consultas", () => {
   const titles = Array.from({ length: 30 }, (_, index) => `Director of Human Resources ${index}`);
-  const payload = toPublicProfileFallbackInput({ currentJobTitles: titles, currentCompanies: ["https://www.linkedin.com/company/grupo-corpus"], searchQuery: "x".repeat(520), maxItems: 50 });
-  assert.equal((payload.searchQuery as string).length, 300);
-  assert.deepEqual(payload.currentJobTitles, titles.slice(0, 20));
-  assert.deepEqual(payload.currentCompanies, ["grupo corpus"]);
-  assert.equal(payload.maxItems, 50);
-  assert.equal(toPublicProfileFallbackInput({ currentJobTitles: titles }).searchQuery, undefined);
+  const input = { currentJobTitles: titles, currentCompanies: ["https://www.linkedin.com/company/grupo-corpus"], searchQuery: "Recursos Humanos OR People Operations", maxItems: 50 };
+  assert.deepEqual(toPublicProfileFallbackInput(input), {
+    searchQueries: ["Recursos Humanos", "People Operations"], currentJobTitles: titles.slice(0, 10),
+    currentCompanies: ["grupo corpus"], maxProfiles: 25,
+  });
+  assert.deepEqual(toPublicProfileFallbackInput({ currentJobTitles: titles }), { currentJobTitles: titles.slice(0, 10), maxProfiles: 25 });
+  assert.equal(toPublicProfileFallbackInput({ ...input, searchQuery: "x".repeat(520) }, false).searchQuery, "x".repeat(300));
+});
+
+test("fallback Apify diferencia ausência de perfis de indisponibilidade e preserva resultados parciais", () => {
+  const profile = { ok: true, recordType: "profile", fullName: "Pessoa fixture" };
+  const diagnostic = (errorCode: string) => ({ ok: false, recordType: "diagnostic", errorCode });
+  assert.deepEqual(readPublicProfileFallbackItems([diagnostic("NO_RESULTS")]), []);
+  assert.throws(() => readPublicProfileFallbackItems([diagnostic("BAD_INPUT")]));
+  assert.deepEqual(readPublicProfileFallbackItems([profile, diagnostic("TIME_LIMIT")]), [profile]);
 });
 
 test("B2B limita o último fallback e entrega seus perfis sem outra rodada de enriquecimento", async () => {

@@ -96,7 +96,9 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
         excludedKeys,
         normalize: normalizeCandidates,
         fetchPage: (actorInput, page) => runApifyActor("linkedinProfileSearch", {
-          ...actorInput, startPage: page.startPage, takePages: page.takePages, maxItems: page.maxItems,
+          ...actorInput,
+          searchQuery: limitHarvestQuery(actorInput.searchQuery),
+          startPage: page.startPage, takePages: page.takePages, maxItems: page.maxItems,
         }, { timeoutMs: page.timeoutMs, allowFallback: false }),
       })
     : {
@@ -106,28 +108,33 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
       };
 
   let externalPool = collected.items;
+  let fallbackFailed = false;
   if (externalPool.length < externalTarget && !collected.state.fallbackComplete) {
     try {
-      const fallbackTerms = unique([
-        input.currentTitle?.trim() || search.jobDna.title || search.title,
+      const title = input.currentTitle?.trim() || search.jobDna.title || search.title;
+      const fallbackTitles = unique([
+        title,
         ...(input.alternateTitles || []),
-        ...input.keywords,
-        ...criterionSearchKeywords(search, ["obrigatório", "desejável"]),
-      ]).slice(0, 16);
+        ...buildTitleFamily(title),
+      ]);
+      const location = input.location?.trim() || search.jobDna.location;
       const raw = await runApifyActor("linkedinProfileSearchFallback", compact({
-        searchQuery: fallbackTerms.join(" OR "),
-        locations: (input.location?.trim() || search.jobDna.location) ? [input.location?.trim() || search.jobDna.location] : [],
+        currentJobTitles: fallbackTitles,
+        locations: location ? [location] : [],
         maxItems: 50,
-      }), { timeoutMs: 15_000 });
-      const existing = new Set([...excludedKeys, ...externalPool.map(candidateKey)]);
-      externalPool = [...new Map([...externalPool, ...normalizeCandidates(raw)].filter((candidate) => !existing.has(candidateKey(candidate))).map((candidate) => [candidateKey(candidate), candidate])).values()];
+      }), { timeoutMs: 25_000 });
+      const fallbackCandidates = normalizeCandidates(raw);
+      if (raw.length && !fallbackCandidates.length) throw new Error("Formato de perfis não reconhecido.");
+      externalPool = dedupe([...externalPool, ...fallbackCandidates.filter((candidate) => !excludedKeys.has(candidateKey(candidate)))]);
       collected.state.fallbackComplete = true;
     } catch {
+      fallbackFailed = true;
       warnings.push("A fonte complementar Apify ficou indisponível; os perfis já encontrados foram preservados.");
     }
   }
   collected.summary.unique = externalPool.length;
   if (externalPool.length >= externalTarget) collected.summary.stopReason = "target_reached";
+  else if (fallbackFailed) collected.summary.stopReason = "provider_error";
   warnings.push(collectionMessage(collected.summary));
   console.info("[hr-hunting] collection completed", { ...collected.summary });
   if (externalPool.length) externalPool = await enrich(externalPool, input, warnings);
@@ -163,6 +170,17 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
   });
 
   return findOwnedHrHuntingSearch(id, ownerId);
+}
+
+export function limitHarvestQuery(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const [first, ...alternatives] = value.trim().split(" OR ");
+  let query = first.slice(0, 300);
+  for (const alternative of alternatives) {
+    const expanded = `${query} OR ${alternative}`;
+    if (expanded.length <= 300) query = expanded;
+  }
+  return query;
 }
 
 async function createPlanWithManus(search: HrHuntingSearchSnapshot, input: SearchInput, fallback: SourcingPlan) {

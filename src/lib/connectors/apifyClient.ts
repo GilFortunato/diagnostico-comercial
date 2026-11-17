@@ -37,13 +37,13 @@ export async function runApifyActor(actorKey: ApifyActorKey, input: Record<strin
       masked: resolution.masked,
     });
     try {
-      return await runActorRequest("linkedinProfileSearchFallback", toPublicProfileFallbackInput(input), resolution, deadline);
+      return await runActorRequest("linkedinProfileSearchFallback", input, resolution, deadline);
     } catch {
       throw error;
     }
   }
 
-  return runActorRequest("linkedinProfileSearchFallback", toPublicProfileFallbackInput(input), resolution, deadline);
+  return runActorRequest("linkedinProfileSearchFallback", input, resolution, deadline);
 }
 
 async function runActorRequest(
@@ -56,6 +56,11 @@ async function runActorRequest(
 
   const configuredId = configuredActorId(actorKey);
   const actorId = configuredId ?? apifyActors[actorKey].actorId;
+  const isDamiFallback = actorKey === "linkedinProfileSearchFallback"
+    && encodeActorId(actorId) === encodeActorId(apifyActors.linkedinProfileSearchFallback.actorId);
+  const actorInput = actorKey === "linkedinProfileSearchFallback"
+    ? toPublicProfileFallbackInput(input, isDamiFallback)
+    : input;
   const timeoutMs = deadline - Date.now();
   if (timeoutMs < 1_000) throw new PlatformResourceUnavailableError();
   const endpoint = `https://api.apify.com/v2/acts/${encodeActorId(actorId)}/run-sync-get-dataset-items?timeout=${Math.min(120, Math.floor(timeoutMs / 1_000))}`;
@@ -68,7 +73,7 @@ async function runActorRequest(
         Authorization: `Bearer ${resolution.credential}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(input),
+      body: JSON.stringify(actorInput),
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch {
@@ -82,10 +87,13 @@ async function runActorRequest(
   }
 
   if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const errorType = payload?.error?.type;
     console.warn("[apify] actor returned non-success status", {
       actorKey,
       actorId,
       status: response.status,
+      errorType: typeof errorType === "string" && /^[a-z-]{1,80}$/.test(errorType) ? errorType : undefined,
       source: resolution.source,
       masked: resolution.masked,
     });
@@ -97,7 +105,7 @@ async function runActorRequest(
 
   const payload = (await response.json()) as unknown;
   if (!Array.isArray(payload)) throw new PlatformResourceUnavailableError();
-  const items = payload;
+  const items = isDamiFallback ? readPublicProfileFallbackItems(payload) : payload;
   console.info("[apify] actor completed", {
     actorKey,
     actorId,
@@ -110,20 +118,42 @@ async function runActorRequest(
   return items;
 }
 
-export function toPublicProfileFallbackInput(input: Record<string, unknown>) {
-  const currentJobTitles = stringArray(input.currentJobTitles);
-  const currentCompanies = stringArray(input.currentCompanies).map(companySearchName).filter(Boolean);
+export function toPublicProfileFallbackInput(input: Record<string, unknown>, useDamiSchema = true) {
+  const currentJobTitles = [...new Set(stringArray(input.currentJobTitles))];
+  const currentCompanies = stringArray(input.currentCompanies).map(companySearchName).filter(Boolean).slice(0, 10);
+  const locations = stringArray(input.locations);
+  const searchQuery = typeof input.searchQuery === "string" ? input.searchQuery.trim() : "";
   const maxItems = typeof input.maxItems === "number" && Number.isFinite(input.maxItems)
     ? Math.min(120, Math.max(1, Math.floor(input.maxItems)))
     : 25;
 
+  if (!useDamiSchema) {
+    return compactInput({ searchQuery: searchQuery.slice(0, 300), currentJobTitles: currentJobTitles.slice(0, 20), locations: locations.slice(0, 20), currentCompanies, maxItems });
+  }
+  const searchQueries = [...new Set(searchQuery.split(/\s+OR\s+/).map((term) => term.trim()).filter(Boolean))].slice(0, Math.min(20, maxItems));
   return compactInput({
-    searchQuery: typeof input.searchQuery === "string" ? input.searchQuery.trim().slice(0, 300) || undefined : undefined,
-    currentJobTitles: [...new Set(currentJobTitles)].slice(0, 20),
-    locations: stringArray(input.locations).slice(0, 20),
-    currentCompanies: currentCompanies.slice(0, 10),
-    maxItems,
+    searchQueries,
+    currentJobTitles: currentJobTitles.slice(0, 10),
+    locations: locations.slice(0, 10),
+    currentCompanies,
+    maxProfiles: Math.floor(maxItems / (searchQueries.length || 1)),
   });
+}
+
+export function readPublicProfileFallbackItems(payload: unknown[]) {
+  const rows = payload.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"));
+  const profiles = rows.filter((row) => row.ok === true && row.recordType === "profile");
+  const failures = rows.filter((row) => row.ok === false && row.errorCode !== "NO_RESULTS");
+  if (failures.length) {
+    const codes = [...new Set(failures.map((row) => row.errorCode))]
+      .filter((code): code is string => typeof code === "string" && /^[A-Z_]{1,50}$/.test(code));
+    console.warn("[apify] fallback search returned diagnostics", { codes, profileCount: profiles.length });
+  }
+  const empty = rows.length === payload.length && rows.every((row) => row.errorCode === "NO_RESULTS" || row._sample === true);
+  if (!profiles.length && !empty) {
+    throw new PlatformResourceUnavailableError();
+  }
+  return profiles;
 }
 
 function companySearchName(value: string) {

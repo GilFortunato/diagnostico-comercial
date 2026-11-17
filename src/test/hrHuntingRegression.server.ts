@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { conservativeJobDna } from "@/lib/hr-hunting/jobDna";
+import { limitHarvestQuery } from "@/lib/hr-hunting/safeStrategicSearch";
 import { applyCandidateQualityGate, buildHrCandidateRecallInput, buildTitleFamily, normalizeCandidates, rankCandidates } from "@/lib/hr-hunting/service";
 import { createJobSchema, executeSearchSchema, type HrCandidate, type JobDna } from "@/lib/hr-hunting/types";
 
@@ -79,6 +80,13 @@ test("normalizador aceita o formato Short atual do Harvest", () => {
   assert.equal(candidates[0].currentTitle, "Analista de Pós-Vendas");
   assert.equal(candidates[0].location, "Jundiaí, São Paulo, Brasil");
   assert.equal(candidates[0].profileUrl, "https://www.linkedin.com/in/maria-silva");
+});
+
+test("busca estratégica restringe o texto do Harvest a 300 caracteres preservando alternativas completas", () => {
+  const first = "a".repeat(220);
+  const tooLong = "b".repeat(90);
+  assert.equal(limitHarvestQuery(`${first} OR ${tooLong} OR CRM`), `${first} OR CRM`);
+  assert.equal(limitHarvestQuery(undefined), undefined);
 });
 
 test("normalizador preserva perfil com LinkedIn sem cargo para possível enriquecimento", () => {
