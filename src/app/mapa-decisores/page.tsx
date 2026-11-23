@@ -4,7 +4,7 @@ import { isAdminUser } from "@/lib/auth/admin";
 import { getSessionUser } from "@/lib/auth/sessionUser";
 import { getUserModuleAccess } from "@/lib/auth/modulePermissions";
 
-export default async function DecisionMakerMapPage() {
+export default async function DecisionMakerMapPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
   const user = await getSessionUser();
   const [allowed, canUseCrm] = user ? await Promise.all([getUserModuleAccess(user, "decision.makers").catch(() => false), getUserModuleAccess(user, "humanship.crm").catch(() => false)]) : [false, false];
 
@@ -20,10 +20,11 @@ export default async function DecisionMakerMapPage() {
     );
   }
 
+  const commercial = (await searchParams).aba === "comercial";
   return (
     <>
       <AppHeader isAdmin={isAdminUser(user)} canUseCrm={canUseCrm} />
-      <DecisionMakerMapExperienceV2 canUseCrm={canUseCrm} />
+      <DecisionMakerMapExperienceV2 initialView={commercial ? "commercial" : "search"} canUseCrm={canUseCrm} />
     </>
   );
 }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CommercialPanel } from "./CommercialPanel";
 import { AddToCrmButton } from "@/components/crm/AddToCrmButton";
-import { BookmarkPlus, Building2, Database, Download, ExternalLink, FolderSearch, ListChecks, LoaderCircle, Plus, Search, Trash2, Users } from "lucide-react";
+import { BriefcaseBusiness, BookmarkPlus, Building2, Database, Download, ExternalLink, FolderSearch, ListChecks, LoaderCircle, Plus, Search, Trash2, Users } from "lucide-react";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
 import { defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
 import { getSuggestedRoles } from "@/lib/decision-makers/roleIntelligence";
@@ -10,7 +11,7 @@ import { splitTerms, type DecisionMakerResult, type HuntingCompany, type Hunting
 
 type SearchMode = "companies" | "people";
 type PeopleSearchTarget = { companyLinkedinUrls: string[]; companyNames: string[] };
-type WorkspaceView = "search" | "all" | "mine" | "leads" | "my-leads" | "list";
+type WorkspaceView = "commercial" | "search" | "all" | "mine" | "leads" | "my-leads" | "list";
 type SavedB2BSearch = {
   id: string; title: string; mode: string; ownerId: string; ownerName: string; mine: boolean;
   resultCount: number; reused: boolean; updatedAt: string;
@@ -28,7 +29,7 @@ type WorkspaceListDetail = {
   items: Array<{ id: string; addedByName: string; createdAt: string; lead: WorkspaceLead }>;
 };
 
-export function DecisionMakerMapExperienceV2({ canUseCrm = false }: { canUseCrm?: boolean }) {
+export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = "search" }: { canUseCrm?: boolean; initialView?: "commercial" | "search" }) {
   const units = useMemo(() => demoBusinessUnits.filter((unit) => unit.contextType === "business"), []);
   const initialUnit = units.find((unit) => unit.id === defaultBusinessUnitId) || units[0];
   const [mode, setMode] = useState<SearchMode>("people");
@@ -40,7 +41,7 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false }: { canUseCrm?
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
-  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("search");
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>(initialView);
   const [savedSearches, setSavedSearches] = useState<SavedB2BSearch[]>([]);
   const [workspaceLeads, setWorkspaceLeads] = useState<WorkspaceLead[]>([]);
   const [workspaceLists, setWorkspaceLists] = useState<WorkspaceList[]>([]);
@@ -361,11 +362,11 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false }: { canUseCrm?
           onCreateList={() => void createSharedList()}
         />
         <div className="min-w-0 grid gap-5">
-      <section className="rounded-lg bg-[var(--share-green-950)] p-6 text-white">
+      {workspaceView === "commercial" ? <CommercialPanel /> : <section className="rounded-lg bg-[var(--share-green-950)] p-6 text-white">
         <p className="text-xs font-semibold uppercase text-[var(--share-lime)]">B2B Hunting</p>
         <h1 className="mt-2 text-3xl font-semibold">Encontre contas e decisores sem repetir resultados.</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-white/75">Cada nova rodada amplia a cobertura e deduplica por LinkedIn, domínio e identificadores confiáveis antes de exibir.</p>
-      </section>
+      </section>}
 
       {workspaceView === "search" ? <section className="rounded-lg border border-[var(--share-line)] bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--share-line)] p-3">
@@ -505,6 +506,7 @@ function B2BWorkspaceSidebar({
     <p className="px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--share-lime)]">B2B Workspace</p>
     <button type="button" onClick={onNew} className={`mt-3 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold ${view === "search" ? "bg-[var(--share-lime)] text-[var(--share-green-950)]" : "bg-white text-[var(--share-green-950)]"}`}><Plus className="h-4 w-4" /> Nova busca</button>
     <nav className="mt-4 space-y-1">
+      <button type="button" aria-current={view === "commercial" ? "page" : undefined} onClick={() => onView("commercial")} className={workspaceNav(view === "commercial")}><BriefcaseBusiness className="h-4 w-4" />Comercial</button>
       <button type="button" onClick={() => onView("all")} className={workspaceNav(view === "all")}><FolderSearch className="h-4 w-4" /><span className="flex-1">Pesquisas da equipe</span><span className="text-xs opacity-50">{searches.length}</span></button>
       <button type="button" onClick={() => onView("mine")} className={workspaceNav(view === "mine")}><Search className="h-4 w-4" /><span className="flex-1">Minhas pesquisas</span><span className="text-xs opacity-50">{mine}</span></button>
       <button type="button" onClick={() => onView("leads")} className={workspaceNav(view === "leads")}><Database className="h-4 w-4" /><span className="flex-1">Leads da equipe</span><span className="text-xs opacity-50">{leads.length}</span></button>
