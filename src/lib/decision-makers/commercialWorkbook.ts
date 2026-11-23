@@ -3,6 +3,9 @@ import { classifyLead, normalized, stamp } from "./commercialPolicy";
 
 const names = {
   company: ["empresa", "empresas", "conta", "organização"], person: ["nome", "pessoa", "nome do líder", "nome do líder de RH", "nome do contato"],
+  role: ["cargo", "função", "job title"], phone: ["telefone", "celular", "whatsapp", "fone"],
+  contact: ["contato"], email: ["email", "e-mail", "email profissional", "e-mail profissional"],
+  notes: ["obs", "observação", "observações", "observações estratégicas (RH e Estrutura)", "relevância / atividade"],
   status: ["status", "status do evento"], responsible: ["responsável", "resposalvel", "executivo", "titular atual"],
   organizer: ["organizador", "organizador do jantar"], origin: ["origem", "origem do lead"],
   presence: ["compareceu", "presença", "compareceu ao jantar"], inPipe: ["pipe", "no pipedrive", "já consta no pipedrive"],
@@ -31,6 +34,10 @@ function header(row: ExcelJS.Row) {
     const key = fieldByHeader.get(normalized(text(cell)));
     if (key) map.set(key, [...(map.get(key) ?? []), index]);
   });
+  // The Weekend example uses a salesperson's name as its sixth header.
+  const firstFive = ["empresa", "nome", "cargo", "contato", "obs"];
+  if (firstFive.every((label, i) => normalized(text(row.getCell(i + 1))) === label) &&
+      normalized(text(row.getCell(6))) === "tal") map.set("responsible", [6]);
   return map.has("company") && map.has("person") ? map : undefined;
 }
 
@@ -48,20 +55,13 @@ function organizers(sheet?: ExcelJS.Worksheet) {
   return map;
 }
 
-const reportHeaders = ["Aba de origem", "Linha", "Empresa", "Pessoa", "Status na origem", "Responsável na origem", "Comercial do jantar", "Decisão comercial", "Titular prioritário", "Fundamento", "Próxima ação", "SLA da origem", "Situação do SLA"];
-const reportName = "Prioridades comerciais";
-const guideName = "Critérios comerciais";
+const weekendHeaders = ["Empresa", "Nome", "Cargo", "Contato", "Obs", "Responsável"];
+const exportSubject = "B2B Hunting · Lista comercial Weekend";
 
-function style(sheet: ExcelJS.Worksheet, widths: number[]) {
-  widths.forEach((width,i) => { sheet.getColumn(i+1).width = width; });
-  sheet.views = [{ state: "frozen", ySplit: 1 }];
-  const top = sheet.getRow(1);
-  top.height = 27;
-  top.eachCell(cell => {
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: {argb:"FF084A39"} };
-    cell.font = {bold:true,color:{argb:"FFFFFFFF"}};
-  });
-  sheet.autoFilter = {from:{row:1,column:1},to:{row:sheet.rowCount,column:widths.length}};
+function contactValue(phone: string, contact: string, email: string) {
+  // Some city sheets use "Contato" for the commercial representative.
+  const phoneValue = [phone, contact].find(value => /\d[\s().+/-]*\d/.test(value) && value.replace(/\D/g, "").length >= 8);
+  return phoneValue || [email, contact].find(value => /[^\s@]+@[^\s@]+\.[^\s@]+/.test(value)) || "";
 }
 
 export function saoPauloTime(date: Date) {
@@ -72,21 +72,20 @@ export function saoPauloTime(date: Date) {
 export async function prioritizeWorkbook(input: ArrayBuffer, at = new Date()) {
   const book = new ExcelJS.Workbook();
   await book.xlsx.load(input);
+  if (book.subject === exportSubject && book.worksheets.length === 1) {
+    throw new Error("Esta é a lista de saída. Para recalcular as prioridades, importe a base de leads com os dados do Pipedrive.");
+  }
   const now = saoPauloTime(at);
   const directory = book.worksheets.find(s => normalized(s.name) === "geral");
   const byCity = organizers(directory);
-  const entries: { order: number; values: (string|number)[] }[] = [];
+  const entries: { order: number; owner: string; values: string[] }[] = [];
   const skipped: string[] = [];
   let cities = 0;
   for (const sheet of book.worksheets) {
     if (sheet === directory) continue;
-    // Only remove generated tabs when their signatures also match.
-    if ((sheet.name === reportName && text(sheet.getCell("A1")) === reportHeaders[0]) ||
-        (sheet.name === guideName && text(sheet.getCell("A1")) === "Regra ou campo")) {
-      book.removeWorksheet(sheet.id);
-      continue;
-    }
-    if (sheet.name === reportName || sheet.name === guideName) throw new Error("Renomeie a aba " + sheet.name + " antes de importar. Esse nome é usado na saída.");
+    // Previous exports include their source tabs, plus two generated summaries.
+    if ((sheet.name === "Prioridades comerciais" && text(sheet.getCell("A1")) === "Aba de origem") ||
+        (sheet.name === "Critérios comerciais" && text(sheet.getCell("A1")) === "Regra ou campo")) continue;
     let mapping: ReturnType<typeof header>;
     let firstHeader = 0;
     sheet.eachRow((row, i) => {
@@ -101,12 +100,19 @@ export async function prioritizeWorkbook(input: ArrayBuffer, at = new Date()) {
     let count = 0;
     sheet.eachRow((row, i) => {
       const next = header(row);
-      if (next) { mapping = next; return; }
+      if (next) { mapping = i === firstHeader ? initial : next; return; }
       // Curitiba has a header within the list, after existing contact records.
       if (i < firstHeader && !(cityKey(sheet.name) === "curitiba" && firstHeader > 1)) return;
       const cols = mapping ?? initial;
       const get = (key: Field) => (cols.get(key) ?? []).map(index => text(row.getCell(index))).find(Boolean) ?? "";
-      const company = get("company"), person = get("person");
+      // In Recife's company block, "Responsável" is the company's contact.
+      // In its invitee block, "Contato" identifies the salesperson.
+      const recife = cityKey(sheet.name) === "recife";
+      const companyBlock = recife && cols.has("responsible") && !cols.has("contact") &&
+        normalized(text(sheet.getRow(firstHeader).getCell(cols.get("person")![0]))) === "pessoa" && cols === initial;
+      const inviteeBlock = recife && cols.has("contact") && cols.has("phone") && !cols.has("responsible");
+      const company = get("company");
+      const person = get("person") || (companyBlock && get("role") ? get("responsible") : "");
       if (!company && !person) return;
       // A pasted invitation or a free-standing note below a city list is not a lead.
       if (!person && /^(ol[áa][ ,!]|bom dia\b|boa tarde\b)/i.test(company) && company.includes("\n")) return;
@@ -119,36 +125,32 @@ export async function prioritizeWorkbook(input: ArrayBuffer, at = new Date()) {
         decision.reason = "A linha identifica uma empresa sem informar o nome do contato.";
         decision.action = "Identificar o contato e conferir seu cadastro no Pipedrive.";
       }
-      entries.push({order: decision.order, values:[sheet.name, i, company, person, lead.status, lead.responsible, owner, decision.decision, decision.owner, decision.reason, decision.action, decision.sla, decision.slaState]});
+      const contact = contactValue(get("phone"), inviteeBlock ? "" : get("contact"), get("email"));
+      const currentOwner = companyBlock ? "" : inviteeBlock ? get("contact") : lead.responsible;
+      const assigned = decision.owner || (decision.order <= 1 ? "" : currentOwner);
+      const observations = [
+        decision.decision + ". " + decision.action,
+        decision.sla && ("SLA de " + decision.sla + ". " + decision.slaState + "."),
+        lead.notes,
+        [sheet.name, lead.status, !assigned && owner ? "Comercial do jantar: " + owner : ""].filter(Boolean).join(" · "),
+      ].filter(Boolean).join("\n");
+      entries.push({ order: decision.order, owner: assigned, values: [company, person, lead.role, contact, observations, assigned] });
       count++;
     });
     if (count) cities++;
   }
   if (!entries.length) throw new Error("Nenhum registro encontrado. Inclua colunas de empresa e nome da pessoa nas abas de dados.");
-  const report = book.addWorksheet(reportName);
-  report.addRow(reportHeaders);
-  for (const entry of entries.sort((a,b) => a.order-b.order)) report.addRow(entry.values);
-  style(report,[21,9,32,32,22,24,24,34,25,78,84,20,35]);
-  const guide = book.addWorksheet(guideName);
-  guide.addRows([
-    ["Regra ou campo", "Aplicação"],
-    ["Referência da análise", new Date(now).toISOString().slice(0,19).replace("T"," ") + " (São Paulo)"],
-    ["Indicação direta", "Primeiro atendimento em até 24 horas úteis. Grande evento tem prazo de 5 dias úteis. Somente atividade concluída no Pipedrive comprova a abordagem."],
-    ["SLA vencido", "Sem abordagem concluída, retornar à fila geral ou redistribuir. Preencha o vencimento calculado pelo calendário comercial do Pipedrive."],
-    ["Lead sem venda", "Redistribuir após 90 dias de abertura sem nenhuma interação nem atividade agendada."],
-    ["Cliente de carteira", "Liberar para reativação após mais de um ano desde a última venda sem novas interações nem tarefas."],
-    ["Novo lead do jantar", "O organizador tem prioridade. A aba Geral relaciona cidade e comercial. Organizador do jantar na linha tem precedência."],
-    ["Contato existente no jantar", "Transferir ao organizador somente com presença comprovada e mais de seis meses sem atividade. A última atividade deve incluir eventual registro do convite."],
-    ["Status e histórico", "Convite e confirmação não comprovam presença. Campo Pipe vazio requer conferência. As decisões são recomendações para execução no CRM."],
-    ["Como completar os dados", "Acrescente os campos abaixo à aba da cidade e importe novamente. Use Sim ou Não para indicadores. Para datas, use células de data do Excel ou dd/mm/aaaa, com hora quando disponível."],
-    ...(["origin","inPipe","newLead","organizer","presence","opening","hasSale","lastSale","interaction","lastActivity","scheduled","deadline","completed","firstCompleted"] as const).map(key => [names[key][0], {
-      origin:"Indicação direta, Grande evento ou Humanship Dinner.", inPipe:"O contato já consta no Pipedrive?", newLead:"É um novo lead desta origem?", organizer:"Nome do organizador, se diferente do mapa por cidade.", presence:"Comparecimento efetivo ao jantar.", opening:"Data de abertura do lead no CRM.", hasSale:"Existe venda concluída?", lastSale:"Data da última venda concluída.", interaction:"Alguma interação consta no histórico?", lastActivity:"Data da atividade mais recente, incluindo convite registrado.", scheduled:"Existe atividade futura agendada?", deadline:"Data e hora limite do primeiro atendimento no calendário da empresa.", completed:"Existe atividade de abordagem marcada como concluída no CRM?", firstCompleted:"Data e hora da primeira atividade de abordagem concluída no Pipedrive.",
-    }[key]]),
-    ...(skipped.length ? [["Abas sem cabeçalho reconhecido", skipped.join(", ")]] : []),
-  ]);
-  style(guide,[40,105]);
-  guide.getColumn(2).alignment = {wrapText:true,vertical:"middle"};
-  guide.eachRow(row => { if (row.number>1) row.height=32; });
-  book.views = [{x:0,y:0,width:16000,height:9000,firstSheet:0,activeTab:book.worksheets.indexOf(report),visibility:"visible"}];
-  return {bytes: new Uint8Array(await book.xlsx.writeBuffer()), count:entries.length, cities, skipped};
+  const output = new ExcelJS.Workbook();
+  output.subject = exportSubject;
+  const report = output.addWorksheet("Weekend", {views: [{state: "frozen", ySplit: 1}]});
+  report.addRow(weekendHeaders);
+  const collator = new Intl.Collator("pt-BR", {sensitivity: "base"});
+  entries.sort((a, b) => Number(!a.owner) - Number(!b.owner) || collator.compare(a.owner, b.owner) || a.order - b.order);
+  for (const entry of entries) report.addRow(entry.values);
+  [32, 32, 42, 32, 78, 22].forEach((width, i) => { report.getColumn(i + 1).width = width; });
+  report.getColumn(4).numFmt = "@";
+  report.getColumn(5).alignment = {wrapText: true, vertical: "top"};
+  report.getRow(1).font = {bold: true};
+  report.autoFilter = {from: "A1", to: "F" + report.rowCount};
+  return {bytes: new Uint8Array(await output.xlsx.writeBuffer()), count: entries.length, cities, skipped};
 }

@@ -18,10 +18,10 @@ export function CommercialPanel() {
       const { prioritizeWorkbook } = await import("@/lib/decision-makers/commercialWorkbook");
       const {bytes,count,cities,skipped} = await prioritizeWorkbook(await file.arrayBuffer());
       const blob = new Blob([new Uint8Array(bytes)], {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
-      setOutput({url:URL.createObjectURL(blob),name:file.name.replace(/\.xlsx$/i,"") + "-prioridades.xlsx",count,cities,skipped});
+      setOutput({url:URL.createObjectURL(blob),name:file.name.replace(/\.xlsx$/i,"") + "-weekend.xlsx",count,cities,skipped});
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "";
-      setError(/^(Nenhum registro|Renomeie a aba)/.test(message) ? message : "Não foi possível ler o arquivo. Selecione uma planilha .xlsx válida e sem senha.");
+      setError(/^(Nenhum registro|Esta é a lista de saída)/.test(message) ? message : "Não foi possível ler o arquivo. Selecione uma planilha .xlsx válida e sem senha.");
     } finally { setBusy(false); }
   }
 
@@ -37,7 +37,7 @@ export function CommercialPanel() {
     <button type="button" disabled={!file || busy || !!output} onClick={() => void process()} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[var(--share-green-950)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"><FileSpreadsheet size={16}/>{busy ? "Analisando planilha…" : "Gerar prioridades"}</button>
     {error && <p role="alert" className="mt-4 text-sm text-red-700">{error}</p>}
     {output && <div role="status" className="mt-5 rounded-lg bg-green-50 p-4 text-sm">
-      <p>{output.count.toLocaleString("pt-BR")} registros analisados em {output.cities} abas. As decisões estão na aba <strong>Prioridades comerciais</strong>.</p>
+      <p>{output.count.toLocaleString("pt-BR")} registros analisados em {output.cities} abas. A aba <strong>Weekend</strong> agrupa os registros por responsável. Consulte a prioridade e a próxima ação em <strong>Obs</strong>.</p>
       {output.skipped.length > 0 && <p className="mt-1">Abas sem cabeçalho reconhecido: {output.skipped.join(", ")}.</p>}
       <a href={output.url} download={output.name} className="mt-3 inline-flex items-center gap-2 font-bold text-[var(--share-green-800)] underline"><Download size={16}/> Baixar planilha priorizada</a>
     </div>}

@@ -34,18 +34,37 @@ test("SLA por origem reconhece somente conclusão formal e vencimento informado"
   assert.equal(decide({...ref, firstCompleted:"23/11/2026 11:01"}).decision,"Revisar redistribuição por SLA");
   assert.equal(decide(ref).slaState,"Verificar atividade concluída");
 });
-test("importação mantém linhas e abas de origem e permite reprocessar a saída", async () => {
+test("lista Weekend consolida seis colunas e aplica a política dentro de cada grupo", async () => {
   const book = new ExcelJS.Workbook();
   book.addWorksheet("Geral").addRows([["Cidade","Comercial"],["POA","Ana"]]);
-  book.addWorksheet("PORTO ALEGRE").addRows([["Empresa","Nome","Status","Status","Pipe"],["Exemplo","Maria","","Confirmada","Não"],["Nome","Empresa","Compareceu","Pipe","Última atividade"],["Joana","Outra","Sim","Sim","01/01/2025"]]);
-  const run = async (input:ArrayBuffer) => prioritizeWorkbook(input,new Date("2026-11-23T15:00:00Z"));
-  const first = await run(new Uint8Array(await book.xlsx.writeBuffer()).buffer);
-  const second = await run(new Uint8Array(first.bytes).buffer);
-  assert.equal(second.count,2);
-  const output = new ExcelJS.Workbook(); await output.xlsx.load(second.bytes.buffer);
-  const sheet = output.getWorksheet("Prioridades comerciais")!;
-  assert.equal(output.worksheets.length,4);
-  assert.equal(sheet.getCell("I2").text,"Ana");
-  assert.equal(sheet.getCell("E2").text,"Confirmada");
-  assert.equal(sheet.getCell("C3").text,"Outra");
+  book.addWorksheet("PORTO ALEGRE").addRows([
+    ["Empresa","Nome","Cargo","Status","Status","Pipe","Responsável","Telefone","E-mail","Observações"],
+    ["Primeira","Maria","Head","","Confirmada","","Ana","(11) 98765-4321","m@example.org","Prefere ligação"],
+    ["Segunda","Joana","Diretora","","","Não","Outro","","j@example.org",""],
+    ["Terceira","Lia","Gerente"],
+  ]);
+  const {bytes,count} = await prioritizeWorkbook(new Uint8Array(await book.xlsx.writeBuffer()).buffer);
+  const output = new ExcelJS.Workbook(); await output.xlsx.load(bytes.buffer);
+  const sheet = output.worksheets[0];
+  assert.equal(count,3);
+  assert.equal(output.worksheets.length,1);
+  assert.equal(sheet.name,"Weekend");
+  assert.deepEqual(sheet.getRow(1).values, [, "Empresa","Nome","Cargo","Contato","Obs","Responsável"]);
+  assert.equal(sheet.actualColumnCount,6);
+  assert.equal(sheet.getCell("A2").text,"Segunda");
+  assert.equal(sheet.getCell("C2").text,"Diretora");
+  assert.equal(sheet.getCell("D2").text,"j@example.org");
+  assert.match(sheet.getCell("E2").text,/Prioridade do organizador/);
+  assert.equal(sheet.getCell("F2").text,"Ana");
+  assert.equal(sheet.getCell("D3").text,"(11) 98765-4321");
+  assert.match(sheet.getCell("E3").text,/Prefere ligação/);
+  assert.equal(sheet.getCell("F4").text,"");
+});
+test("modelo com Tal no cabeçalho mantém o responsável e reconhece o telefone", async () => {
+  const book = new ExcelJS.Workbook();
+  book.addWorksheet("Página1").addRows([["Empresa","Nome ","Cargo","Contato","Obs","Tal"],["Exemplo","Maria","CEO","011 98765-4321","Retornar sexta","Ale"]]);
+  const {bytes} = await prioritizeWorkbook(new Uint8Array(await book.xlsx.writeBuffer()).buffer);
+  const output = new ExcelJS.Workbook(); await output.xlsx.load(bytes.buffer);
+  assert.equal(output.worksheets[0].getCell("F2").text,"Ale");
+  assert.equal(output.worksheets[0].getCell("D2").text,"011 98765-4321");
 });
