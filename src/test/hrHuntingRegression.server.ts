@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { conservativeJobDna } from "@/lib/hr-hunting/jobDna";
-import { limitHarvestQuery } from "@/lib/hr-hunting/safeStrategicSearch";
+import { buildRounds, limitHarvestQuery } from "@/lib/hr-hunting/safeStrategicSearch";
 import { applyCandidateQualityGate, buildHrCandidateRecallInput, buildTitleFamily, normalizeCandidates, rankCandidates } from "@/lib/hr-hunting/service";
 import { createJobSchema, executeSearchSchema, type HrCandidate, type JobDna } from "@/lib/hr-hunting/types";
 
@@ -61,6 +61,25 @@ test("busca HR usa família de cargo e não abre a descoberta com keywords solta
   assert.doesNotMatch(String(actorInput.searchQuery), /\bCRM\b/);
   assert.deepEqual(actorInput.locations, ["Jundiaí, SP"]);
   assert.equal("seniorityLevelIds" in actorInput, false);
+});
+
+test("refazer busca jurídica após timeout usa títulos de mercado e preserva os filtros explícitos", () => {
+  const title = "Pessoa Advogada Empresarial Pleno";
+  const jobDna = conservativeJobDna({ title, description: "Obrigatório: formação em Direito e inscrição ativa na OAB." });
+  const search = { title, jobDna };
+  const input = { currentTitle: title, quantity: 50, seniority: [], location: "Brasil", keywords: [] };
+  const plan = { primaryTitle: title, equivalentTitles: ["Pessoa Advogada Empresarial"], adjacentTitles: [] };
+  const rounds = buildRounds(search, input, plan);
+  for (const round of rounds) {
+    assert.equal(round.location, "Brasil");
+    assert.deepEqual(round.keywords, []);
+    for (const equivalent of ["Advogada Empresarial", "Advogado Empresarial", "Advogado Corporativo"]) {
+      assert.ok(round.titles.includes(equivalent));
+    }
+  }
+  const explicit = buildRounds(search, { ...input, keywords: ["contratos"], alternateTitles: ["Legal Counsel"] }, plan);
+  assert.deepEqual(explicit[0].titles, ["Legal Counsel"]);
+  assert.ok(explicit.every((round) => round.keywords.join() === "contratos"));
 });
 
 test("normalizador aceita o formato Short atual do Harvest", () => {

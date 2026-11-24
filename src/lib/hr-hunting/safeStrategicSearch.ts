@@ -115,7 +115,7 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
       const fallbackTitles = unique([
         title,
         ...(input.alternateTitles || []),
-        ...buildTitleFamily(title),
+        ...discoveryTitleFamily(title),
       ]);
       const location = input.location?.trim() || search.jobDna.location;
       const raw = await runApifyActor("linkedinProfileSearchFallback", compact({
@@ -220,49 +220,29 @@ async function createPlanWithManus(search: HrHuntingSearchSnapshot, input: Searc
   return { plan: sanitizePlan(result.value, fallback), warnings: result.warnings };
 }
 
-function buildRounds(search: HrHuntingSearchSnapshot, input: SearchInput, plan: SourcingPlan): Round[] {
-  const original = input.currentTitle?.trim() || search.jobDna.title || search.title;
-  const manual = unique(input.alternateTitles || []).slice(0, 12);
-  const precise = manual.length ? manual : unique([original, plan.primaryTitle, ...buildTitleFamily(original), ...plan.equivalentTitles]).slice(0, 20);
-  const expanded = unique([original, ...manual, plan.primaryTitle, ...buildTitleFamily(original), ...plan.equivalentTitles, ...plan.adjacentTitles.slice(0, 3)]).slice(0, 30);
-  const discovery = unique([...expanded, ...plan.adjacentTitles]).slice(0, 40);
-  const originalLocation = input.location?.trim() || search.jobDna.location || "";
-  const requiredKeywords = unique([
-    ...input.keywords,
-    ...criterionSearchKeywords(search, ["obrigatório"]),
-    ...plan.mustHaveKeywords,
-  ]).slice(0, 12);
-  const supportingKeywords = unique([
-    ...criterionSearchKeywords(search, ["desejável"]),
-    ...plan.supportingKeywords,
-  ]).slice(0, 10);
-  return [
-    { label: "precisa", titles: precise, keywords: manual.length ? input.keywords : requiredKeywords, location: originalLocation || undefined },
-    { label: "ampliada", titles: expanded, keywords: requiredKeywords, location: originalLocation || undefined },
-    { label: "descoberta", titles: discovery, keywords: unique([...requiredKeywords, ...supportingKeywords]).slice(0, 16), location: originalLocation || undefined },
-  ];
+function discoveryTitleFamily(title: string) {
+  const role = title.replace(/^pessoa\s+/i, "").replace(/\s+(?:pleno|plena|s[eê]nior|j[uú]nior|sr|jr|pl)\.?$/i, "").trim();
+  const corporateLaw = /\badvogad[oa]\b/i.test(role) && /\b(?:empresarial|corporativ[oa])\b/i.test(role);
+  const equivalents = corporateLaw
+    ? ["Advogada Empresarial", "Advogado Empresarial", "Advogada Corporativa", "Advogado Corporativo", "Corporate Counsel", "Corporate Lawyer"]
+    : [];
+  return unique([title, role, ...equivalents, ...buildTitleFamily(title)]);
 }
 
-function criterionSearchKeywords(
-  search: HrHuntingSearchSnapshot,
-  kinds: HrHuntingSearchSnapshot["jobDna"]["criteria"][number]["kind"][],
-) {
-  const stopWords = new Set([
-    "a", "as", "ao", "aos", "com", "como", "da", "das", "de", "do", "dos", "e", "em",
-    "na", "nas", "no", "nos", "o", "os", "ou", "para", "por", "que", "um", "uma",
-    "formacao", "area", "areas", "experiencia", "previa", "conhecimento", "conhecimentos",
-    "desejavel", "obrigatorio", "profissional", "profissionais", "atuacao", "vivencia",
-    "ferramenta", "ferramentas", "edicao", "grafica", "similares", "similar", "dominio",
-  ]);
-  const criteria = search.jobDna.criteria.filter((criterion) => kinds.includes(criterion.kind));
-  return unique(criteria.flatMap((criterion) => criterion.label
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .split(/[,;\/]|\b(?:ou|or|como)\b/)
-    .map((part) => part.split(/[^a-z0-9]+/).filter((term) => term.length > 2 && !stopWords.has(term)).join(" "))
-    .filter((term) => term.length >= 3),
-  ));
+export function buildRounds(search: Pick<HrHuntingSearchSnapshot, "title" | "jobDna">, input: SearchInput, plan: Pick<SourcingPlan, "primaryTitle" | "equivalentTitles" | "adjacentTitles">): Round[] {
+  const original = input.currentTitle?.trim() || search.jobDna.title || search.title;
+  const manual = unique(input.alternateTitles || []).slice(0, 12);
+  const family = discoveryTitleFamily(original);
+  const precise = manual.length ? manual : unique([...family, plan.primaryTitle, ...plan.equivalentTitles]).slice(0, 20);
+  const expanded = unique([...precise, original, ...family, plan.primaryTitle, ...plan.equivalentTitles, ...plan.adjacentTitles.slice(0, 3)]).slice(0, 30);
+  const discovery = unique([...expanded, ...plan.adjacentTitles]).slice(0, 40);
+  const location = input.location?.trim() || search.jobDna.location || undefined;
+  const keywords = unique(input.keywords);
+  return [
+    { label: "precisa", titles: precise, keywords, location },
+    { label: "ampliada", titles: expanded, keywords, location },
+    { label: "descoberta", titles: discovery, keywords, location },
+  ];
 }
 
 async function enrich(candidates: HrCandidate[], input: SearchInput, warnings: string[]) {
