@@ -11,13 +11,13 @@ export type ApifyRunMetadata = {
   itemCount: number;
 };
 
-export async function runApifyActor(actorKey: ApifyActorKey, input: Record<string, unknown>, options: { timeoutMs?: number; allowFallback?: boolean } = {}) {
+export async function runApifyActor(actorKey: ApifyActorKey, input: Record<string, unknown>, options: { timeoutMs?: number; allowFallback?: boolean; onPartial?: () => void } = {}) {
   const resolution = await resolveApifyCredential();
   if (!resolution.available || !resolution.credential) throw new PlatformResourceUnavailableError();
 
   const deadline = Date.now() + Math.min(130_000, options.timeoutMs ?? 130_000);
   if (actorKey !== "linkedinProfileSearch" || options.allowFallback === false || Number(input.startPage ?? 1) > 1) {
-    return runActorRequest(actorKey, input, resolution, deadline);
+    return runActorRequest(actorKey, input, resolution, deadline, options.onPartial);
   }
 
   // Harvest continua sendo a fonte principal. Quando ele responde vazio ou falha,
@@ -51,6 +51,7 @@ async function runActorRequest(
   input: Record<string, unknown>,
   resolution: PlatformCredentialResolution,
   deadline: number,
+  onPartial?: () => void,
 ) {
   if (!resolution.credential) throw new PlatformResourceUnavailableError();
 
@@ -105,7 +106,7 @@ async function runActorRequest(
 
   const payload = (await response.json()) as unknown;
   if (!Array.isArray(payload)) throw new PlatformResourceUnavailableError();
-  const items = isDamiFallback ? readPublicProfileFallbackItems(payload) : payload;
+  const items = isDamiFallback ? readPublicProfileFallbackItems(payload, onPartial) : payload;
   console.info("[apify] actor completed", {
     actorKey,
     actorId,
@@ -140,11 +141,12 @@ export function toPublicProfileFallbackInput(input: Record<string, unknown>, use
   });
 }
 
-export function readPublicProfileFallbackItems(payload: unknown[]) {
+export function readPublicProfileFallbackItems(payload: unknown[], onPartial?: () => void) {
   const rows = payload.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"));
   const profiles = rows.filter((row) => row.ok === true && row.recordType === "profile");
   const failures = rows.filter((row) => row.ok === false && row.errorCode !== "NO_RESULTS");
   if (failures.length) {
+    onPartial?.();
     const codes = [...new Set(failures.map((row) => row.errorCode))]
       .filter((code): code is string => typeof code === "string" && /^[A-Z_]{1,50}$/.test(code));
     console.warn("[apify] fallback search returned diagnostics", { codes, profileCount: profiles.length });

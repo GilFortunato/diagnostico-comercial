@@ -14,6 +14,7 @@ import {
 import type { EvidenceState, HrCandidate, HrHuntingSearchSnapshot } from "@/lib/hr-hunting/types";
 import { candidateKey, collectHrDiscovery, readDiscoveryState, type HrDiscoveryState } from "@/lib/hr-hunting/pagedDiscovery";
 import { findReusableCandidateProfiles, profileKeyForCandidate, upsertCandidateProfiles } from "@/lib/hr-hunting/candidateMemory";
+import { midLevelInTitle, requiresMidLevel } from "@/lib/hr-hunting/seniority";
 import { collectionMessage } from "@/lib/hunting/pagination";
 
 type SearchInput = {
@@ -48,15 +49,19 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
   const search = await findOwnedHrHuntingSearch(id, ownerId);
   if (!search) return null;
 
-  const fingerprint = createHash("sha256").update(JSON.stringify({ currentTitle: input.currentTitle, seniority: input.seniority, location: input.location, keywords: input.keywords, alternateTitles: input.alternateTitles || [], dna: search.jobDna })).digest("hex");
+  const fingerprint = createHash("sha256").update(JSON.stringify({ strategy: 2, currentTitle: input.currentTitle, seniority: input.seniority, location: input.location, keywords: input.keywords, alternateTitles: input.alternateTitles || [], dna: search.jobDna })).digest("hex");
   const previous = options.append ? await getPrisma().hrHuntingSearch.findFirst({ where: { id }, select: { sourceSnapshot: true } }) : null;
   let state = readDiscoveryState(previous?.sourceSnapshot, fingerprint);
   const warnings: string[] = [];
   const evalInput = evaluationInput(search, input);
 
+  const title = evalInput.currentTitle || search.title;
+  const midOnly = requiresMidLevel(title, search.jobDna.seniority);
+  if (midOnly) evalInput.alternateTitles = unique([...(input.alternateTitles || []), ...midLevelTitles(title)]);
+  const acceptsLevel = (candidate: HrCandidate) => !midOnly || midLevelInTitle(candidate.currentTitle);
   const knownKeys = new Set(options.append ? search.candidates.map(candidateKey) : []);
   const reusable = (await findReusableCandidateProfiles())
-    .filter((candidate) => !knownKeys.has(candidateKey(candidate)));
+    .filter((candidate) => !knownKeys.has(candidateKey(candidate)) && acceptsLevel(candidate));
   const reusableQuality = applyCandidateQualityGate(reusable, search.jobDna, evalInput);
   const cachedPool = reusableQuality.eligible;
   const cachedRanked = rankCandidates(cachedPool, search.jobDna, evalInput).slice(0, input.quantity);
@@ -95,6 +100,7 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
         state, target: externalTarget,
         excludedKeys,
         normalize: normalizeCandidates,
+        accept: acceptsLevel,
         fetchPage: (actorInput, page) => runApifyActor("linkedinProfileSearch", {
           ...actorInput,
           searchQuery: limitHarvestQuery(actorInput.searchQuery),
@@ -109,56 +115,61 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
 
   let externalPool = collected.items;
   let fallbackFailed = false;
-  if (externalPool.length < externalTarget && !collected.state.fallbackComplete) {
-    try {
-      const title = input.currentTitle?.trim() || search.jobDna.title || search.title;
-      const fallbackTitles = unique([
-        title,
-        ...(input.alternateTitles || []),
-        ...discoveryTitleFamily(title),
-      ]);
-      const location = input.location?.trim() || search.jobDna.location;
-      const raw = await runApifyActor("linkedinProfileSearchFallback", compact({
-        currentJobTitles: fallbackTitles,
-        locations: location ? [location] : [],
-        maxItems: 50,
-      }), { timeoutMs: 25_000 });
-      const fallbackCandidates = normalizeCandidates(raw);
-      if (raw.length && !fallbackCandidates.length) throw new Error("Formato de perfis não reconhecido.");
-      externalPool = dedupe([...externalPool, ...fallbackCandidates.filter((candidate) => !excludedKeys.has(candidateKey(candidate)))]);
-      collected.state.fallbackComplete = true;
-    } catch {
-      fallbackFailed = true;
-      warnings.push("A fonte complementar Apify ficou indisponível; os perfis já encontrados foram preservados.");
+  let partial = false;
+  if (externalPool.length < externalTarget) {
+    const levelTitles = midOnly ? midLevelTitles(title) : [];
+    // Older snapshots marked partial actor runs as complete and had no title cursor.
+    const remaining = collected.state.fallbackTitles ?? unique([...(input.alternateTitles || []), ...levelTitles, ...discoveryTitleFamily(title)]);
+    const batch = remaining.slice(0, 4);
+    if (batch.length) {
+      try {
+        const location = input.location?.trim() || search.jobDna.location;
+        const raw = await runApifyActor("linkedinProfileSearchFallback", compact({
+          currentJobTitles: batch, searchQuery: limitHarvestQuery((input.keywords.length ? input.keywords : batch).join(" OR ")),
+          locations: location ? [location] : [], maxItems: 50,
+        }), { timeoutMs: 105_000, onPartial: () => { partial = true; } });
+        const normalized = normalizeCandidates(raw);
+        if (raw.length && !normalized.length) throw new Error("Formato de perfis não reconhecido.");
+        externalPool = dedupe([...externalPool, ...normalized.filter((candidate) => acceptsLevel(candidate) && !excludedKeys.has(candidateKey(candidate)))]);
+        collected.state.fallbackTitles = remaining.slice(batch.length).concat(partial ? batch : []);
+        collected.state.fallbackComplete = collected.state.fallbackTitles.length === 0;
+      } catch {
+        fallbackFailed = true;
+        collected.state.fallbackTitles = remaining.slice(batch.length).concat(batch);
+        collected.state.fallbackComplete = false;
+        warnings.push("A fonte complementar ficou indisponível. A busca pode continuar a partir dos cargos salvos.");
+      }
     }
   }
   collected.summary.unique = externalPool.length;
   if (externalPool.length >= externalTarget) collected.summary.stopReason = "target_reached";
   else if (fallbackFailed) collected.summary.stopReason = "provider_error";
+  else if (partial) collected.summary.stopReason = "time_limit";
+  else if (collected.state.fallbackTitles?.length && collected.summary.stopReason === "source_exhausted") collected.summary.stopReason = "request_limit";
   warnings.push(collectionMessage(collected.summary));
   console.info("[hr-hunting] collection completed", { ...collected.summary });
   if (externalPool.length) externalPool = await enrich(externalPool, input, warnings);
 
-  const pool = dedupe([...externalPool, ...search.candidates, ...cachedPool]);
+  const pool = dedupe([...externalPool, ...search.candidates, ...cachedPool]).filter(acceptsLevel);
   const quality = applyCandidateQualityGate(pool, search.jobDna, evalInput);
   const strictRanked = rankCandidates(quality.eligible, search.jobDna, evalInput);
-  const expandedRanked = rankCandidates(quality.rejected, search.jobDna, evalInput);
+  const expandedRanked = midOnly ? [] : rankCandidates(quality.rejected, search.jobDna, evalInput);
   const ranked = dedupe([...strictRanked, ...expandedRanked]);
   const externalKeys = new Set(externalPool.map(candidateKey));
   const previousKeys = new Set(search.candidates.map(candidateKey));
   const candidates = dedupe([
-    ...ranked.slice(0, input.quantity),
+    ...(options.append ? ranked.filter((candidate) => !previousKeys.has(candidateKey(candidate))) : ranked).slice(0, input.quantity),
     ...ranked.filter((candidate) => previousKeys.has(candidateKey(candidate))),
     ...(hasManualTitles && !options.append
       ? strictRanked.filter((candidate) => externalKeys.has(candidateKey(candidate))).slice(0, Math.min(20, input.quantity))
       : []),
   ]);
 
-  if (quality.rejected.length) {
+  if (quality.rejected.length && !midOnly) {
     warnings.push(`${quality.rejected.length} perfil(is) vieram da expansão e permaneceram visíveis com aderência calculada contra a vaga original.`);
   }
   const selected = new Set(candidates.map(candidateKey));
-  const nextState = { ...collected.state, pending: pool.filter((candidate) => !selected.has(candidateKey(candidate))) };
+  const nextState = { ...collected.state, pending: ranked.filter((candidate) => !selected.has(candidateKey(candidate))) };
 
   await persistResult({
     id,
@@ -220,6 +231,13 @@ async function createPlanWithManus(search: HrHuntingSearchSnapshot, input: Searc
   return { plan: sanitizePlan(result.value, fallback), warnings: result.warnings };
 }
 
+function midLevelTitles(title: string) {
+  if (/\badvogad[oa]\b/i.test(title)) return /empresarial|corporativ/i.test(title)
+    ? ["Advogada Empresarial Plena", "Advogado Empresarial Pleno", "Advogada Plena", "Advogado Pleno", "Advogada Pleno"]
+    : [title];
+  return [title];
+}
+
 function discoveryTitleFamily(title: string) {
   const role = title.replace(/^pessoa\s+/i, "").replace(/\s+(?:pleno|plena|s[eê]nior|j[uú]nior|sr|jr|pl)\.?$/i, "").trim();
   const corporateLaw = /\badvogad[oa]\b/i.test(role) && /\b(?:empresarial|corporativ[oa])\b/i.test(role);
@@ -233,7 +251,8 @@ export function buildRounds(search: Pick<HrHuntingSearchSnapshot, "title" | "job
   const original = input.currentTitle?.trim() || search.jobDna.title || search.title;
   const manual = unique(input.alternateTitles || []).slice(0, 12);
   const family = discoveryTitleFamily(original);
-  const precise = manual.length ? manual : unique([...family, plan.primaryTitle, ...plan.equivalentTitles]).slice(0, 20);
+  const midOnly = requiresMidLevel(original, search.jobDna.seniority);
+  const precise = manual.length ? manual : midOnly ? unique([...midLevelTitles(original), original]) : unique([...family, plan.primaryTitle, ...plan.equivalentTitles]).slice(0, 20);
   const expanded = unique([...precise, original, ...family, plan.primaryTitle, ...plan.equivalentTitles, ...plan.adjacentTitles.slice(0, 3)]).slice(0, 30);
   const discovery = unique([...expanded, ...plan.adjacentTitles]).slice(0, 40);
   const location = input.location?.trim() || search.jobDna.location || undefined;

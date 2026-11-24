@@ -271,7 +271,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
       if (!response.ok || !body.search) throw new Error(body.error || "Não foi possível carregar mais candidatos.");
       setSearch(body.search); setDraftDna(body.search.jobDna);
       const added = Math.max(0, body.search.candidates.length - before);
-      if (added === 0) setError("Não encontramos novos perfis elegíveis sem repetir os atuais. Você pode ampliar os critérios e fazer uma nova busca.");
+      if (added === 0) setError("Nenhum novo perfil elegível foi salvo nesta rodada. Confira os avisos da coleta.");
       await refreshSavedSearches();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível carregar mais candidatos."); }
     finally { setPending(null); }
@@ -404,6 +404,8 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
                 {search.status === "connector_error" ? <State title="A pesquisa não pôde ser concluída" text="Os resultados existentes foram preservados. Teste a conexão e tente novamente." /> : null}
 
                 {sorted.length ? <Results candidates={sorted} selected={selected} setSelected={setSelected} onOpen={setCandidate} onShortlist={toggleShortlist} onExport={exportSnapshot} exporting={pending === "export"} onLoadMore={loadMore} loadingMore={pending === "more"} /> : null}
+                {search.earlierLevelCandidates?.length ? <details className="mt-4 rounded-xl border border-[var(--share-line)] p-4"><summary className="cursor-pointer font-medium">Histórico fora do ranking de nível pleno ({search.earlierLevelCandidates.length})</summary><p className="mt-2 text-sm text-zinc-600">O cargo registrado nesses perfis não confirma o nível pleno solicitado para a vaga.</p>{search.earlierLevelCandidates.map((item) => <button key={item.id} type="button" onClick={() => setCandidate(item)} className="mt-2 block text-sm underline">{item.name} · {item.currentTitle || "Cargo não informado"}</button>)}</details> : null}
+                {!sorted.length && search.status !== "job_dna_ready" ? <button type="button" onClick={loadMore} disabled={Boolean(pending)} className="mt-4 rounded-md border px-4 py-2 font-medium">{pending === "more" ? "Buscando novos perfis" : "Carregar mais 20"}</button> : null}
                 {selectedCandidates.length >= 2 ? <Compare candidates={selectedCandidates} /> : null}
               </>
             ) : null}

@@ -368,7 +368,9 @@ test("fallback Apify diferencia ausência de perfis de indisponibilidade e prese
   const diagnostic = (errorCode: string) => ({ ok: false, recordType: "diagnostic", errorCode });
   assert.deepEqual(readPublicProfileFallbackItems([diagnostic("NO_RESULTS")]), []);
   assert.throws(() => readPublicProfileFallbackItems([diagnostic("BAD_INPUT")]));
-  assert.deepEqual(readPublicProfileFallbackItems([profile, diagnostic("TIME_LIMIT")]), [profile]);
+  let partial = false;
+  assert.deepEqual(readPublicProfileFallbackItems([profile, diagnostic("TIME_LIMIT")], () => { partial = true; }), [profile]);
+  assert.equal(partial, true);
 });
 
 test("B2B limita o último fallback e entrega seus perfis sem outra rodada de enriquecimento", async () => {

@@ -4,6 +4,7 @@ import { runApifyActor } from "@/lib/connectors/apifyClient";
 import { getPrisma } from "@/lib/db/prisma";
 import { createJobDna } from "@/lib/hr-hunting/jobDna";
 import { executeSearchSchema, type CriterionKind, type EvidenceState, type HrCandidate, type HrHuntingSearchSnapshot, type JobDna, type MessageFormat } from "@/lib/hr-hunting/types";
+import { midLevelInTitle, requiresMidLevel } from "@/lib/hr-hunting/seniority";
 import { attachCandidateMemory } from "@/lib/hr-hunting/candidateMemory";
 
 type SearchInput = { quantity: number; currentTitle?: string; seniority: string[]; location?: string; keywords: string[]; alternateTitles?: string[] };
@@ -179,22 +180,28 @@ export async function listHrHuntingSearches(actorId: string) {
     take: 100,
     include: {
       owner: { select: { id: true, name: true, email: true } },
-      candidates: { select: { id: true, shortlist: true } },
+      candidates: { select: { id: true, currentTitle: true, shortlist: true } },
     },
   });
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    companyName: row.companyName,
-    recruiterName: row.recruiterName,
-    status: row.status,
-    updatedAt: row.updatedAt.toISOString(),
-    candidates: row.candidates.length,
-    shortlist: row.candidates.filter((candidate) => candidate.shortlist).length,
-    ownerId: row.ownerId,
-    ownerName: row.owner.name || row.owner.email || "Usuário",
-    mine: row.ownerId === actorId,
-  }));
+  return rows.map((row) => {
+    const dna = row.jobDna as JobDna;
+    const snapshot = row.sourceSnapshot as { searchFilters?: { currentTitle?: string } } | null;
+    const midOnly = requiresMidLevel(snapshot?.searchFilters?.currentTitle || dna.title || row.title, dna.seniority);
+    const visible = midOnly ? row.candidates.filter((candidate) => midLevelInTitle(candidate.currentTitle || "")) : row.candidates;
+    return {
+      id: row.id,
+      title: row.title,
+      companyName: row.companyName,
+      recruiterName: row.recruiterName,
+      status: row.status,
+      updatedAt: row.updatedAt.toISOString(),
+      candidates: visible.length,
+      shortlist: row.candidates.filter((candidate) => candidate.shortlist).length,
+      ownerId: row.ownerId,
+      ownerName: row.owner.name || row.owner.email || "Usuário",
+      mine: row.ownerId === actorId,
+    };
+  });
 }
 
 export async function toggleHrShortlist(candidateId: string, ownerId: string, shortlisted: boolean, nextStep?: string, notes?: string) {
@@ -227,7 +234,10 @@ function serializeSearch(row: HrHuntingSearchWithCandidates, actorId?: string): 
   const savedFilters = row.sourceSnapshot && typeof row.sourceSnapshot === "object" && !Array.isArray(row.sourceSnapshot)
     ? (row.sourceSnapshot as Record<string, unknown>).searchFilters : undefined;
   const parsedFilters = executeSearchSchema.safeParse(savedFilters);
-  return { id: row.id, ownerId: row.ownerId, ownerName: row.owner.name || row.owner.email || "Usuário", mine: actorId ? row.ownerId === actorId : undefined, title: row.title, jobDescription: row.jobDescription, jobUrl: row.jobUrl || undefined, companyName: row.companyName || undefined, recruiterName: row.recruiterName || undefined, jobDna: row.jobDna as JobDna, searchTerms: row.searchTerms, status: row.status, connectorWarnings: row.connectorWarnings, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), candidates, lastSearchFilters: parsedFilters.success ? parsedFilters.data : undefined };
+  const dna = row.jobDna as JobDna;
+  const midOnly = requiresMidLevel(parsedFilters.data?.currentTitle || dna.title || row.title, dna.seniority);
+  const earlier = midOnly ? candidates.filter((item) => !midLevelInTitle(item.currentTitle)) : [];
+  return { id: row.id, ownerId: row.ownerId, ownerName: row.owner.name || row.owner.email || "Usuário", mine: actorId ? row.ownerId === actorId : undefined, title: row.title, jobDescription: row.jobDescription, jobUrl: row.jobUrl || undefined, companyName: row.companyName || undefined, recruiterName: row.recruiterName || undefined, jobDna: row.jobDna as JobDna, searchTerms: row.searchTerms, status: row.status, connectorWarnings: row.connectorWarnings, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), candidates: midOnly ? candidates.filter((item) => midLevelInTitle(item.currentTitle)) : candidates, earlierLevelCandidates: earlier, lastSearchFilters: parsedFilters.success ? parsedFilters.data : undefined };
 }
 
 export function normalizeCandidates(items: unknown[]): HrCandidate[] {
@@ -241,6 +251,7 @@ export function normalizeCandidates(items: unknown[]): HrCandidate[] {
     const currentExperience = firstRecord(item.experience ?? getPath(item, "profile.experience"));
     const title = pick(item, ["jobTitle", "title", "position", "employment.title", "profile.position", "profile.headline"])
       || pick(currentPosition, ["title", "position", "jobTitle"])
+      || pick(item, ["currentPosition"])
       || pick(currentExperience, ["position", "title", "jobTitle"])
       || pick(item, ["headline"]);
     const profileUrl = normalizeLinkedIn(pick(item, ["linkedinUrl", "linkedin_url", "linkedinProfileUrl", "profileUrl", "url", "navigationUrl", "profile.linkedinUrl", "profile.url"]));
@@ -445,8 +456,8 @@ function titleTokens(value: string) {
 function locationAffinity(candidateLocation: string, targetLocation: string) {
   if (!targetLocation.trim()) return 1;
   if (!candidateLocation.trim()) return 0.4;
-  const candidate = normal(candidateLocation);
-  const target = normal(targetLocation);
+  const candidate = normal(candidateLocation).replace(/\bbrazil\b/g, "brasil");
+  const target = normal(targetLocation).replace(/\bbrazil\b/g, "brasil");
   if (candidate.includes(target) || target.includes(candidate)) return 1;
   const targetCity = normal(targetLocation.split(/[,/-]/)[0] || "");
   if (targetCity.length >= 3 && candidate.includes(targetCity)) return 1;

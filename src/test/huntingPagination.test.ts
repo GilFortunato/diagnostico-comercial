@@ -92,3 +92,18 @@ test("HR reconhece o mesmo candidato sem URL antes e depois de persistir", () =>
   const candidate = { ...person(1), profileUrl: undefined };
   assert.equal(candidateKey(candidate), candidateKey({ ...candidate, id: "1_search-id" }));
 });
+
+test("HR continua após página só com cargos fora do nível solicitado", async () => {
+  const pages: number[] = [];
+  const result = await collectHrDiscovery({
+    state: state(), target: 1,
+    normalize: (raw) => raw as HrCandidate[],
+    accept: (candidate) => candidate.currentTitle === "Advogada Plena",
+    fetchPage: async (_round, page) => {
+      pages.push(page.startPage);
+      return [{ ...person(page.startPage), currentTitle: page.startPage === 1 ? "Senior Counsel" : "Advogada Plena" }];
+    },
+  });
+  assert.deepEqual(pages, [1, 3]);
+  assert.equal(result.items[0].currentTitle, "Advogada Plena");
+});

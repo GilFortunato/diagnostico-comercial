@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { conservativeJobDna } from "@/lib/hr-hunting/jobDna";
+import { midLevelInTitle, requiresMidLevel } from "@/lib/hr-hunting/seniority";
 import { buildRounds, limitHarvestQuery } from "@/lib/hr-hunting/safeStrategicSearch";
 import { applyCandidateQualityGate, buildHrCandidateRecallInput, buildTitleFamily, normalizeCandidates, rankCandidates } from "@/lib/hr-hunting/service";
 import { createJobSchema, executeSearchSchema, type HrCandidate, type JobDna } from "@/lib/hr-hunting/types";
@@ -73,10 +74,10 @@ test("refazer busca jurídica após timeout usa títulos de mercado e preserva o
   for (const round of rounds) {
     assert.equal(round.location, "Brasil");
     assert.deepEqual(round.keywords, []);
-    for (const equivalent of ["Advogada Empresarial", "Advogado Empresarial", "Advogado Corporativo"]) {
-      assert.ok(round.titles.includes(equivalent));
-    }
+    assert.ok(round.titles.includes("Advogado Empresarial Pleno"));
   }
+  assert.ok(rounds[0].titles.every(midLevelInTitle));
+  assert.ok(rounds[1].titles.includes("Advogado Corporativo"));
   const explicit = buildRounds(search, { ...input, keywords: ["contratos"], alternateTitles: ["Legal Counsel"] }, plan);
   assert.deepEqual(explicit[0].titles, ["Legal Counsel"]);
   assert.ok(explicit.every((round) => round.keywords.join() === "contratos"));
@@ -191,3 +192,10 @@ function candidate(name: string, currentTitle: string | undefined, location: str
     shortlisted: false,
   };
 }
+
+test("vaga exclusivamente plena exige nível no cargo atual", () => {
+  assert.equal(requiresMidLevel("Pessoa Advogada Empresarial Pleno"), true);
+  assert.equal(requiresMidLevel("Advogado", "Pleno ou Sênior"), false);
+  for (const title of ["Advogada Plena", "Advogado PL", "Mid-level Corporate Lawyer"]) assert.ok(midLevelInTitle(title));
+  for (const title of ["Advogada Corporativa Internacional", "Senior Counsel", "Advogado Jr.", "Sócia | Advogada Plena"]) assert.equal(midLevelInTitle(title), false);
+});

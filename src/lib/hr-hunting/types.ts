@@ -81,5 +81,6 @@ export type HrCandidate = {
 export type HrHuntingSearchSnapshot = {
   id: string; ownerId?: string; ownerName?: string; mine?: boolean; title: string; jobDescription: string; jobUrl?: string; companyName?: string; recruiterName?: string; jobDna: JobDna; searchTerms: string[];
   status: string; connectorWarnings: string[]; createdAt: string; updatedAt: string; candidates: HrCandidate[];
+  earlierLevelCandidates?: HrCandidate[];
   lastSearchFilters?: z.infer<typeof executeSearchSchema>;
 };

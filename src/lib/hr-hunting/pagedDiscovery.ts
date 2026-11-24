@@ -2,7 +2,7 @@ import { collectHuntingPages, type CollectionSummary, type HuntingPage } from "@
 import type { HrCandidate } from "@/lib/hr-hunting/types";
 
 export type HrDiscoveryRound = { input: Record<string, unknown>; nextPage: number; exhausted: boolean };
-export type HrDiscoveryState = { version: 1; fingerprint: string; rounds: HrDiscoveryRound[]; pending: HrCandidate[]; fallbackComplete?: boolean; searchFilters?: { quantity: number; currentTitle?: string; seniority: string[]; location?: string; keywords: string[]; alternateTitles?: string[] } };
+export type HrDiscoveryState = { version: 1; fingerprint: string; rounds: HrDiscoveryRound[]; pending: HrCandidate[]; fallbackComplete?: boolean; fallbackTitles?: string[]; searchFilters?: { quantity: number; currentTitle?: string; seniority: string[]; location?: string; keywords: string[]; alternateTitles?: string[] } };
 
 export function candidateKey(candidate: HrCandidate) {
   if (candidate.profileUrl) return candidate.profileUrl.split("?")[0].replace(/\/$/, "").toLowerCase();
@@ -24,12 +24,13 @@ export async function collectHrDiscovery(options: {
   excludedKeys?: Set<string>;
   fetchPage: (input: Record<string, unknown>, page: HuntingPage) => Promise<unknown[]>;
   normalize: (items: unknown[]) => HrCandidate[];
+  accept?: (candidate: HrCandidate) => boolean;
   now?: () => number;
 }) {
   const now = options.now ?? Date.now;
-  const deadline = now() + 150_000;
+  const deadline = now() + 100_000;
   const state: HrDiscoveryState = { ...options.state, rounds: options.state.rounds.map((round) => ({ ...round })) };
-  let items = state.pending.filter((candidate) => !options.excludedKeys?.has(candidateKey(candidate)));
+  let items = state.pending.filter((candidate) => !options.excludedKeys?.has(candidateKey(candidate)) && (!options.accept || options.accept(candidate)));
   const summaries: CollectionSummary[] = [];
   let requests = 0;
   for (const round of state.rounds) {
@@ -44,7 +45,7 @@ export async function collectHrDiscovery(options: {
           const raw = await options.fetchPage(round.input, page);
           const candidates = options.normalize(raw);
           if (raw.length && !candidates.length) throw new Error("Formato de perfis não reconhecido.");
-          return { items: candidates, exhausted: raw.length === 0 };
+          return { items: options.accept ? candidates.filter(options.accept) : candidates, exhausted: raw.length === 0 };
         },
       });
       items = result.items;
