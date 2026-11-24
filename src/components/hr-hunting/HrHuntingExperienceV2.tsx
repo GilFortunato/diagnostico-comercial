@@ -401,6 +401,7 @@ export function HrHuntingExperienceV2({ accountName }: { accountName?: string | 
                 <ConnectorNotice status={search.status} warnings={search.connectorWarnings} />
                 {search.status === "job_dna_ready" ? <State title="Job DNA pronto para revisão" text="Revise o cargo e os critérios profissionais antes de iniciar a busca." /> : null}
                 {search.status === "no_results" ? <State title="Nenhum candidato elegível neste recorte" text="Inclua cargos alternativos acima e clique em “Refazer busca”. Você também pode ajustar a localização." /> : null}
+                {search.status === "search_pending" ? <State title="Coleta em andamento na fonte principal" text="Clique em Carregar mais 20 para consultar o progresso e recuperar os perfis disponíveis." /> : null}
                 {search.status === "connector_error" ? <State title="A pesquisa não pôde ser concluída" text="Os resultados existentes foram preservados. Teste a conexão e tente novamente." /> : null}
 
                 {sorted.length ? <Results candidates={sorted} selected={selected} setSelected={setSelected} onOpen={setCandidate} onShortlist={toggleShortlist} onExport={exportSnapshot} exporting={pending === "export"} onLoadMore={loadMore} loadingMore={pending === "more"} /> : null}

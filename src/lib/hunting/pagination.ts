@@ -12,7 +12,7 @@ export type CollectionSummary = {
 export async function collectHuntingPages<T>(options: {
   target: number;
   key: (item: T) => string;
-  fetchPage: (page: HuntingPage) => Promise<{ items: T[]; exhausted: boolean }>;
+  fetchPage: (page: HuntingPage) => Promise<{ items: T[]; exhausted: boolean; pending?: boolean; partial?: boolean }>;
   initialItems?: T[];
   excludedKeys?: Set<string>;
   startPage?: number;
@@ -38,7 +38,6 @@ export async function collectHuntingPages<T>(options: {
       summary.stopReason = "provider_error";
       break;
     }
-    summary.nextPage += 2;
     let newSourceItems = 0;
     for (const item of page.items) {
       const key = options.key(item);
@@ -47,6 +46,9 @@ export async function collectHuntingPages<T>(options: {
       if (items.has(key) || options.excludedKeys?.has(key)) summary.duplicates += 1;
       else items.set(key, item);
     }
+    if (page.pending) { summary.stopReason = "time_limit"; break; }
+    if (page.partial) { summary.stopReason = "provider_error"; break; }
+    summary.nextPage += 2;
     if (page.exhausted) { summary.stopReason = "source_exhausted"; break; }
     stagnant = newSourceItems ? 0 : stagnant + 1;
     if (stagnant >= 2) { summary.stopReason = "no_progress"; break; }

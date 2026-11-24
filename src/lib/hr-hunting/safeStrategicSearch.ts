@@ -1,6 +1,8 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { Prisma, type ConfidenceLevel } from "@prisma/client";
+import { indexedProfiles, profileQueries } from "@/lib/hr-hunting/indexedProfiles";
+import { fetchHarvestPage } from "@/lib/connectors/harvestPage";
 import { runApifyActor } from "@/lib/connectors/apifyClient";
 import { runManusStructuredTask } from "@/lib/connectors/manusClient";
 import { getPrisma } from "@/lib/db/prisma";
@@ -46,12 +48,15 @@ type Round = {
 };
 
 export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: string, input: SearchInput, options: { append?: boolean } = {}) {
+  const startedAt = Date.now();
   const search = await findOwnedHrHuntingSearch(id, ownerId);
   if (!search) return null;
 
   const fingerprint = createHash("sha256").update(JSON.stringify({ strategy: 2, currentTitle: input.currentTitle, seniority: input.seniority, location: input.location, keywords: input.keywords, alternateTitles: input.alternateTitles || [], dna: search.jobDna })).digest("hex");
-  const previous = options.append ? await getPrisma().hrHuntingSearch.findFirst({ where: { id }, select: { sourceSnapshot: true } }) : null;
-  let state = readDiscoveryState(previous?.sourceSnapshot, fingerprint);
+  const resume = options.append || search.status === "connector_error" || search.status === "search_pending";
+  const previous = await getPrisma().hrHuntingSearch.findFirst({ where: { id }, select: { sourceSnapshot: true } });
+  const saved = readDiscoveryState(previous?.sourceSnapshot, fingerprint);
+  let state = resume || saved?.rounds.some((round) => round.runId) ? saved : null;
   const warnings: string[] = [];
   const evalInput = evaluationInput(search, input);
 
@@ -101,11 +106,11 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
         excludedKeys,
         normalize: normalizeCandidates,
         accept: acceptsLevel,
-        fetchPage: (actorInput, page) => runApifyActor("linkedinProfileSearch", {
+        fetchPage: (actorInput, page, round) => fetchHarvestPage({
           ...actorInput,
           searchQuery: limitHarvestQuery(actorInput.searchQuery),
           startPage: page.startPage, takePages: page.takePages, maxItems: page.maxItems,
-        }, { timeoutMs: page.timeoutMs, allowFallback: false }),
+        }, round, page.timeoutMs),
       })
     : {
         items: [] as HrCandidate[],
@@ -141,11 +146,58 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
       }
     }
   }
+  const indexBudget = Math.min(45_000, 245_000 - (Date.now() - startedAt));
+  if (externalPool.length < externalTarget && indexBudget >= 5_000 && (fallbackFailed || partial || ["provider_error", "time_limit"].includes(collected.summary.stopReason))) {
+    const titles = unique([...(input.alternateTitles || []), ...(midOnly ? midLevelTitles(title) : []), ...discoveryTitleFamily(title)]);
+    const location = input.location?.trim() || search.jobDna.location || "";
+    const previousQueries = collected.state.indexedQueries || [];
+    const queries = profileQueries(titles, location, input.keywords).filter((query) => !previousQueries.includes(query)).slice(0, 3);
+    if (queries.length) {
+      try {
+        const rows = await runApifyActor("publicProfileIndex", compact({
+          queries: queries.join("\n"), maxPagesPerQuery: 1, maximumLeadsEnrichmentRecords: 0,
+          countryCode: /^(brasil|brazil|br)$/i.test(location) ? "br" : undefined,
+          saveHtmlToKeyValueStore: false,
+        }), { timeoutMs: indexBudget });
+        const profiles = indexedProfiles(rows, location).filter((candidate) => acceptsLevel(candidate) && !excludedKeys.has(candidateKey(candidate)));
+        const eligible = applyCandidateQualityGate(profiles, search.jobDna, evalInput).eligible;
+        const before = externalPool.length;
+        externalPool = dedupe([...externalPool, ...eligible]);
+        // Only mark queries for which the actor actually returned an organic results page.
+        const completed = rows.flatMap((row: { organicResults?: unknown; searchQuery?: { term?: string } }) =>
+          Array.isArray(row?.organicResults) && queries.includes(row.searchQuery?.term || "") ? [row.searchQuery!.term!] : []);
+        collected.state.indexedQueries = [...new Set([...previousQueries, ...completed])];
+        warnings.push(`O índice público acrescentou ${externalPool.length - before} perfil(is) pelo título profissional publicado.`);
+      } catch {
+        warnings.push("O índice público também ficou indisponível. A consulta poderá ser retomada.");
+      }
+    }
+  }
+  const activeRound = collected.state.rounds.find((round) => round.runId);
+  if (activeRound && Date.now() - startedAt < 245_000) {
+    try {
+      // Other sources have had time to run. Check the same run once before replying.
+      const latest = await fetchHarvestPage({}, activeRound, 8_000, 0);
+      const fresh = normalizeCandidates(latest.items).filter((candidate) => acceptsLevel(candidate) && !excludedKeys.has(candidateKey(candidate)));
+      externalPool = dedupe([...externalPool, ...fresh]);
+      if (!latest.pending && !latest.partial) {
+        activeRound.nextPage += 2;
+        activeRound.exhausted = latest.items.length === 0 || activeRound.nextPage > 99;
+        collected.summary.stopReason = collected.state.rounds.every((round) => round.exhausted) ? "source_exhausted" : "request_limit";
+      } else if (latest.partial) {
+        collected.summary.stopReason = "provider_error";
+      }
+    } catch {
+      collected.summary.stopReason = "provider_error";
+    }
+  }
   collected.summary.unique = externalPool.length;
   if (externalPool.length >= externalTarget) collected.summary.stopReason = "target_reached";
   else if (fallbackFailed) collected.summary.stopReason = "provider_error";
   else if (partial) collected.summary.stopReason = "time_limit";
   else if (collected.state.fallbackTitles?.length && collected.summary.stopReason === "source_exhausted") collected.summary.stopReason = "request_limit";
+  const harvestPending = collected.state.rounds.some((round) => round.runId);
+  if (harvestPending) warnings.push("A coleta principal ainda estava em andamento na última consulta. Use Carregar mais 20 para consultar a mesma execução.");
   warnings.push(collectionMessage(collected.summary));
   console.info("[hr-hunting] collection completed", { ...collected.summary });
   if (externalPool.length) externalPool = await enrich(externalPool, input, warnings);
@@ -177,7 +229,7 @@ export async function executeSafeStrategicHrHuntingSearch(id: string, ownerId: s
     candidates,
     discoveryState: nextState,
     warnings,
-    status: candidates.length || search.candidates.length ? "results_ready" : collected.summary.stopReason === "provider_error" ? "connector_error" : "no_results",
+    status: candidates.length || search.candidates.length ? "results_ready" : harvestPending ? "search_pending" : collected.summary.stopReason === "provider_error" ? "connector_error" : "no_results",
   });
 
   return findOwnedHrHuntingSearch(id, ownerId);

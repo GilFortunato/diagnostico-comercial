@@ -199,3 +199,35 @@ test("vaga exclusivamente plena exige nível no cargo atual", () => {
   for (const title of ["Advogada Plena", "Advogado PL", "Mid-level Corporate Lawyer"]) assert.ok(midLevelInTitle(title));
   for (const title of ["Advogada Corporativa Internacional", "Senior Counsel", "Advogado Jr.", "Sócia | Advogada Plena"]) assert.equal(midLevelInTitle(title), false);
 });
+
+test("Harvest retoma o mesmo run e aproveita o dataset até quando termina parcialmente", async () => {
+  const { readHarvestPage } = await import("@/lib/connectors/harvestPage");
+  const round: import("@/lib/hr-hunting/pagedDiscovery").HrDiscoveryRound = { input: {}, nextPage: 1, exhausted: false };
+  let state = "RUNNING";
+  let created = 0;
+  const data = [{ position: "Advogada Plena" }];
+  const request = async (path: string, init?: RequestInit) => {
+    if (init?.method === "POST") created++;
+    if (path.startsWith("datasets/")) return data;
+    return { data: { id: "runexample123", status: state, defaultDatasetId: "datasetexample123" } };
+  };
+  const first = await readHarvestPage("harvestapi/linkedin-profile-search", {}, round, request);
+  assert.equal(first.pending, true);
+  assert.equal(round.runId, "runexample123");
+  state = "TIMED-OUT";
+  const last = await readHarvestPage("harvestapi/linkedin-profile-search", {}, round, request);
+  assert.deepEqual(last, { items: data, pending: false, partial: true });
+  assert.equal(created, 1);
+  assert.equal(round.runId, undefined);
+});
+
+test("índice de contingência usa perfis individuais, título e localização com evidência", async () => {
+  const { indexedProfiles, profileQueries } = await import("@/lib/hr-hunting/indexedProfiles");
+  const hit = { title: "Maria Exemplo - Advogada Plena | LinkedIn", url: "https://br.linkedin.com/in/fixture-profile", description: "São Paulo, Brasil · Advocacia" };
+  const result = indexedProfiles([{ organicResults: [hit, { ...hit, url: "https://www.linkedin.com/jobs/view/123" },
+    { ...hit, url: "https://example.com/in/fake" }, { ...hit, url: "https://www.linkedin.com/in/unknown", description: "sem localização publicada" }] }], "Brasil");
+  assert.equal(result.length, 1);
+  assert.equal(result[0].currentTitle, "Advogada Plena");
+  assert.equal(result[0].location, "São Paulo, Brasil");
+  assert.ok(profileQueries(["Advogada Plena"], "Brasil", ["contratos"])[0].includes('"contratos"'));
+});

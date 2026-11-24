@@ -516,7 +516,7 @@ function looksLikeProfile(record: UnknownRecord) {
 }
 
 function pickLocation(record: UnknownRecord) {
-  const direct = pick(record, ["locationName", "geo", "location.linkedinText", "location.parsed.text", "location.text", "profile.location.linkedinText", "profile.location.parsed.text"]);
+  const direct = pick(record, ["locationName", "geo", "location", "location.linkedinText", "location.parsed.text", "location.text", "profile.location.linkedinText", "profile.location.parsed.text"]);
   if (direct) return direct;
   const city = pick(record, ["city", "location.city", "location.parsed.city"]);
   const state = pick(record, ["state", "location.state", "location.parsed.state"]);

@@ -8,7 +8,8 @@ export type ApifyActorKey =
   | "linkedinCompanyDetails"
   | "linkedinCompanySearch"
   | "leadDiscovery"
-  | "publicJobSearch";
+  | "publicJobSearch"
+  | "publicProfileIndex";
 
 export type ApifyActorDefinition = {
   key: ApifyActorKey;
@@ -107,6 +108,14 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
       scraperMode: "short",
       maxItems: 25,
     },
+  },
+  publicProfileIndex: {
+    key: "publicProfileIndex",
+    actorId: "apify/google-search-scraper",
+    label: "Índice público de perfis",
+    purpose: "Localizar títulos profissionais em páginas públicas individuais.",
+    stage: "decision_maker",
+    defaultInput: { maxPagesPerQuery: 1 },
   },
   publicJobSearch: {
     key: "publicJobSearch",

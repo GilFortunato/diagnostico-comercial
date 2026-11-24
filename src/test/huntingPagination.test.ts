@@ -107,3 +107,15 @@ test("HR continua após página só com cargos fora do nível solicitado", async
   assert.deepEqual(pages, [1, 3]);
   assert.equal(result.items[0].currentTitle, "Advogada Plena");
 });
+
+test("coleta não avança a página nem esgota a rodada enquanto o run está em andamento", async () => {
+  const result = await collectHrDiscovery({ state: state(), target: 2, normalize: (items) => items as HrCandidate[],
+    fetchPage: async (_input, _page, round) => {
+      round.runId = "runexample123";
+      return { pending: true, partial: false, items: [person(1)] };
+    } });
+  assert.equal(result.summary.stopReason, "time_limit");
+  assert.equal(result.state.rounds[0].nextPage, 1);
+  assert.equal(result.state.rounds[0].exhausted, false);
+  assert.equal(result.items.length, 1);
+});
