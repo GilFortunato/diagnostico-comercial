@@ -68,3 +68,35 @@ test("modelo com Tal no cabeçalho mantém o responsável e reconhece o telefone
   assert.equal(output.worksheets[0].getCell("F2").text,"Ale");
   assert.equal(output.worksheets[0].getCell("D2").text,"011 98765-4321");
 });
+
+test("indicação no Status requer validação de entrada e nunca presume vencimento", () => {
+  for (const status of ["Indicação Paula (Share)", "Indicação Rhaylander"]) {
+    const row = decide({status});
+    assert.equal(row.sla, "24 horas úteis");
+    assert.equal(row.decision, "Validar indicação e SLA");
+    assert.equal(row.owner, "");
+  }
+  assert.equal(decide({status:"Indicação Paula (Share)", newLead:"Não"}).sla, "");
+  assert.equal(decide({status:"Sem indicação"}).sla, "");
+  assert.equal(decide({origin:"Grande evento", status:"Indicação Paula (Share)"}).sla, "5 dias úteis");
+});
+
+test("atividade formal de convite ou abordagem recente impede transferência por inatividade", () => {
+  const lead = {inPipe:"Sim", presence:"Sim", lastActivity:"01/01/2025"};
+  assert.equal(decide({...lead, recordedInvitation:"20/11/2026"}).owner, "");
+  assert.equal(decide({...lead, firstCompleted:"20/11/2026"}).owner, "");
+  assert.equal(decide({...lead, recordedInvitation:"01/03/2025"}).owner, "Paula");
+});
+
+test("indicação pendente aparece antes das verificações gerais mesmo sem responsável", async () => {
+  const book = new ExcelJS.Workbook();
+  book.addWorksheet("Geral").addRows([["Cidade","Comercial"],["BH","Ana"]]);
+  book.addWorksheet("BH").addRows([["Empresa","Nome","Responsável","Status"],["Outra","Maria","Ana","Confirmada"],["Indicada","","","Indicação Paula (Share)"]]);
+  const {bytes} = await prioritizeWorkbook(new Uint8Array(await book.xlsx.writeBuffer()).buffer);
+  const out = new ExcelJS.Workbook(); await out.xlsx.load(bytes.buffer);
+  const sheet = out.worksheets[0];
+  assert.equal(sheet.getCell("A2").text, "Indicada");
+  assert.match(sheet.getCell("E2").text,/24 horas úteis/);
+  assert.match(sheet.getCell("E2").text,/Identificar a pessoa/);
+  assert.equal(sheet.getCell("F2").text,"");
+});

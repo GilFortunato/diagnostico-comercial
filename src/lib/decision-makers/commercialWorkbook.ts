@@ -12,6 +12,7 @@ const names = {
   newLead: ["lead novo", "novo lead", "novo lead do jantar"], opening: ["data de abertura", "data de criação"],
   lastSale: ["última venda", "data da última venda"], hasSale: ["houve venda", "venda concluída"],
   lastActivity: ["última atividade incluindo convite", "última atividade no pipedrive", "última atividade"],
+  recordedInvitation: ["data do convite registrado no pipedrive", "data da atividade de convite no pipedrive"],
   interaction: ["houve interação", "houve interação no pipedrive"], scheduled: ["atividade agendada", "há atividade agendada"],
   deadline: ["vencimento do sla", "prazo do primeiro atendimento"], firstCompleted: ["data do primeiro atendimento concluído", "primeira atividade concluída"],
   completed: ["primeiro atendimento concluído", "atividade de abordagem concluída"],
@@ -129,7 +130,9 @@ export async function prioritizeWorkbook(input: ArrayBuffer, at = new Date()) {
       const currentOwner = companyBlock ? "" : inviteeBlock ? get("contact") : lead.responsible;
       const assigned = decision.owner || (decision.order <= 1 ? "" : currentOwner);
       const observations = [
-        decision.decision + ". " + decision.action,
+        decision.decision + ". " + decision.reason + " " + decision.action,
+        decision.decision === "Validar indicação e SLA" && !person && "Identificar a pessoa indicada.",
+        normalized(lead.status) === "nao convidar" && "Orientação registrada para este jantar: não convidar.",
         decision.sla && ("SLA de " + decision.sla + ". " + decision.slaState + "."),
         lead.notes,
         [sheet.name, lead.status, !assigned && owner ? "Comercial do jantar: " + owner : ""].filter(Boolean).join(" · "),
@@ -145,7 +148,7 @@ export async function prioritizeWorkbook(input: ArrayBuffer, at = new Date()) {
   const report = output.addWorksheet("Weekend", {views: [{state: "frozen", ySplit: 1}]});
   report.addRow(weekendHeaders);
   const collator = new Intl.Collator("pt-BR", {sensitivity: "base"});
-  entries.sort((a, b) => Number(!a.owner) - Number(!b.owner) || collator.compare(a.owner, b.owner) || a.order - b.order);
+  entries.sort((a, b) => a.order - b.order || Number(!a.owner) - Number(!b.owner) || collator.compare(a.owner, b.owner));
   for (const entry of entries) report.addRow(entry.values);
   [32, 32, 42, 32, 78, 22].forEach((width, i) => { report.getColumn(i + 1).width = width; });
   report.getColumn(4).numFmt = "@";

@@ -37,7 +37,7 @@ export function CommercialPanel() {
     <button type="button" disabled={!file || busy || !!output} onClick={() => void process()} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[var(--share-green-950)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"><FileSpreadsheet size={16}/>{busy ? "Analisando planilha…" : "Gerar prioridades"}</button>
     {error && <p role="alert" className="mt-4 text-sm text-red-700">{error}</p>}
     {output && <div role="status" className="mt-5 rounded-lg bg-green-50 p-4 text-sm">
-      <p>{output.count.toLocaleString("pt-BR")} registros analisados em {output.cities} abas. A aba <strong>Weekend</strong> agrupa os registros por responsável. Consulte a prioridade e a próxima ação em <strong>Obs</strong>.</p>
+      <p>{output.count.toLocaleString("pt-BR")} registros analisados em {output.cities} abas. A aba <strong>Weekend</strong> mostra primeiro as ações prioritárias e agrupa os responsáveis dentro de cada nível. Consulte a prioridade e a próxima ação em <strong>Obs</strong>.</p>
       {output.skipped.length > 0 && <p className="mt-1">Abas sem cabeçalho reconhecido: {output.skipped.join(", ")}.</p>}
       <a href={output.url} download={output.name} className="mt-3 inline-flex items-center gap-2 font-bold text-[var(--share-green-800)] underline"><Download size={16}/> Baixar planilha priorizada</a>
     </div>}
