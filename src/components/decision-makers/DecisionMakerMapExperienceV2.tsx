@@ -53,6 +53,7 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
   const [industries, setIndustries] = useState("");
   const [country, setCountry] = useState("Brazil");
   const [states, setStates] = useState("");
+  const [cities, setCities] = useState("");
   const [companyKeywords, setCompanyKeywords] = useState("");
   const [domains, setDomains] = useState("");
   const [companyQuantity, setCompanyQuantity] = useState(15);
@@ -70,7 +71,7 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
     [result, selectedCompanyIds],
   );
   const canSearch = mode === "companies"
-    ? Boolean(splitTerms(industries).length || splitTerms(companyKeywords).length || splitTerms(domains).length)
+    ? Boolean(splitTerms(industries).length || splitTerms(companyKeywords).length || splitTerms(domains).length || splitTerms(cities).length || splitTerms(states).length)
     : Boolean(splitTerms(companyLinkedinUrls).length && splitTerms(rolesText).length);
 
   useEffect(() => {
@@ -184,6 +185,7 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
       setIndustries(input.filters.industries.join(", "));
       setCountry(input.filters.country);
       setStates(input.filters.states.join(", "));
+      setCities(input.filters.cityPostalCodes.join(", "));
       setCompanyKeywords(input.filters.keywords.join(", "));
       setDomains(input.filters.domains.join(", "));
       setCompanyQuantity(input.filters.quantity);
@@ -211,11 +213,11 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
     const targetCompanyUrls = peopleTarget?.companyLinkedinUrls ?? splitTerms(companyLinkedinUrls);
     const targetCompanyNames = peopleTarget?.companyNames ?? splitTerms(companyNames);
     const canRun = searchMode === "companies"
-      ? Boolean(splitTerms(industries).length || splitTerms(companyKeywords).length || splitTerms(domains).length)
+      ? Boolean(splitTerms(industries).length || splitTerms(companyKeywords).length || splitTerms(domains).length || splitTerms(cities).length || splitTerms(states).length)
       : Boolean(targetCompanyUrls.length && splitTerms(rolesText).length);
 
     if (!canRun) {
-      setError(searchMode === "companies" ? "Informe setor, palavra-chave ou domínio." : "Informe ao menos uma página corporativa do LinkedIn e um cargo.");
+      setError(searchMode === "companies" ? "Informe setor, palavra-chave, domínio, cidade ou estado." : "Informe ao menos uma página corporativa do LinkedIn e um cargo.");
       return;
     }
 
@@ -237,7 +239,7 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
               industries: splitTerms(industries),
               country,
               states: splitTerms(states),
-              cityPostalCodes: [],
+              cityPostalCodes: splitTerms(cities),
               employeeRanges: [],
               keywords: splitTerms(companyKeywords),
               technologies: [],
@@ -384,8 +386,19 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
           <aside className="border-r border-[var(--share-line)] p-5">
             {mode === "companies" ? <div className="grid gap-4">
               <Area label="Setores" value={industries} setValue={setIndustries} />
+              <div className="flex flex-wrap gap-1">
+                <button type="button" className="rounded border px-2 py-1 text-xs" onClick={() => { setIndustries(""); setCompanyKeywords(""); }}>Todos os setores (limpar)</button>
+                {([["Tecnologia","Software, SaaS, TI, inteligência artificial"],["Indústria","Manufatura, produção, automação industrial"],["Agronegócio","Agroindústria, agricultura, cooperativas"],["Saúde","Hospitais, clínicas, farmacêuticas"],["Logística","Transportadoras, distribuição, supply chain"],["Recursos Humanos","Gestão de pessoas, RH, recrutamento"],["Financeiro","Bancos, fintechs, investimentos"],["Varejo","Comércio, e-commerce"],["Energia","Energia renovável, energia solar"],["Telecomunicações","Internet, fibra óptica, telecom"],["Educação","Universidades, edtechs, ensino"],["Serviços","Consultoria, terceirização, BPO"],["Construção Civil","Engenharia, construtoras"],["Automotivo","Autopeças, montadoras"],["Alimentos e Bebidas","Indústria alimentícia, bebidas"]]).map(([sector, terms]) => <button key={sector} type="button" aria-pressed={splitTerms(industries).includes(sector)} className={`rounded border px-2 py-1 text-xs ${splitTerms(industries).includes(sector) ? "bg-green-100" : "bg-white"}`} onClick={() => {
+                  const selected = splitTerms(industries);
+                  if (selected.includes(sector)) { setIndustries(selected.filter((item) => item !== sector).join(", ")); return; }
+                  if (selected.length >= 10) return;
+                  setIndustries([...selected, sector].join(", "));
+                  setCompanyKeywords([...new Set([...splitTerms(companyKeywords), ...splitTerms(terms)])].slice(0, 15).join(", "));
+                }}>{sector}</button>)}
+              </div>
               <Field label="País" value={country} setValue={setCountry} />
               <Field label="Estados / regiões" value={states} setValue={setStates} />
+              <Field label="Cidades (ex.: Campinas)" value={cities} setValue={setCities} />
               <Area label="Palavras-chave" value={companyKeywords} setValue={setCompanyKeywords} />
               <Area label="Domínios" value={domains} setValue={setDomains} />
               <NumberField label="Resultados iniciais" value={companyQuantity} setValue={setCompanyQuantity} />
@@ -396,7 +409,7 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
               <Field label="Localizações" value={locations} setValue={setLocations} />
               <Area label="Palavras-chave profissionais" value={profileKeywords} setValue={setProfileKeywords} />
               <NumberField label="Pessoas desejadas (até 50)" value={peopleQuantity} setValue={setPeopleQuantity} />
-              <p className="text-xs leading-5 text-zinc-500">Primeiro buscamos os cargos e locais informados. Se faltarem resultados, consultamos outros funcionários das mesmas empresas e priorizamos a aderência no ranking. A quantidade depende da cobertura da fonte.</p>
+              <p className="text-xs leading-5 text-zinc-500">Buscamos os cargos e locais informados. A localização é obrigatória quando especificada; a fonte complementar não deve ampliar o recorte. A quantidade depende da cobertura da fonte.</p>
               <label className="flex items-start gap-2 text-sm text-zinc-600"><input type="checkbox" checked={includeBroadDiscovery} onChange={(event) => setIncludeBroadDiscovery(event.target.checked)} className="mt-1" />Consultar fonte complementar mesmo após atingir a meta</label>
             </div>}
             <button type="button" onClick={() => runSearch()} disabled={isSearching || !canSearch} className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[var(--share-green-950)] px-4 text-sm font-semibold text-white disabled:opacity-50">
