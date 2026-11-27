@@ -7,6 +7,7 @@ export type ApifyActorKey =
   | "linkedinCompanyEmployeesFallback"
   | "linkedinCompanyDetails"
   | "linkedinCompanySearch"
+  | "googleMapsCompanies"
   | "leadDiscovery"
   | "publicJobSearch"
   | "publicProfileIndex";
@@ -108,6 +109,9 @@ export const apifyActors: Record<ApifyActorKey, ApifyActorDefinition> = {
       scraperMode: "short",
       maxItems: 25,
     },
+  },
+  googleMapsCompanies: {
+    key: "googleMapsCompanies", actorId: "compass/crawler-google-places", label: "Google Maps · Empresas", purpose: "Descobrir estabelecimentos empresariais por localização.", stage: "decision_maker", defaultInput: { language: "pt-BR", maxCrawledPlacesPerSearch: 25 },
   },
   publicProfileIndex: {
     key: "publicProfileIndex",
