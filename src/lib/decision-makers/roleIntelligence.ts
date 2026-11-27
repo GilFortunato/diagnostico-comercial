@@ -26,7 +26,7 @@ export function expandRoleFamilies(roles: string[]) {
     const family = roleFamilies.find((entry) => entry.signals.some((signal) => normalized.includes(signal)));
     if (family) expanded.push(...family.related);
   }
-  return uniqueStrings(expanded).slice(0, 20);
+  return uniqueStrings(expanded).slice(0, 150);
 }
 
 export function addRoleSelection(roles: string[], role: string) {
