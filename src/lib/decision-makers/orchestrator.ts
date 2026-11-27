@@ -52,6 +52,26 @@ const defaultDependencies: HuntingDependencies = {
 const resultCache = new Map<string, { expiresAt: number; result: DecisionMakerResult }>();
 const cacheTtlMs = 10 * 60 * 1000;
 
+const brazilStates: Record<string, string> = { ac:"acre", al:"alagoas", ap:"amapa", am:"amazonas", ba:"bahia", ce:"ceara", df:"distrito federal", es:"espirito santo", go:"goias", ma:"maranhao", mt:"mato grosso", ms:"mato grosso do sul", mg:"minas gerais", pa:"para", pb:"paraiba", pr:"parana", pe:"pernambuco", pi:"piaui", rj:"rio de janeiro", rn:"rio grande do norte", rs:"rio grande do sul", ro:"rondonia", rr:"roraima", sc:"santa catarina", sp:"sao paulo", se:"sergipe", to:"tocantins" };
+function geoText(value: string) { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
+function geoContains(value: string, term: string) { return (" " + value + " ").includes(" " + term + " "); }
+function matchesGeo(location: string | undefined, requested: string) {
+  const value = geoText(location ?? "");
+  const parts = requested.split(/[,/–—-]/).map(geoText).filter(Boolean);
+  if (!value || !parts.length) return false;
+  return parts.every((term) => {
+    if (term === "brasil" || term === "brazil") return geoContains(value, "brasil") || geoContains(value, "brazil") || Object.entries(brazilStates).some(([uf, name]) => geoContains(value, uf) || geoContains(value, name));
+    const full = brazilStates[term] ?? term;
+    const uf = Object.keys(brazilStates).find((key) => brazilStates[key] === full);
+    return geoContains(value, full) || Boolean(uf && geoContains(value, uf));
+  });
+}
+function matchesPeopleGeo(location: string | undefined, locations: string[]) {
+  const specific = locations.filter((item) => !["brasil","brazil"].includes(geoText(item)));
+  return specific.length ? specific.some((item) => matchesGeo(location, item)) : true;
+}
+
+
 export async function executeDecisionMakerSearch(input: DecisionMakerSearchInput, dependencies: Partial<HuntingDependencies> = {}) {
   const deps = { ...defaultDependencies, ...dependencies };
   const cacheKey = createQueryId(input);
@@ -95,7 +115,11 @@ async function executeCompanySearch(input: Extract<DecisionMakerSearchInput, { m
   if (items.length > 0 && normalized.length === 0) {
     throw new Error("A fonte retornou empresas, mas o formato recebido não pôde ser normalizado com segurança.");
   }
-  const companies = rankCompanies(normalized, input).slice(0, input.filters.quantity);
+  const eligible = normalized.filter((company) =>
+    (!input.filters.cityPostalCodes.length || input.filters.cityPostalCodes.some((city) => matchesGeo(company.location, city))) &&
+    (!input.filters.states.length || input.filters.states.some((state) => matchesGeo(company.location, state))));
+  if (eligible.length < normalized.length) warnings.push(`${normalized.length - eligible.length} empresas excluídas por localização incompatível ou não comprovada.`);
+  const companies = rankCompanies(eligible, input).slice(0, input.filters.quantity);
 
   return {
     mode: "companies",
@@ -158,7 +182,7 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
         const raw = await deps.discoverHarvestPeople(expandedInput, page);
         const normalized = normalizePeople(raw, primarySource, input.filters.desiredDecisionRole);
         if (raw.length && !normalized.length) throw new Error("Formato de perfis não reconhecido.");
-        return { items: normalized, exhausted: raw.length === 0 };
+        return { items: normalized.filter((person) => matchesPeopleGeo(person.location, input.filters.locations)), exhausted: raw.length === 0 };
       },
     });
     primaryItems = collected.items;
@@ -172,7 +196,7 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
     try {
       fallbackItems = await deps.discoverBroadPeople(expandedInput);
       fallbackUsed = fallbackItems.length > 0;
-      if (fallbackUsed) warnings.push("A busca complementar consultou funcionários das empresas informadas sem restringir cargo ou localização. Os critérios originais orientam o ranking; valide a aderência antes de abordar.");
+      if (fallbackUsed) warnings.push("A busca complementar consultou funcionários das empresas informadas sem restringir cargo ou localização. Os resultados fora da localização específica serão excluídos.");
       if (!primaryItems.length && fallbackUsed) warnings.push("A segunda fonte de funcionários assumiu a descoberta porque a principal não trouxe cobertura.");
     } catch {
       fallbackFailed = true;
@@ -203,7 +227,10 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
     throw new Error("A fonte retornou perfis, mas o formato recebido não pôde ser normalizado com segurança.");
   }
 
-  let people: HuntingPerson[] = rankPeople(mergePeople(primaryPeople, fallbackPeople), expandedInput).slice(0, input.filters.quantity);
+  const merged = mergePeople(primaryPeople, fallbackPeople);
+  const eligible = merged.filter((person) => matchesPeopleGeo(person.location, input.filters.locations));
+  if (eligible.length < merged.length) warnings.push(`${merged.length - eligible.length} perfis excluídos por localização incompatível ou não comprovada.`);
+  let people: HuntingPerson[] = rankPeople(eligible, expandedInput).slice(0, input.filters.quantity);
   if (collection) {
     collection = { ...collection, unique: people.length, stopReason: people.length >= input.filters.quantity ? "target_reached" : collection.stopReason };
     warnings.push(collectionMessage(collection));
@@ -236,7 +263,7 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
   }));
   const postEnrichments = postResults.reduce<number>((total, current) => total + current, 0);
 
-  people = rankPeople(people, expandedInput);
+  people = rankPeople(people.filter((person) => matchesPeopleGeo(person.location, input.filters.locations)), expandedInput);
 
   let aiNextAction: DecisionMakerResult["nextBestAction"] | null = null;
   if (people.length && !manusUsed) {
