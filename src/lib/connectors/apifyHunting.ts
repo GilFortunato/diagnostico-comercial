@@ -14,21 +14,19 @@ const harvestSeniorityIds: Record<PersonSearchInput["filters"]["seniority"][numb
 
 export function buildCompanyDiscoveryInput(input: CompanySearchInput) {
   const queryTerms = uniqueStrings([
-    ...input.filters.keywords,
     ...input.filters.industries,
+    ...input.filters.keywords,
     ...input.filters.technologies,
     ...input.filters.domains,
   ]).slice(0, 6);
-  const locations = uniqueStrings([
-    ...input.filters.cityPostalCodes,
-    ...input.filters.states,
-    input.filters.country,
-  ]).slice(0, 20);
+  const locations = uniqueStrings(input.filters.cityPostalCodes.length
+    ? input.filters.cityPostalCodes.map((city) => [city, ...(input.filters.states.length === 1 ? input.filters.states : []), input.filters.country].join(", "))
+    : input.filters.states.length ? input.filters.states.map((state) => `${state}, ${input.filters.country}`) : [input.filters.country]).slice(0, 20);
 
   return compactInput({
     ...apifyActors.linkedinCompanySearch.defaultInput,
     scraperMode: "short",
-    maxItems: input.filters.quantity,
+    maxItems: Math.min(100, input.filters.quantity * 2),
     searchQuery: queryTerms.length ? queryTerms.join(" OR ") : undefined,
     locations,
   });
