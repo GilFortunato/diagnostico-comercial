@@ -80,7 +80,6 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
   const [companyLinkedinUrls, setCompanyLinkedinUrls] = useState("");
   const [companyNames, setCompanyNames] = useState("");
   const [rolesText, setRolesText] = useState(defaultHrRoles.join(", "));
-  const [locations, setLocations] = useState("Brasil");
   const [profileKeywords, setProfileKeywords] = useState("");
   const [peopleQuantity, setPeopleQuantity] = useState(50);
   const [includeBroadDiscovery, setIncludeBroadDiscovery] = useState(false);
@@ -213,7 +212,15 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
       setCompanyLinkedinUrls(input.filters.companyLinkedinUrls.join("\n"));
       setCompanyNames(input.filters.companyNames.join(", "));
       setRolesText(input.filters.roles.join(", "));
-      setLocations(input.filters.locations.join(", "));
+      const savedLocations = input.filters.locations;
+      const stateNames = Object.keys(brazilUF);
+      const stateValues = [...new Set(savedLocations.flatMap(location => location.split(/[,/]/).map(part => part.trim())).map(part => stateNames.find(name => name.toLocaleLowerCase("pt-BR") === part.toLocaleLowerCase("pt-BR") || brazilUF[name].toLowerCase() === part.toLowerCase())).filter((name): name is string => Boolean(name)))];
+      const regionName = Object.keys(brazilRegions).find(name => { const group = brazilRegions[name as keyof typeof brazilRegions]; return group.length === stateValues.length && group.every(state => stateValues.includes(state)); });
+      const remaining = [...new Set(savedLocations.flatMap(location => location.split(/[,/]/).map(part => part.trim())).filter(part => part && !/^(brasil|brazil)$/i.test(part) && !stateNames.some(name => name.toLocaleLowerCase("pt-BR") === part.toLocaleLowerCase("pt-BR") || brazilUF[name].toLowerCase() === part.toLowerCase())))];
+      setCountry("Brazil");
+      setRegion(regionName || "");
+      setStates(stateValues.join(", "));
+      setCities(remaining.join(", "));
       setProfileKeywords(input.filters.profileKeywords.join(", "));
       setPeopleQuantity(input.filters.quantity);
       setIncludeBroadDiscovery(input.filters.includeBroadDiscovery);
@@ -279,7 +286,13 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
               roles: splitTerms(rolesText),
               departments: [],
               seniority: [],
-              locations: splitTerms(locations),
+              locations: (() => {
+                const selectedCities = splitTerms(cities);
+                const selectedStates = splitTerms(states);
+                if (selectedCities.length) return selectedCities.flatMap(city => (selectedStates.length ? selectedStates : [""]).map(state => [city, state, country].filter(Boolean).join(", "))).slice(0, 10);
+                if (selectedStates.length) return selectedStates.map(state => [state, country].filter(Boolean).join(", "));
+                return [country].filter(Boolean);
+              })(),
               profileKeywords: splitTerms(profileKeywords),
               desiredDecisionRole: "Decisor funcional",
               quantity: requestedQuantity,
@@ -434,7 +447,16 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
               <Area label="Páginas corporativas do LinkedIn" value={companyLinkedinUrls} setValue={setCompanyLinkedinUrls} placeholder="https://www.linkedin.com/company/empresa" />
               <Field label="Nomes das empresas" value={companyNames} setValue={setCompanyNames} />
               <TagsField label="Cargos e famílias de RH" value={rolesText} setValue={setRolesText} limit={100} suggestions={defaultHrRoles} />
-              <Field label="Localizações" value={locations} setValue={setLocations} />
+              <Field label="País" value={country} setValue={setCountry} />
+              {brazil ? <>
+                <label className="grid gap-1 text-xs font-semibold text-zinc-600">Região<select className="h-10 border border-[var(--share-line)] bg-white px-3 text-sm" value={region} onChange={event => { const next = event.target.value; setRegion(next); setStates(next ? brazilRegions[next as keyof typeof brazilRegions].join(", ") : ""); setCities(""); }}><option value="">Todas as regiões</option>{Object.keys(brazilRegions).map(name => <option key={name}>{name}</option>)}</select></label>
+                <label className="grid gap-1 text-xs font-semibold text-zinc-600">Estado<select className="h-10 border border-[var(--share-line)] bg-white px-3 text-sm" value={availableStates.includes(states) ? states : ""} onChange={event => { setStates(event.target.value || (region ? availableStates.join(", ") : "")); setCities(""); }}><option value="">Todos os estados da região</option>{availableStates.map(name => <option key={name}>{name}</option>)}{states && !availableStates.includes(states) && !region && <option value={states}>{states}</option>}</select></label>
+                <label className="grid gap-1 text-xs font-semibold text-zinc-600">Cidade específica (opcional)<input className="h-10 border border-[var(--share-line)] bg-white px-3 text-sm" list="b2b-ibge-cities" value={cities} onChange={event => setCities(event.target.value)} placeholder="Todas as cidades ou digite um município" /><datalist id="b2b-ibge-cities">{cityOptions.map(name => <option key={name} value={name}/>)}</datalist></label>
+                {cityStatus && <p className="text-xs text-zinc-500">{cityStatus}</p>}
+              </> : <>
+                <Field label="Estados / regiões" value={states} setValue={setStates} />
+                <Field label="Cidades" value={cities} setValue={setCities} />
+              </>}
               <TagsField label="Palavras-chave profissionais" value={profileKeywords} setValue={setProfileKeywords} limit={15} suggestions={["Recursos Humanos","People & Culture","Talent Acquisition","DHO","Learning & Development","HRBP","Employee Experience","Gestão de Pessoas"]} />
               <NumberField label="Pessoas desejadas (até 50)" value={peopleQuantity} setValue={setPeopleQuantity} />
               <p className="text-xs leading-5 text-zinc-500">Buscamos os cargos e locais informados. A localização é obrigatória quando especificada; a fonte complementar não deve ampliar o recorte. A quantidade depende da cobertura da fonte.</p>
