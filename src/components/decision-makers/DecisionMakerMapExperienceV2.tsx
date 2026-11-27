@@ -9,6 +9,9 @@ import { defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/
 import { getSuggestedRoles } from "@/lib/decision-makers/roleIntelligence";
 import { splitTerms, type DecisionMakerResult, type HuntingCompany, type HuntingPerson } from "@/lib/decision-makers/search";
 
+const brazilRegions = {"Norte":["Acre","Amapá","Amazonas","Pará","Rondônia","Roraima","Tocantins"],"Nordeste":["Alagoas","Bahia","Ceará","Maranhão","Paraíba","Pernambuco","Piauí","Rio Grande do Norte","Sergipe"],"Centro-Oeste":["Distrito Federal","Goiás","Mato Grosso","Mato Grosso do Sul"],"Sudeste":["Espírito Santo","Minas Gerais","Rio de Janeiro","São Paulo"],"Sul":["Paraná","Rio Grande do Sul","Santa Catarina"]};
+const brazilUF: Record<string, string> = {"Acre":"AC","Amapá":"AP","Amazonas":"AM","Pará":"PA","Rondônia":"RO","Roraima":"RR","Tocantins":"TO","Alagoas":"AL","Bahia":"BA","Ceará":"CE","Maranhão":"MA","Paraíba":"PB","Pernambuco":"PE","Piauí":"PI","Rio Grande do Norte":"RN","Sergipe":"SE","Distrito Federal":"DF","Goiás":"GO","Mato Grosso":"MT","Mato Grosso do Sul":"MS","Espírito Santo":"ES","Minas Gerais":"MG","Rio de Janeiro":"RJ","São Paulo":"SP","Paraná":"PR","Rio Grande do Sul":"RS","Santa Catarina":"SC"};
+
 type SearchMode = "companies" | "people";
 type PeopleSearchTarget = { companyLinkedinUrls: string[]; companyNames: string[] };
 type WorkspaceView = "commercial" | "search" | "all" | "mine" | "leads" | "my-leads" | "list";
@@ -54,6 +57,21 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
   const [country, setCountry] = useState("Brazil");
   const [states, setStates] = useState("");
   const [cities, setCities] = useState("");
+  const [region, setRegion] = useState("");
+  const [cityOptions, setCityOptions] = useState<string[]>([]);
+  const [cityStatus, setCityStatus] = useState("");
+  const brazil = /^(brasil|brazil)$/i.test(country.trim());
+  const availableStates = region ? brazilRegions[region as keyof typeof brazilRegions] ?? [] : Object.values(brazilRegions).flat().sort((a,b) => a.localeCompare(b,"pt-BR"));
+  useEffect(() => {
+    if (!brazil || !brazilUF[states]) { setCityOptions([]); setCityStatus(""); return; }
+    const controller = new AbortController();
+    setCityOptions([]); setCityStatus("Carregando municípios…");
+    fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${brazilUF[states]}/municipios?orderBy=nome`, { signal: controller.signal })
+      .then(response => { if (!response.ok) throw new Error("IBGE"); return response.json() as Promise<{nome:string}[]>; })
+      .then(items => { if (!controller.signal.aborted) { setCityOptions(items.map(item => item.nome)); setCityStatus(""); } })
+      .catch(() => { if (!controller.signal.aborted) setCityStatus("Lista indisponível. Digite o município manualmente."); });
+    return () => controller.abort();
+  }, [states, brazil]);
   const [companyKeywords, setCompanyKeywords] = useState("");
   const [domains, setDomains] = useState("");
   const [companyQuantity, setCompanyQuantity] = useState(15);
@@ -184,6 +202,7 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
     if (input.mode === "companies") {
       setIndustries(input.filters.industries.join(", "));
       setCountry(input.filters.country);
+      setRegion("");
       setStates(input.filters.states.join(", "));
       setCities(input.filters.cityPostalCodes.join(", "));
       setCompanyKeywords(input.filters.keywords.join(", "));
@@ -397,8 +416,15 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
                 }}>{sector}</button>)}
               </div>
               <Field label="País" value={country} setValue={setCountry} />
-              <Field label="Estados / regiões" value={states} setValue={setStates} />
-              <Field label="Cidades (ex.: Campinas)" value={cities} setValue={setCities} />
+              {brazil ? <>
+                <label className="grid gap-1 text-xs font-semibold text-zinc-600">Região<select className="h-10 border border-[var(--share-line)] bg-white px-3 text-sm" value={region} onChange={event => { const next = event.target.value; setRegion(next); setStates(next ? brazilRegions[next as keyof typeof brazilRegions].join(", ") : ""); setCities(""); }}><option value="">Todas as regiões</option>{Object.keys(brazilRegions).map(name => <option key={name}>{name}</option>)}</select></label>
+                <label className="grid gap-1 text-xs font-semibold text-zinc-600">Estado<select className="h-10 border border-[var(--share-line)] bg-white px-3 text-sm" value={availableStates.includes(states) ? states : ""} onChange={event => { setStates(event.target.value || (region ? availableStates.join(", ") : "")); setCities(""); }}><option value="">Todos os estados da região</option>{availableStates.map(name => <option key={name}>{name}</option>)}{states && !availableStates.includes(states) && !region && <option value={states}>{states}</option>}</select></label>
+                <label className="grid gap-1 text-xs font-semibold text-zinc-600">Cidade específica (opcional)<input className="h-10 border border-[var(--share-line)] bg-white px-3 text-sm" list="b2b-ibge-cities" value={cities} onChange={event => setCities(event.target.value)} placeholder="Todas as cidades ou digite um município" /><datalist id="b2b-ibge-cities">{cityOptions.map(name => <option key={name} value={name}/>)}</datalist></label>
+                {cityStatus && <p className="text-xs text-zinc-500">{cityStatus}</p>}
+              </> : <>
+                <Field label="Estados / regiões" value={states} setValue={setStates} />
+                <Field label="Cidades" value={cities} setValue={setCities} />
+              </>}
               <Area label="Palavras-chave" value={companyKeywords} setValue={setCompanyKeywords} />
               <Area label="Domínios" value={domains} setValue={setDomains} />
               <NumberField label="Resultados iniciais" value={companyQuantity} setValue={setCompanyQuantity} />
