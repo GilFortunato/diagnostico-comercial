@@ -6,11 +6,12 @@ import { AddToCrmButton } from "@/components/crm/AddToCrmButton";
 import { BriefcaseBusiness, BookmarkPlus, Building2, Database, Download, ExternalLink, FolderSearch, ListChecks, LoaderCircle, Plus, Search, Trash2, Users } from "lucide-react";
 import { demoBusinessUnits } from "@/lib/tenancy/demo";
 import { defaultBusinessUnitId, getBusinessUnitDna } from "@/lib/business-units/dna";
-import { getSuggestedRoles } from "@/lib/decision-makers/roleIntelligence";
 import { splitTerms, type DecisionMakerResult, type HuntingCompany, type HuntingPerson } from "@/lib/decision-makers/search";
 
 const brazilRegions = {"Norte":["Acre","Amapá","Amazonas","Pará","Rondônia","Roraima","Tocantins"],"Nordeste":["Alagoas","Bahia","Ceará","Maranhão","Paraíba","Pernambuco","Piauí","Rio Grande do Norte","Sergipe"],"Centro-Oeste":["Distrito Federal","Goiás","Mato Grosso","Mato Grosso do Sul"],"Sudeste":["Espírito Santo","Minas Gerais","Rio de Janeiro","São Paulo"],"Sul":["Paraná","Rio Grande do Sul","Santa Catarina"]};
 const brazilUF: Record<string, string> = {"Acre":"AC","Amapá":"AP","Amazonas":"AM","Pará":"PA","Rondônia":"RO","Roraima":"RR","Tocantins":"TO","Alagoas":"AL","Bahia":"BA","Ceará":"CE","Maranhão":"MA","Paraíba":"PB","Pernambuco":"PE","Piauí":"PI","Rio Grande do Norte":"RN","Sergipe":"SE","Distrito Federal":"DF","Goiás":"GO","Mato Grosso":"MT","Mato Grosso do Sul":"MS","Espírito Santo":"ES","Minas Gerais":"MG","Rio de Janeiro":"RJ","São Paulo":"SP","Paraná":"PR","Rio Grande do Sul":"RS","Santa Catarina":"SC"};
+
+const defaultHrRoles = ["CHRO (Chief Human Resources Officer)","Chief People Officer (CPO)","Chief Human Capital Officer (CHCO)","Diretor(a) de RH","Diretor(a) de Recursos Humanos","Diretor(a) de Pessoas","Diretor(a) de Gestão de Pessoas","Diretor(a) de Gente e Gestão","Diretor(a) de Desenvolvimento Humano e Organizacional (DHO)","Diretor(a) de Desenvolvimento Organizacional (DO)","Diretor(a) de Transformação","Diretor(a) de Cultura e Pessoas","Head de RH","Head de People","Head de People & Culture","Head de Gente e Gestão","Head de DHO","Head de T&D","Head de Learning","Head de Learning & Development (L&D)","Head de Talent Management","Head de Talent Acquisition","Head de Cultura e Engajamento","Head de Desenvolvimento Organizacional","Head de Employee Experience","Head de Total Rewards","Head de Remuneração e Benefícios","Head de HR Business Partners (HRBP)","Gerente de RH","Gerente de Recursos Humanos","Gerente de Gestão de Pessoas","Gerente de Gente e Gestão","Gerente de DHO","Gerente de Desenvolvimento Organizacional","Gerente de T&D","Gerente de Educação Corporativa","Gerente de Universidade Corporativa","Gerente de Cultura e Clima","Gerente de Talent Management","Gerente de Talent Acquisition","Gerente de HRBP","HR Manager","HR Lead","People Manager","People & Culture Manager","People Director","HR Director","VP de Recursos Humanos","VP de People","VP de Pessoas","VP de Gente e Gestão","VP de Human Resources","VP de People & Culture","Superintendente de RH","Superintendente de Gestão de Pessoas","Superintendente de Desenvolvimento Humano","Business Partner de RH (HRBP)","Coordenador(a) de RH","Coordenador(a) de DHO","Coordenador(a) de T&D","Coordenador(a) de Desenvolvimento Organizacional"];
 
 type SearchMode = "companies" | "people";
 type PeopleSearchTarget = { companyLinkedinUrls: string[]; companyNames: string[] };
@@ -78,7 +79,7 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
 
   const [companyLinkedinUrls, setCompanyLinkedinUrls] = useState("");
   const [companyNames, setCompanyNames] = useState("");
-  const [rolesText, setRolesText] = useState(getSuggestedRoles(initialUnit.id).slice(0, 5).join(", "));
+  const [rolesText, setRolesText] = useState(defaultHrRoles.join(", "));
   const [locations, setLocations] = useState("Brasil");
   const [profileKeywords, setProfileKeywords] = useState("");
   const [peopleQuantity, setPeopleQuantity] = useState(50);
@@ -362,7 +363,7 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
   function changeContext(id: string) {
     setBusinessUnitId(id);
     setObjective(buildObjective(id));
-    setRolesText(getSuggestedRoles(id).slice(0, 5).join(", "));
+    
     setResult(null);
     setSelectedCompanyIds([]);
   }
@@ -404,7 +405,7 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
         <div className="grid lg:grid-cols-[340px_1fr]">
           <aside className="border-r border-[var(--share-line)] p-5">
             {mode === "companies" ? <div className="grid gap-4">
-              <Area label="Setores" value={industries} setValue={setIndustries} />
+              <TagsField label="Setores selecionados" value={industries} setValue={setIndustries} limit={10} />
               <div className="flex flex-wrap gap-1">
                 <button type="button" className="rounded border px-2 py-1 text-xs" onClick={() => { setIndustries(""); setCompanyKeywords(""); }}>Todos os setores (limpar)</button>
                 {([["Tecnologia","Software, SaaS, TI, inteligência artificial"],["Indústria","Manufatura, produção, automação industrial"],["Agronegócio","Agroindústria, agricultura, cooperativas"],["Saúde","Hospitais, clínicas, farmacêuticas"],["Logística","Transportadoras, distribuição, supply chain"],["Recursos Humanos","Gestão de pessoas, RH, recrutamento"],["Financeiro","Bancos, fintechs, investimentos"],["Varejo","Comércio, e-commerce"],["Energia","Energia renovável, energia solar"],["Telecomunicações","Internet, fibra óptica, telecom"],["Educação","Universidades, edtechs, ensino"],["Serviços","Consultoria, terceirização, BPO"],["Construção Civil","Engenharia, construtoras"],["Automotivo","Autopeças, montadoras"],["Alimentos e Bebidas","Indústria alimentícia, bebidas"]]).map(([sector, terms]) => <button key={sector} type="button" aria-pressed={splitTerms(industries).includes(sector)} className={`rounded border px-2 py-1 text-xs ${splitTerms(industries).includes(sector) ? "bg-green-100" : "bg-white"}`} onClick={() => {
@@ -425,15 +426,16 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
                 <Field label="Estados / regiões" value={states} setValue={setStates} />
                 <Field label="Cidades" value={cities} setValue={setCities} />
               </>}
-              <Area label="Palavras-chave" value={companyKeywords} setValue={setCompanyKeywords} />
-              <Area label="Domínios" value={domains} setValue={setDomains} />
+              <TagsField label="Palavras-chave" value={companyKeywords} setValue={setCompanyKeywords} limit={15} suggestions={["Indústria", "Tecnologia", "Serviços", "Multinacional", "Grupo empresarial", "Manufatura", "Logística", "Inovação", "Expansão"]} />
+              <TagsField label="Domínios de empresas (opcional)" value={domains} setValue={setDomains} limit={10} suggestions={result?.companies.map(company => company.domain || "").filter(Boolean) ?? []} placeholder="ex.: empresa.com.br" />
+              <p className="text-xs text-zinc-500">Sugestões de domínio aparecem a partir das empresas encontradas; adicione apenas sites corporativos conhecidos.</p>
               <NumberField label="Resultados iniciais" value={companyQuantity} setValue={setCompanyQuantity} />
             </div> : <div className="grid gap-4">
               <Area label="Páginas corporativas do LinkedIn" value={companyLinkedinUrls} setValue={setCompanyLinkedinUrls} placeholder="https://www.linkedin.com/company/empresa" />
               <Field label="Nomes das empresas" value={companyNames} setValue={setCompanyNames} />
-              <Area label="Cargos e famílias" value={rolesText} setValue={setRolesText} />
+              <TagsField label="Cargos e famílias de RH" value={rolesText} setValue={setRolesText} limit={100} suggestions={defaultHrRoles} />
               <Field label="Localizações" value={locations} setValue={setLocations} />
-              <Area label="Palavras-chave profissionais" value={profileKeywords} setValue={setProfileKeywords} />
+              <TagsField label="Palavras-chave profissionais" value={profileKeywords} setValue={setProfileKeywords} limit={15} suggestions={["Recursos Humanos","People & Culture","Talent Acquisition","DHO","Learning & Development","HRBP","Employee Experience","Gestão de Pessoas"]} />
               <NumberField label="Pessoas desejadas (até 50)" value={peopleQuantity} setValue={setPeopleQuantity} />
               <p className="text-xs leading-5 text-zinc-500">Buscamos os cargos e locais informados. A localização é obrigatória quando especificada; a fonte complementar não deve ampliar o recorte. A quantidade depende da cobertura da fonte.</p>
               <label className="flex items-start gap-2 text-sm text-zinc-600"><input type="checkbox" checked={includeBroadDiscovery} onChange={(event) => setIncludeBroadDiscovery(event.target.checked)} className="mt-1" />Consultar fonte complementar mesmo após atingir a meta</label>
@@ -716,7 +718,7 @@ function CompanyTable({
 function PeopleTable({ people, selectedListId, lists, onSelectList, onSaveLead, canUseCrm, searchId }: { canUseCrm: boolean; searchId?: string; people: HuntingPerson[]; selectedListId: string; lists: WorkspaceList[]; onSelectList: (id: string) => void; onSaveLead: (leadId?: string) => void }) {
   return <div className="mt-4">
     <div className="mb-3 flex justify-end"><LeadListSelector lists={lists} selectedListId={selectedListId} onSelectList={onSelectList} /></div>
-    <div className="overflow-x-auto"><table className="w-full min-w-[1040px] text-left text-sm"><thead className="text-xs uppercase text-[var(--share-green-800)]"><tr><th className="border-b p-3">Pessoa</th><th className="border-b p-3">Cargo</th><th className="border-b p-3">Empresa</th><th className="border-b p-3">Fit</th><th className="border-b p-3">Workspace</th><th className="border-b p-3">Próxima ação</th></tr></thead><tbody>{people.map((person) => <tr key={person.id} className="border-b border-[var(--share-line)]"><td className="p-3"><a href={person.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--share-green-950)] hover:underline">{person.name}<ExternalLink className="h-3.5 w-3.5" /></a><span className="mt-1 block text-xs text-zinc-500">{person.location || "Localização não informada"}</span></td><td className="p-3">{person.title}</td><td className="p-3">{person.company}</td><td className="p-3"><strong>{person.fitScore}%</strong><span className="ml-2 text-xs text-zinc-500">{person.fit}</span></td><td className="p-3"><div className="flex flex-col items-start gap-2">{person.firstSeenByName ? <span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(person.firstSeenByName)}</span> : <span className="text-xs text-zinc-400">Novo lead</span>}<button type="button" onClick={() => onSaveLead(person.workspaceLeadId)} disabled={!person.workspaceLeadId || !selectedListId} className="inline-flex items-center gap-1 rounded-md border border-[var(--share-line)] px-2 py-1 text-[10px] font-semibold text-[var(--share-green-800)] disabled:opacity-40"><BookmarkPlus className="h-3 w-3" /> Salvar na lista</button>{canUseCrm && <AddToCrmButton key={person.workspaceLeadId ?? person.id} leadId={person.workspaceLeadId} searchId={searchId} />}</div></td><td className="p-3 text-zinc-600">{person.nextBestAction}</td></tr>)}</tbody></table></div>
+    <div className="overflow-x-auto"><table className="w-full min-w-[1040px] text-left text-sm"><thead className="text-xs uppercase text-[var(--share-green-800)]"><tr><th className="border-b p-3">Pessoa</th><th className="border-b p-3">Cargo</th><th className="border-b p-3">Empresa</th><th className="border-b p-3">Fit</th><th className="border-b p-3">Workspace</th><th className="border-b p-3">Próxima ação</th></tr></thead><tbody>{people.map((person) => <tr key={person.id} className="border-b border-[var(--share-line)]"><td className="p-3"><a href={person.linkedinUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-[var(--share-green-950)] hover:underline">{person.name}<ExternalLink className="h-3.5 w-3.5" /></a><span className="mt-1 block text-xs text-zinc-500">{person.location || "Localização não informada"}</span></td><td className="p-3">{person.title}</td><td className="p-3">{person.company}<span className="block text-xs text-zinc-500">{person.companyEmployeeRange ? `${person.companyEmployeeRange} funcionários` : "Porte não informado"}</span></td><td className="p-3"><strong>{person.fitScore}%</strong><span className="ml-2 text-xs text-zinc-500">{person.fit}</span></td><td className="p-3"><div className="flex flex-col items-start gap-2">{person.firstSeenByName ? <span className="rounded-full bg-[#eef6e8] px-2 py-1 text-[10px] font-bold uppercase text-[#52712b]">{leadOwnerLabel(person.firstSeenByName)}</span> : <span className="text-xs text-zinc-400">Novo lead</span>}<button type="button" onClick={() => onSaveLead(person.workspaceLeadId)} disabled={!person.workspaceLeadId || !selectedListId} className="inline-flex items-center gap-1 rounded-md border border-[var(--share-line)] px-2 py-1 text-[10px] font-semibold text-[var(--share-green-800)] disabled:opacity-40"><BookmarkPlus className="h-3 w-3" /> Salvar na lista</button>{canUseCrm && <AddToCrmButton key={person.workspaceLeadId ?? person.id} leadId={person.workspaceLeadId} searchId={searchId} />}</div></td><td className="p-3 text-zinc-600">{person.nextBestAction}</td></tr>)}</tbody></table></div>
   </div>;
 }
 
@@ -743,4 +745,20 @@ function NumberField({ label, value, setValue }: { label: string; value: number;
 function buildObjective(id: string) {
   const unit = getBusinessUnitDna(id);
   return `Encontrar contas e pessoas aderentes a ${unit.positioning.whatWeAre.toLocaleLowerCase("pt-BR")} e criar conversas comerciais baseadas em evidências.`;
+}
+
+function TagsField({ label, value, setValue, limit, suggestions = [], placeholder = "Digite para adicionar" }: { label: string; value: string; setValue: (value: string) => void; limit: number; suggestions?: string[]; placeholder?: string }) {
+  const [draft, setDraft] = useState("");
+  const items = splitTerms(value);
+  const add = (term: string) => {
+    const next = [...new Set([...items, ...splitTerms(term)])].slice(0, limit);
+    setValue(next.join(", ")); setDraft("");
+  };
+  const suggested = [...new Set(suggestions)].filter(term => term && !items.includes(term)).filter(term => !draft || term.toLocaleLowerCase("pt-BR").includes(draft.toLocaleLowerCase("pt-BR"))).slice(0, 12);
+  return <div className="grid gap-2 text-xs text-zinc-600">
+    <div className="flex items-center justify-between"><span className="font-semibold">{label} ({items.length})</span>{items.length > 0 && <button type="button" className="underline" onClick={() => setValue("")}>Limpar</button>}</div>
+    <div className="flex max-h-60 flex-wrap gap-1 overflow-y-auto">{items.map(item => <span key={item} className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-green-900">{item}<button type="button" aria-label={`Remover ${item}`} onClick={() => setValue(items.filter(term => term !== item).join(", "))} className="rounded px-1 font-bold hover:bg-green-200">×</button></span>)}</div>
+    <div className="flex gap-1"><input value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); add(draft); } }} placeholder={placeholder} className="min-w-0 flex-1 border border-[var(--share-line)] px-2 py-2" /><button type="button" disabled={!draft.trim() || items.length >= limit} onClick={() => add(draft)} className="border px-2 disabled:opacity-40">+</button></div>
+    {suggested.length > 0 && <div className="flex flex-wrap gap-1">{suggested.map(term => <button key={term} type="button" disabled={items.length >= limit} onClick={() => add(term)} className="rounded border px-2 py-1 disabled:opacity-40">+ {term}</button>)}</div>}
+  </div>;
 }
