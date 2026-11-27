@@ -12,23 +12,29 @@ const harvestSeniorityIds: Record<PersonSearchInput["filters"]["seniority"][numb
   owner: ["320"],
 };
 
-export function buildCompanyDiscoveryInput(input: CompanySearchInput) {
+export function buildCompanyDiscoveryInput(input: CompanySearchInput, variant: "primary" | "alternate" | "broad" = "primary") {
   const queryTerms = uniqueStrings([
     ...input.filters.industries,
     ...input.filters.keywords,
     ...input.filters.technologies,
     ...input.filters.domains,
   ]).slice(0, 6);
-  const locations = uniqueStrings(input.filters.cityPostalCodes.length
-    ? input.filters.cityPostalCodes.map((city) => [city, ...(input.filters.states.length === 1 ? input.filters.states : []), input.filters.country].join(", "))
-    : input.filters.states.length ? input.filters.states.map((state) => `${state}, ${input.filters.country}`) : [input.filters.country]).slice(0, 20);
-
+  const { cityPostalCodes, states, country } = input.filters;
+  const locations = uniqueStrings(variant === "primary"
+    ? (cityPostalCodes.length ? cityPostalCodes : states.length ? states : [country])
+    : variant === "alternate"
+      ? (cityPostalCodes.length ? cityPostalCodes.map(city => [city, ...(states.length === 1 ? states : []), country].join(", ")) : states.length ? states.map(state => [state, country].join(", ")) : [country === "Brazil" ? "Brasil" : country])
+      : (states.length ? states : [country])).slice(0, 20);
+  const query = variant === "alternate" ? queryTerms[0] : queryTerms.join(" OR ");
   return compactInput({
     ...apifyActors.linkedinCompanySearch.defaultInput,
     scraperMode: "short",
     maxItems: Math.min(100, input.filters.quantity * 2),
-    searchQuery: queryTerms.length ? queryTerms.join(" OR ") : undefined,
+    searchQuery: query || undefined,
     locations,
+    ...(input.filters.employeeRanges.length ? { companySize: input.filters.employeeRanges } : {}),
+    startPage: 1,
+    takePages: 2,
   });
 }
 
@@ -94,8 +100,10 @@ export function buildBroadPeopleRecallInput(input: PersonSearchInput) {
   });
 }
 
-export async function discoverCompanies(input: CompanySearchInput) {
-  return runApifyActor("linkedinCompanySearch", buildCompanyDiscoveryInput(input));
+export async function discoverCompanies(input: CompanySearchInput, variant: "primary" | "alternate" | "broad" = "primary") {
+  const payload = buildCompanyDiscoveryInput(input, variant);
+  console.info("[b2b-hunting] company discovery attempt", { variant, locations: payload.locations, searchQuery: payload.searchQuery, maxItems: payload.maxItems });
+  return runApifyActor("linkedinCompanySearch", payload, { timeoutMs: 35_000 });
 }
 
 export async function discoverHarvestPeople(input: PersonSearchInput, page?: HuntingPage) {
