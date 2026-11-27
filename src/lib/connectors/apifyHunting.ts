@@ -65,7 +65,7 @@ export function buildPrimaryPeopleRecallInput(input: PersonSearchInput, page?: H
     profileScraperMode: "Short ($4 per 1k)",
     maxItems: page?.maxItems ?? discoveryLimit(input.filters.quantity),
     ...(page ? { startPage: page.startPage, takePages: page.takePages } : {}),
-    jobTitles: uniqueStrings(input.filters.roles).slice(0, 50),
+    jobTitles: uniqueStrings(input.filters.roles),
     locations: input.filters.locations,
   });
 }
@@ -89,7 +89,7 @@ export function buildBroadPeopleRecallInput(input: PersonSearchInput) {
     profileScraperMode: "Short",
     maxItems: discoveryLimit(input.filters.quantity),
     currentCompanies: input.filters.companyLinkedinUrls,
-    currentJobTitles: uniqueStrings(input.filters.roles).slice(0, 20),
+    currentJobTitles: uniqueStrings(input.filters.roles),
     locations: uniqueStrings(input.filters.locations).slice(0, 20),
   });
 }
