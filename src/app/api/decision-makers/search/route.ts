@@ -20,8 +20,8 @@ export async function POST(request: Request) {
 
   try {
     const reusable = parsed.data.forceRefresh ? null : await findReusableB2BSearch(parsed.data);
-    if (reusable) {
-      const reused = reusable.resultSnapshot as unknown as import("@/lib/decision-makers/search").DecisionMakerResult;
+    const reused = reusable?.resultSnapshot as unknown as import("@/lib/decision-makers/search").DecisionMakerResult | undefined;
+    if (reusable && reused && (reused.mode === "companies" ? reused.companies.length : reused.people.length)) {
       const persisted = await persistB2BWorkspaceSearch({
         actor: access.user,
         searchInput: parsed.data,
