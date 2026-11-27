@@ -82,44 +82,80 @@ export async function executeDecisionMakerSearch(input: DecisionMakerSearchInput
     ? await executeCompanySearch(input, cacheKey, deps)
     : await executePersonSearch(input, cacheKey, deps);
 
-  resultCache.set(cacheKey, { expiresAt: deps.now().getTime() + cacheTtlMs, result });
+  if (result.companies.length || result.people.length) resultCache.set(cacheKey, { expiresAt: deps.now().getTime() + cacheTtlMs, result });
   return result;
 }
 
 async function executeCompanySearch(input: Extract<DecisionMakerSearchInput, { mode: "companies" }>, queryId: string, deps: HuntingDependencies): Promise<DecisionMakerResult> {
   const unit = getBusinessUnitDna(input.businessUnitId);
   const warnings: string[] = [];
-  let items: unknown[] = [];
   let sourceTitle = "LinkedIn Company Search via Harvest";
   let manusFallbackUsed = false;
-
-  try {
-    items = await deps.discoverCompanies(input);
-  } catch {
-    warnings.push("A busca direta de empresas ficou indisponível; o Manus foi acionado apenas como fallback.");
+  const matches = (company: import("@/lib/decision-makers/search").HuntingCompany) =>
+    (!input.filters.cityPostalCodes.length || input.filters.cityPostalCodes.some(city => matchesGeo(company.location, city))) &&
+    (!input.filters.states.length || input.filters.states.some(state => matchesGeo(company.location, state)));
+  type Company = import("@/lib/decision-makers/search").HuntingCompany;
+  const pool = new Map<string, Company>();
+  let discarded = 0;
+  let successfulSources = 0;
+  const add = (items: unknown[], source: string) => {
+    const normalized = normalizeCompanies(items, source);
+    for (const company of normalized) {
+      if (!matches(company)) { discarded++; continue; }
+      const key = (company.linkedinUrl || company.domain || company.name).toLowerCase().replace(/\/$/, "");
+      const existing = pool.get(key);
+      pool.set(key, existing ? { ...existing, ...Object.fromEntries(Object.entries(company).filter(([,value]) => value !== undefined && value !== "")), employeeRange: company.employeeRange || existing.employeeRange } : company);
+    }
+    console.info("[b2b-hunting] company discovery result", { source, received: items.length, normalized: normalized.length, eligible: pool.size, discarded });
+  };
+  for (const variant of ["primary", "alternate", "broad"] as const) {
+    if (pool.size >= input.filters.quantity) break;
+    try {
+      const items = await deps.discoverCompanies(input, variant);
+      successfulSources++;
+      add(items, sourceTitle);
+    } catch {
+      warnings.push(`Tentativa Apify (${variant}) indisponível.`);
+      console.warn("[b2b-hunting] company discovery attempt failed", { variant });
+    }
+  }
+  if (pool.size < input.filters.quantity) {
+    warnings.push("Cobertura insuficiente no Apify; pesquisa complementar acionada.");
     try {
       const manusResult = await deps.researchManusCompanies(input);
       warnings.push(...manusWarnings(manusResult));
+      successfulSources++;
       if (manusResult.status === "success_with_results") {
-        items = manusCompaniesToRawItems(manusResult);
-        manusFallbackUsed = items.length > 0;
-        sourceTitle = "Manus · fallback de pesquisa B2B";
+        manusFallbackUsed = true;
+        add(manusCompaniesToRawItems(manusResult), "Manus · pesquisa complementar B2B");
+        sourceTitle = "Apify / Manus";
       }
     } catch {
-      warnings.push("O fallback do Manus também ficou indisponível.");
+      warnings.push("A pesquisa complementar do Manus ficou indisponível.");
     }
-    if (!items.length) throw new Error("As fontes de descoberta de empresas estão indisponíveis no momento.");
   }
-
-  const normalized = normalizeCompanies(items, sourceTitle);
-  if (items.length > 0 && normalized.length === 0) {
-    throw new Error("A fonte retornou empresas, mas o formato recebido não pôde ser normalizado com segurança.");
+  if (!successfulSources && !pool.size) throw new Error("As fontes de descoberta de empresas estão indisponíveis no momento.");
+  const candidates = [...pool.values()];
+  const toEnrich = candidates.filter(company => !company.employeeRange && company.linkedinUrl).slice(0, Math.min(30, input.filters.quantity * 2));
+  if (toEnrich.length) {
+    try {
+      const details = normalizeCompanies(await deps.researchCompanies(toEnrich.map(company => company.linkedinUrl!)), "Detalhes corporativos");
+      for (const candidate of candidates) {
+        const detail = details.find(company => company.linkedinUrl && candidate.linkedinUrl && company.linkedinUrl.toLowerCase().replace(/\/$/, "") === candidate.linkedinUrl.toLowerCase().replace(/\/$/, ""));
+        if (detail) {
+          candidate.employeeRange = detail.employeeRange || candidate.employeeRange;
+          candidate.domain = detail.domain || candidate.domain;
+          candidate.website = detail.website || candidate.website;
+          candidate.industry = detail.industry || candidate.industry;
+        }
+      }
+    } catch {
+      warnings.push("Enriquecimento de porte indisponível; empresas com porte desconhecido ficam ao final.");
+    }
   }
-  const eligible = normalized.filter((company) =>
-    (!input.filters.cityPostalCodes.length || input.filters.cityPostalCodes.some((city) => matchesGeo(company.location, city))) &&
-    (!input.filters.states.length || input.filters.states.some((state) => matchesGeo(company.location, state))));
-  if (eligible.length < normalized.length) warnings.push(`${normalized.length - eligible.length} empresas excluídas por localização incompatível ou não comprovada.`);
-  const companies = rankCompanies(eligible, input).slice(0, input.filters.quantity);
+  if (discarded) warnings.push(`${discarded} registros excluídos por localização incompatível ou não comprovada.`);
+  const companies = rankCompanies(candidates, input).slice(0, input.filters.quantity);
+  console.info("[b2b-hunting] company search completed", { eligible: candidates.length, returned: companies.length, discarded, knownSize: companies.filter(company => company.employeeRange).length, manusFallbackUsed });
 
   return {
     mode: "companies",
@@ -138,12 +174,12 @@ async function executeCompanySearch(input: Extract<DecisionMakerSearchInput, { m
       title: sourceTitle,
       confidence: companies.length ? "provável" : "não verificado",
       notes: manusFallbackUsed
-        ? "O Manus foi usado somente porque a fonte direta de empresas falhou."
+        ? "O Manus complementou a pesquisa quando a cobertura do Apify foi insuficiente."
         : "A busca de empresas foi executada diretamente no Actor especializado, sem Manus no caminho crítico.",
     }],
     warnings: [...new Set(warnings)],
     cost: {
-      strategy: manusFallbackUsed ? "Apify direto falhou; Manus usado como fallback." : "Apify direto como fonte principal; Manus não foi necessário.",
+      strategy: manusFallbackUsed ? "Pesquisa progressiva Apify com complemento Manus." : "Apify direto como fonte principal; Manus não foi necessário.",
       basicCandidates: companies.length,
       profileEnrichments: 0,
       postEnrichments: 0,
