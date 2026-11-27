@@ -70,6 +70,7 @@ export function normalizePeople(items: unknown[], source: string, desiredRole: D
       name: fullName,
       title: title || "Cargo não informado",
       company: resolvedCompany,
+      companyEmployeeRange: pickString(item, ["companyEmployeeSize", "company.employeeRange", "company.employeeCount", "organization.employeeRange", "organization.employeeCount"]) || undefined,
       linkedinUrl,
       location: location || undefined,
       department: department || undefined,
