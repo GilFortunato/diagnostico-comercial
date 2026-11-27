@@ -33,7 +33,7 @@ export const personSearchSchema = commonSchema.extend({
   filters: z.object({
     companyLinkedinUrls: z.array(z.string().url()).min(1).max(10),
     companyNames: z.array(z.string().trim().min(2)).max(10).default([]),
-    roles: z.array(z.string().trim().min(2)).min(1).max(20),
+    roles: z.array(z.string().trim().min(2)).min(1).max(100),
     departments: z.array(z.string().trim().min(2)).max(10).default([]),
     seniority: z.array(z.enum(seniorityLevels)).max(5).default([]),
     locations: z.array(z.string().trim().min(2)).max(10).default([]),
@@ -87,6 +87,7 @@ export type HuntingPerson = {
   name: string;
   title: string;
   company: string;
+  companyEmployeeRange?: string;
   linkedinUrl: string;
   location?: string;
   department?: string;
