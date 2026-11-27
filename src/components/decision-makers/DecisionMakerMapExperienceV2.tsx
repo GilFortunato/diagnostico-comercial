@@ -466,6 +466,7 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
               {isSearching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               {isSearching ? "Pesquisando fontes" : mode === "companies" ? "Buscar empresas" : "Buscar pessoas"}
             </button>
+            {(isSearching || isLoadingMore) && <div role="status" className="mt-3 rounded-md border border-[var(--share-line)] p-3 text-xs leading-5 text-zinc-600"><strong>Pesquisa em andamento</strong><p>O motor consulta as fontes, tenta alternativas quando necessário, valida a localização e classifica os resultados. As etapas executadas serão informadas no diagnóstico ao final.</p></div>}
             {error ? <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">{error}</p> : null}
           </aside>
 
@@ -509,7 +510,7 @@ export function DecisionMakerMapExperienceV2({ canUseCrm = false, initialView = 
                 </button>
               </div>
 
-              {result.warnings.length ? <details className="mt-4 rounded-md border border-[var(--share-line)] p-3">
+              {result.warnings.length ? <details open={result.mode === "companies" && result.companies.length === 0 ? true : undefined} className="mt-4 rounded-md border border-[var(--share-line)] p-3">
                 <summary className="cursor-pointer text-sm font-semibold text-[var(--share-green-900)]">Detalhes da pesquisa</summary>
                 <ul className="mt-2 grid gap-1 text-xs leading-5 text-zinc-600">{result.warnings.slice(-8).map((warning) => <li key={warning}>• {warning}</li>)}</ul>
               </details> : null}
