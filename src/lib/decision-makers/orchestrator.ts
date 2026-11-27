@@ -11,7 +11,7 @@ import {
 } from "@/lib/connectors/apifyHunting";
 import { applyAiRanking, refineDecisionMakerRanking } from "@/lib/decision-makers/aiRanking";
 import { mergePeople, normalizeCompanies, normalizePeople, pickString } from "@/lib/decision-makers/normalization";
-import { rankCompanies, rankPeople, targetRolesNotFound } from "@/lib/decision-makers/ranking";
+import { employeeSize, rankCompanies, rankPeople, targetRolesNotFound } from "@/lib/decision-makers/ranking";
 import { expandRoleFamilies } from "@/lib/decision-makers/roleIntelligence";
 import { collectHuntingPages, collectionMessage, type CollectionSummary } from "@/lib/hunting/pagination";
 import type { DecisionMakerResult, DecisionMakerSearchInput, HuntingPerson, PersonSearchInput } from "@/lib/decision-makers/search";
@@ -227,10 +227,14 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
     throw new Error("A fonte retornou perfis, mas o formato recebido não pôde ser normalizado com segurança.");
   }
 
-  const merged = mergePeople(primaryPeople, fallbackPeople);
+  const researchedCompanies = normalizeCompanies(companyItems, "Páginas corporativas públicas");
+  const companyKey = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const employerSizes = new Map(researchedCompanies.map(company => [companyKey(company.name), company.employeeRange]));
+  const sortByEmployer = (items: HuntingPerson[]) => items.sort((a,b) => employeeSize(b.companyEmployeeRange) - employeeSize(a.companyEmployeeRange) || b.fitScore - a.fitScore);
+  const merged = mergePeople(primaryPeople, fallbackPeople).map(person => ({ ...person, companyEmployeeRange: employerSizes.get(companyKey(person.company)) || person.companyEmployeeRange }));
   const eligible = merged.filter((person) => matchesPeopleGeo(person.location, input.filters.locations));
   if (eligible.length < merged.length) warnings.push(`${merged.length - eligible.length} perfis excluídos por localização incompatível ou não comprovada.`);
-  let people: HuntingPerson[] = rankPeople(eligible, expandedInput).slice(0, input.filters.quantity);
+  let people: HuntingPerson[] = sortByEmployer(rankPeople(eligible, expandedInput)).slice(0, input.filters.quantity);
   if (collection) {
     collection = { ...collection, unique: people.length, stopReason: people.length >= input.filters.quantity ? "target_reached" : collection.stopReason };
     warnings.push(collectionMessage(collection));
@@ -278,8 +282,8 @@ async function executePersonSearch(input: Extract<DecisionMakerSearchInput, { mo
     }
   }
 
+  people = sortByEmployer(people);
   const missingRoles = targetRolesNotFound(input.filters.roles, people);
-  const researchedCompanies = normalizeCompanies(companyItems, "Páginas corporativas públicas");
   const companies = researchedCompanies.length ? researchedCompanies : companiesFromPeople(people);
   const discoveryTitle = manusUsed
     ? "Manus · fallback de decisores"
