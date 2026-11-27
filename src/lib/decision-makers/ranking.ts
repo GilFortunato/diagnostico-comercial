@@ -130,5 +130,11 @@ function fitFromScore(score: number) {
 
 function compareFit(a: HuntingCompany, b: HuntingCompany) {
   const weight = { Alta: 3, Média: 2, Baixa: 1 };
-  return weight[b.fit] - weight[a.fit] || a.name.localeCompare(b.name, "pt-BR");
+  return employeeSize(b.employeeRange) - employeeSize(a.employeeRange) || weight[b.fit] - weight[a.fit] || a.name.localeCompare(b.name, "pt-BR");
+}
+
+function employeeSize(range?: string) {
+  if (!range) return 0;
+  const numbers = range.replace(/(?<=\d)[.,](?=\d{3}\b)/g, "").match(/\d+/g);
+  return numbers ? Number(numbers[0]) : 0;
 }
